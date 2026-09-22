@@ -17,7 +17,7 @@ function loadDatabaseUrl() {
   }
 
   const raw = line.replace(/^\s*DATABASE_URL\s*=\s*/, "").trim();
-  const value = raw.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
+  const value = raw.replace(/^\"(.*)\"$/, "$1").replace(/^'(.*)'$/, "$1");
 
   if (!value.startsWith("mysql://")) {
     throw new Error("DATABASE_URL no parece una URL MySQL válida.");
@@ -26,12 +26,23 @@ function loadDatabaseUrl() {
   return value;
 }
 
+function cleanSql(sql) {
+  return sql
+    .replace(/^\s*--.*$/gm, "")
+    .replace(/^[ \t]*\r?\n/gm, "")
+    .trim();
+}
+
+function getStatementTableName(statement) {
+  const match = statement.match(/^CREATE TABLE(?: IF NOT EXISTS)?\s+([\w]+)/i);
+  return match?.[1] ?? null;
+}
+
 const sqlPath = path.resolve("db/schema.sql");
 const sql = fs.readFileSync(sqlPath, "utf8");
-
-const statements = sql
+const statements = cleanSql(sql)
   .split(";")
-  .map((statement) => statement.replace(/(^|\n)\s*--.*(?=\n|$)/g, "").trim())
+  .map((statement) => statement.trim())
   .filter(Boolean);
 
 let connection;
@@ -43,41 +54,56 @@ try {
 
   connection = await mysql.createConnection(databaseUrl);
 
-  const [databaseRows] = await connection.query("SELECT DATABASE() AS database_name");
-  console.log(`Base de datos: ${databaseRows[0]?.database_name ?? "desconocida"}`);
+  const [databaseRows] = await connection.query(
+    "SELECT DATABASE() AS database_name"
+  );
+  console.log(
+    `Base de datos: ${databaseRows[0]?.database_name ?? "desconocida"}`
+  );
 
   const [existingRows] = await connection.query(
     "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE 'inm_%' ORDER BY table_name"
   );
 
-  if (existingRows.length > 0) {
-    console.log("\nYa existen tablas inm_* en esta base de datos:");
-    for (const row of existingRows) console.log(`- ${row.table_name}`);
-    console.log("\nPor seguridad, el instalador se detiene y no modifica nada.");
-    process.exitCode = 2;
+  const existingTables = new Set(existingRows.map((row) => row.table_name));
+
+  if (existingTables.size > 0) {
+    console.log("\nSe encontraron tablas inm_* existentes.");
+    console.log(
+      "El instalador continuará solo con las tablas que todavía falten."
+    );
+    for (const table of existingTables) console.log(`- ${table}`);
   } else {
     console.log("\nNo se encontraron tablas inm_*. Iniciando instalación...");
+  }
 
-    for (const statement of statements) {
-      const firstLine = statement.split("\n").find((line) => line.trim())?.trim() ?? "";
-      console.log(`Ejecutando: ${firstLine.slice(0, 90)}`);
-      await connection.query(statement);
+  for (const statement of statements) {
+    const tableName = getStatementTableName(statement);
+
+    if (tableName && existingTables.has(tableName)) {
+      console.log(`Omitiendo (ya existe): ${tableName}`);
+      continue;
     }
 
-    const [createdRows] = await connection.query(
-      "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE 'inm_%' ORDER BY table_name"
-    );
-
-    const [positionRows] = await connection.query(
-      "SELECT COUNT(*) AS total FROM inm_posiciones"
-    );
-
-    console.log(`\nInstalación completada.`);
-    console.log(`Tablas inm_* creadas: ${createdRows.length}`);
-    console.log(`Posiciones cargadas: ${positionRows[0]?.total ?? 0}`);
-
-    for (const row of createdRows) console.log(`- ${row.table_name}`);
+    const firstLine =
+      statement.split("\n").find((line) => line.trim())?.trim() ?? "";
+    console.log(`Ejecutando: ${firstLine.slice(0, 90)}`);
+    await connection.query(statement);
   }
+
+  const [createdRows] = await connection.query(
+    "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE 'inm_%' ORDER BY table_name"
+  );
+
+  const [positionRows] = await connection.query(
+    "SELECT COUNT(*) AS total FROM inm_posiciones"
+  );
+
+  console.log("\nInstalación/verificación completada.");
+  console.log(`Tablas inm_* disponibles: ${createdRows.length}`);
+  console.log(`Posiciones cargadas: ${positionRows[0]?.total ?? 0}`);
+
+  for (const row of createdRows) console.log(`- ${row.table_name}`);
 } catch (error) {
   console.error("\nERROR durante la instalación:");
   console.error(error instanceof Error ? error.message : error);
