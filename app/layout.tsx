@@ -26,7 +26,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full bg-slate-100 text-slate-900">
         <Sidebar />
-        <div className="min-h-screen pt-[76px] lg:pt-0 lg:pl-64">{children}</div>
+        <div className="mobile-page-shell min-h-screen pt-[76px] lg:pt-0 lg:pl-64">{children}</div>
       </body>
     </html>
   );
