@@ -65,7 +65,7 @@ try {
     "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE 'inm_%' ORDER BY table_name"
   );
 
-  const existingTables = new Set(existingRows.map((row) => row.table_name));
+  const existingTables = new Set(existingRows.map((row) => row.table_name ?? row.TABLE_NAME).filter(Boolean));
 
   if (existingTables.size > 0) {
     console.log("\nSe encontraron tablas inm_* existentes.");
