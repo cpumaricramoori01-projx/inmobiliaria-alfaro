@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -41,21 +42,92 @@ function Icon({ name }: { name: string }) {
     clipboard: <><rect x="5" y="5" width="14" height="15" rx="2"/><path d="M9 5V4h6v1M8 10h8M8 14h6"/></>,
     report: <><path d="M5 20V10M12 20V4M19 20v-7"/><path d="M3 20h18"/></>,
     database: <><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5"/><path d="M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7"/></>,
+    menu: <><path d="M4 7h16M4 12h16M4 17h16"/></>,
+    close: <><path d="M6 6l12 12M18 6 6 18"/></>,
   };
   return <svg {...common}>{paths[name]}</svg>;
 }
 
-function MenuLink({ item }: { item: { href: string; label: string; icon: string; tone: string } }) {
+function MenuLink({ item, onNavigate }: { item: { href: string; label: string; icon: string; tone: string }; onNavigate?: () => void }) {
   const pathname = usePathname();
   const active = item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(`${item.href}/`);
   const tone = toneClasses[item.tone];
-  return <Link href={item.href} className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition ${active ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-white/10 text-white" : `${tone.bg} ${tone.text}`}`}><Icon name={item.icon}/></span><span className="leading-5">{item.label}</span></Link>;
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition ${active ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}
+    >
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-white/10 text-white" : `${tone.bg} ${tone.text}`}`}>
+        <Icon name={item.icon}/>
+      </span>
+      <span className="leading-5">{item.label}</span>
+    </Link>
+  );
+}
+
+function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <>
+      <MenuLink item={{ href: "/", label: "Dashboard", icon: "dashboard", tone: "indigo" }} onNavigate={onNavigate}/>
+      <div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Fase 1 · Flujo operativo</div>
+      <div className="space-y-1">{fase1.map(item => <MenuLink key={item.href} item={item} onNavigate={onNavigate}/>)}</div>
+      <div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Fase 2 · Datos del inmueble</div>
+      <div className="space-y-1">{fase2.map(item => <MenuLink key={item.href} item={item} onNavigate={onNavigate}/>)}</div>
+    </>
+  );
 }
 
 export default function Sidebar() {
-  return <aside className="fixed inset-y-0 left-0 z-50 hidden w-72 border-r border-slate-200 bg-white lg:flex lg:flex-col">
-    <div className="flex h-[76px] items-center border-b border-slate-100 px-6"><div><div className="text-base font-bold tracking-tight text-slate-950">Inmobiliaria Alberto Alfaro</div><div className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">Gestión inmobiliaria</div></div></div>
-    <nav className="flex-1 overflow-y-auto px-3 py-5"><MenuLink item={{ href: "/", label: "Dashboard", icon: "dashboard", tone: "indigo" }}/><div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Fase 1 · Flujo operativo</div><div className="space-y-1">{fase1.map(item=><MenuLink key={item.href} item={item}/>)}</div><div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Fase 2 · Datos del inmueble</div><div className="space-y-1">{fase2.map(item=><MenuLink key={item.href} item={item}/>)}</div></nav>
-    <div className="border-t border-slate-100 p-4"><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs font-semibold text-slate-700">Secretaria Virtual</div><div className="mt-1 text-[11px] leading-4 text-slate-500">Control de cartera y seguimiento de operaciones.</div></div></div>
-  </aside>;
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="Abrir menú"
+        onClick={() => setOpen(true)}
+        className="fixed left-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm lg:hidden"
+      >
+        <Icon name="menu"/>
+      </button>
+
+      {open && (
+        <button
+          type="button"
+          aria-label="Cerrar menú"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-[1px] lg:hidden"
+        />
+      )}
+
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,18rem)] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 lg:w-72 lg:translate-x-0 lg:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="flex h-[76px] shrink-0 items-center justify-between border-b border-slate-100 px-5 sm:px-6">
+          <div>
+            <div className="text-base font-bold tracking-tight text-slate-950">Inmobiliaria Alberto Alfaro</div>
+            <div className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">Gestión inmobiliaria</div>
+          </div>
+          <button
+            type="button"
+            aria-label="Cerrar menú"
+            onClick={() => setOpen(false)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+          >
+            <Icon name="close"/>
+          </button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-5">
+          <MenuContent onNavigate={() => setOpen(false)}/>
+        </nav>
+
+        <div className="shrink-0 border-t border-slate-100 p-4">
+          <div className="rounded-xl bg-slate-50 p-3">
+            <div className="text-xs font-semibold text-slate-700">Secretaria Virtual</div>
+            <div className="mt-1 text-[11px] leading-4 text-slate-500">Control de cartera y seguimiento de operaciones.</div>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
 }
