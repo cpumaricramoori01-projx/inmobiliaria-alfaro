@@ -87,7 +87,7 @@ export default function Sidebar() {
         type="button"
         aria-label="Abrir menú"
         onClick={() => setOpen(true)}
-        className="fixed left-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm lg:hidden"
+        className="fixed left-4 top-4 z-[60] flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm lg:hidden"
       >
         <Icon name="menu"/>
       </button>
@@ -97,12 +97,12 @@ export default function Sidebar() {
           type="button"
           aria-label="Cerrar menú"
           onClick={() => setOpen(false)}
-          className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-[1px] lg:hidden"
+          className="fixed inset-x-0 bottom-0 top-[76px] z-40 bg-slate-950/30 backdrop-blur-[1px] lg:hidden"
         />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,18rem)] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 lg:w-72 lg:translate-x-0 lg:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="flex h-[76px] shrink-0 items-center justify-between border-b border-slate-100 px-5 sm:px-6">
+      <aside className={`fixed bottom-0 left-0 top-[76px] z-50 flex w-[min(86vw,18rem)] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 lg:top-0 lg:w-72 lg:translate-x-0 lg:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="hidden h-[76px] shrink-0 items-center justify-between border-b border-slate-100 px-5 sm:px-6 lg:flex">
           <div>
             <div className="text-base font-bold tracking-tight text-slate-950">Inmobiliaria Alberto Alfaro</div>
             <div className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">Gestión inmobiliaria</div>
