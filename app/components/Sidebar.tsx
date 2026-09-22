@@ -61,8 +61,8 @@ function Icon({ name }: { name: string }) {
     case "visit":
       return (
         <svg {...common}>
-          <path d="M5 4h14v16H5z" />
-          <path d="M8 8h8M8 12h5M8 16h3" />
+          <rect x="5" y="4" width="14" height="16" rx="2" />
+          <path d="M8 9h8M8 13h5M8 17h3" />
         </svg>
       );
     case "valuation":
