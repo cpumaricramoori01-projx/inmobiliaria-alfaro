@@ -120,7 +120,7 @@ export default function CarteraPage() {
             ["Visitas pendientes", visitasPendientes, "por atender", "bg-amber-50 text-amber-600", "filter"],
             ["Tasaciones pendientes", tasacionesPendientes, "por atender", "bg-orange-50 text-orange-600", "filter"],
             ["En negociación", negociacion, "pendientes de aprobación", "bg-violet-50 text-violet-600", "arrow"],
-          ] as const).map(([label, value, detail, tone, icon]) => (
+          ].map(([label, value, detail, tone, icon]) => (
             <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">{label}</span><span className={`flex h-8 w-8 items-center justify-center rounded-lg ${tone}`}><Icon name={icon} /></span></div>
               <div className="mt-3 flex items-end gap-2"><span className="text-2xl font-bold text-slate-950">{value}</span><span className="pb-0.5 text-[11px] text-slate-400">{detail}</span></div>
