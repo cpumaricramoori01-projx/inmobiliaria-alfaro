@@ -4,22 +4,32 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const fase1 = [
-  { href: "/cartera", label: "Cartera de inmuebles", icon: "home" },
-  { href: "/registrar-inmueble", label: "Registrar inmueble", icon: "plus" },
-  { href: "/liberar-inmuebles", label: "Liberar inmueble", icon: "release" },
-  { href: "/registrar-visitas", label: "Registrar visitas realizadas", icon: "visit" },
-  { href: "/registrar-tasaciones", label: "Registrar tasaciones realizadas", icon: "valuation" },
-  { href: "/visitas-pendientes", label: "Visitas pendientes", icon: "clock" },
-  { href: "/tasaciones-textos-pendientes", label: "Tasaciones y textos pendientes", icon: "clipboard" },
-  { href: "/reportes", label: "Reportes", icon: "report" },
+  { href: "/cartera", label: "Cartera de inmuebles", icon: "home", tone: "blue" },
+  { href: "/registrar-inmueble", label: "Registrar inmueble", icon: "plus", tone: "emerald" },
+  { href: "/liberar-inmuebles", label: "Liberar inmueble", icon: "release", tone: "rose" },
+  { href: "/registrar-visitas", label: "Registrar visitas realizadas", icon: "visit", tone: "violet" },
+  { href: "/registrar-tasaciones", label: "Registrar tasaciones realizadas", icon: "valuation", tone: "orange" },
+  { href: "/visitas-pendientes", label: "Visitas pendientes", icon: "clock", tone: "amber" },
+  { href: "/tasaciones-textos-pendientes", label: "Tasaciones y textos pendientes", icon: "clipboard", tone: "pink" },
+  { href: "/reportes", label: "Reportes", icon: "report", tone: "indigo" },
 ];
 
-const fase2 = [
-  { href: "/datos-inmuebles", label: "Ingresar datos de inmuebles", icon: "database" },
-];
+const fase2 = [{ href: "/datos-inmuebles", label: "Ingresar datos de inmuebles", icon: "database", tone: "cyan" }];
+
+const toneClasses: Record<string, { bg: string; text: string }> = {
+  blue: { bg: "bg-blue-50", text: "text-blue-600" },
+  emerald: { bg: "bg-emerald-50", text: "text-emerald-600" },
+  rose: { bg: "bg-rose-50", text: "text-rose-600" },
+  violet: { bg: "bg-violet-50", text: "text-violet-600" },
+  orange: { bg: "bg-orange-50", text: "text-orange-600" },
+  amber: { bg: "bg-amber-50", text: "text-amber-600" },
+  pink: { bg: "bg-pink-50", text: "text-pink-600" },
+  indigo: { bg: "bg-indigo-50", text: "text-indigo-600" },
+  cyan: { bg: "bg-cyan-50", text: "text-cyan-600" },
+};
 
 function Icon({ name }: { name: string }) {
-  const common = { className: "h-[18px] w-[18px] shrink-0", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  const common = { className: "h-[18px] w-[18px]", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   const paths: Record<string, React.ReactNode> = {
     dashboard: <><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></>,
     home: <path d="m3 10 9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9Z"/>,
@@ -35,22 +45,17 @@ function Icon({ name }: { name: string }) {
   return <svg {...common}>{paths[name]}</svg>;
 }
 
-function MenuLink({ item }: { item: { href: string; label: string; icon: string } }) {
+function MenuLink({ item }: { item: { href: string; label: string; icon: string; tone: string } }) {
   const pathname = usePathname();
   const active = item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(`${item.href}/`);
-  return <Link href={item.href} className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition ${active ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}><Icon name={item.icon}/><span className="leading-5">{item.label}</span></Link>;
+  const tone = toneClasses[item.tone];
+  return <Link href={item.href} className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition ${active ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-white/10 text-white" : `${tone.bg} ${tone.text}`}`}><Icon name={item.icon}/></span><span className="leading-5">{item.label}</span></Link>;
 }
 
 export default function Sidebar() {
   return <aside className="fixed inset-y-0 left-0 z-50 hidden w-72 border-r border-slate-200 bg-white lg:flex lg:flex-col">
     <div className="flex h-[76px] items-center border-b border-slate-100 px-6"><div><div className="text-base font-bold tracking-tight text-slate-950">Inmobiliaria Alberto Alfaro</div><div className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">Gestión inmobiliaria</div></div></div>
-    <nav className="flex-1 overflow-y-auto px-3 py-5">
-      <MenuLink item={{ href: "/", label: "Dashboard", icon: "dashboard" }}/>
-      <div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Fase 1 · Flujo operativo</div>
-      <div className="space-y-1">{fase1.map(item=><MenuLink key={item.href} item={item}/>)}</div>
-      <div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Fase 2 · Datos del inmueble</div>
-      <div className="space-y-1">{fase2.map(item=><MenuLink key={item.href} item={item}/>)}</div>
-    </nav>
+    <nav className="flex-1 overflow-y-auto px-3 py-5"><MenuLink item={{ href: "/", label: "Dashboard", icon: "dashboard", tone: "indigo" }}/><div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Fase 1 · Flujo operativo</div><div className="space-y-1">{fase1.map(item=><MenuLink key={item.href} item={item}/>)}</div><div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Fase 2 · Datos del inmueble</div><div className="space-y-1">{fase2.map(item=><MenuLink key={item.href} item={item}/>)}</div></nav>
     <div className="border-t border-slate-100 p-4"><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs font-semibold text-slate-700">Secretaria Virtual</div><div className="mt-1 text-[11px] leading-4 text-slate-500">Control de cartera y seguimiento de operaciones.</div></div></div>
   </aside>;
 }
