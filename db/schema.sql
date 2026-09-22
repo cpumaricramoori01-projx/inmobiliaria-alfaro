@@ -1,6 +1,6 @@
 -- Modelo inicial de datos para Inmobiliaria Alberto Alfaro EIRL.
 -- IMPORTANTE: todas las tablas usan prefijo inm_ y son independientes de cualquier tabla del Censo Hospitalario.
--- Esta etapa solo documenta el modelo. No crea ni modifica tablas en la base de datos.
+-- Este archivo puede ejecutarse manualmente en la base de datos destinada a Inmobiliaria.
 
 CREATE TABLE inm_usuarios (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -189,6 +189,21 @@ CREATE TABLE inm_timeline (
     FOREIGN KEY (inmueble_id) REFERENCES inm_inmuebles(id),
   CONSTRAINT fk_inm_timeline_usuario
     FOREIGN KEY (usuario_id) REFERENCES inm_usuarios(id)
+);
+
+-- Alertas configurables por administración.
+CREATE TABLE inm_config_alertas (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  tipo VARCHAR(60) NOT NULL,
+  dias INT UNSIGNED NOT NULL,
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  descripcion VARCHAR(255) NULL,
+  fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  usuario_actualizacion_id BIGINT UNSIGNED NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_inm_config_alertas_tipo (tipo),
+  CONSTRAINT fk_inm_config_alertas_usuario
+    FOREIGN KEY (usuario_actualizacion_id) REFERENCES inm_usuarios(id)
 );
 
 -- Catálogos iniciales de posiciones. Ejecutar solo en la BD de Inmobiliaria.
