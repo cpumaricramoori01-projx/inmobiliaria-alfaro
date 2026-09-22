@@ -114,7 +114,8 @@ export default function CarteraPage() {
         </div>
 
         <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {([\n            ["En cartera", activosCount, "de 90", "bg-blue-50 text-blue-600", "home"],
+          {([
+            ["En cartera", activosCount, "de 90", "bg-blue-50 text-blue-600", "home"],
             ["Disponibles", disponibles, "posiciones reutilizables", "bg-slate-100 text-slate-600", "map"],
             ["Visitas pendientes", visitasPendientes, "por atender", "bg-amber-50 text-amber-600", "filter"],
             ["Tasaciones pendientes", tasacionesPendientes, "por atender", "bg-orange-50 text-orange-600", "filter"],
