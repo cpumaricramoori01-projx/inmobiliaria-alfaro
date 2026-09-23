@@ -1,4 +1,25 @@
+import fs from "node:fs";
+import path from "node:path";
 import mysql from "mysql2/promise";
+
+const envPath = path.join(process.cwd(), ".env.local");
+
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, "utf8");
+
+  for (const line of envContent.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    const separator = trimmed.indexOf("=");
+    if (separator === -1) continue;
+
+    const key = trimmed.slice(0, separator).trim();
+    const value = trimmed.slice(separator + 1).trim().replace(/^['"]|['"]$/g, "");
+
+    if (!process.env[key]) process.env[key] = value;
+  }
+}
 
 const databaseUrl = process.env.DATABASE_URL;
 
