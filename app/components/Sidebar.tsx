@@ -16,7 +16,6 @@ const fase1 = [
 ];
 
 const fase2 = [{ href: "/datos-inmuebles", label: "Ingresar datos de inmuebles", icon: "database", tone: "cyan" }];
-const mantenimiento = [{ href: "/mantenimiento", label: "Mantenimiento BD", icon: "settings", tone: "slate" }];
 
 const toneClasses: Record<string, { bg: string; text: string }> = {
   blue: { bg: "bg-blue-50", text: "text-blue-600" },
@@ -28,7 +27,6 @@ const toneClasses: Record<string, { bg: string; text: string }> = {
   pink: { bg: "bg-pink-50", text: "text-pink-600" },
   indigo: { bg: "bg-indigo-50", text: "text-indigo-600" },
   cyan: { bg: "bg-cyan-50", text: "text-cyan-600" },
-  slate: { bg: "bg-slate-100", text: "text-slate-600" },
 };
 
 function Icon({ name }: { name: string }) {
@@ -77,8 +75,6 @@ function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
       <div className="space-y-1">{fase1.map(item => <MenuLink key={item.href} item={item} onNavigate={onNavigate}/>)}</div>
       <div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Fase 2 · Datos del inmueble</div>
       <div className="space-y-1">{fase2.map(item => <MenuLink key={item.href} item={item} onNavigate={onNavigate}/>)}</div>
-      <div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Mantenimiento</div>
-      <div className="space-y-1">{mantenimiento.map(item => <MenuLink key={item.href} item={item} onNavigate={onNavigate}/>)}</div>
     </>
   );
 }
