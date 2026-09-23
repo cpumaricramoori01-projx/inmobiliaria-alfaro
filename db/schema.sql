@@ -74,7 +74,6 @@ CREATE TABLE inm_asignaciones_posicion (
   fecha_fin DATETIME NULL,
   activa BOOLEAN NOT NULL DEFAULT TRUE,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_inm_posicion_activa (posicion_id, activa),
   CONSTRAINT fk_inm_asig_inmueble
     FOREIGN KEY (inmueble_id) REFERENCES inm_inmuebles(id),
   CONSTRAINT fk_inm_asig_posicion
@@ -151,7 +150,6 @@ CREATE TABLE inm_liberaciones (
   anulada BOOLEAN NOT NULL DEFAULT FALSE,
   fecha_anulacion DATETIME NULL,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_inm_liberacion_pendiente (inmueble_id, confirmado, anulada),
   CONSTRAINT fk_inm_liberaciones_inmueble
     FOREIGN KEY (inmueble_id) REFERENCES inm_inmuebles(id),
   CONSTRAINT fk_inm_liberaciones_registro
