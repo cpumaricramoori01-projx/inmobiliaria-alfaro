@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Estado = "Activo" | "Histórico";
@@ -25,25 +25,8 @@ type Inmueble = {
   motivoLiberacion?: string;
 };
 
-const activos: Inmueble[] = [
-  { id: "INM-001", posicion: 1, tipo: "Casa", nombre: "Casa Urbanización Buenos Aires", ubicacion: "Nuevo Chimbote", estado: "Activo", etapa: "Listo para publicar", propietario: "Propietario registrado" },
-  { id: "INM-002", posicion: 4, tipo: "Casa", nombre: "Casa Villa María", ubicacion: "Nuevo Chimbote", estado: "Activo", etapa: "Publicado", propietario: "Propietario registrado" },
-  { id: "INM-003", posicion: 12, tipo: "Departamento", nombre: "Departamento El Carmen", ubicacion: "Chimbote", estado: "Activo", etapa: "En negociación", propietario: "Propietario registrado" },
-  { id: "INM-004", posicion: 18, tipo: "Terreno", nombre: "Terreno Los Álamos", ubicacion: "Nuevo Chimbote", estado: "Activo", etapa: "Visita realizada", propietario: "Propietario registrado" },
-  { id: "INM-005", posicion: 27, tipo: "Departamento", nombre: "Departamento Los Pinos", ubicacion: "Chimbote", estado: "Activo", etapa: "Publicado", propietario: "Propietario registrado" },
-  { id: "INM-006", posicion: 39, tipo: "Terreno", nombre: "Terreno Plaza 28 de Julio", ubicacion: "Chimbote", estado: "Activo", etapa: "Tasación pendiente", propietario: "Propietario registrado" },
-  { id: "INM-007", posicion: 45, tipo: "Terreno", nombre: "Terreno La Campiña", ubicacion: "Nuevo Chimbote", estado: "Activo", etapa: "Tasación pendiente", propietario: "Propietario registrado" },
-  { id: "INM-008", posicion: 54, tipo: "Terreno", nombre: "Terreno Los Pinos", ubicacion: "Chimbote", estado: "Activo", etapa: "Visita pendiente", propietario: "Propietario registrado" },
-  { id: "INM-009", posicion: 63, tipo: "Casa", nombre: "Casa La Esperanza", ubicacion: "Nuevo Chimbote", estado: "Activo", etapa: "Visita pendiente", propietario: "Propietario registrado" },
-  { id: "INM-010", posicion: 68, tipo: "Departamento", nombre: "Departamento San Pedro", ubicacion: "Chimbote", estado: "Activo", etapa: "Visita pendiente", propietario: "Propietario registrado" },
-  { id: "INM-011", posicion: 72, tipo: "Casa", nombre: "Casa Centro", ubicacion: "Chimbote", estado: "Activo", etapa: "Publicado", propietario: "Propietario registrado" },
-  { id: "INM-012", posicion: 81, tipo: "Terreno", nombre: "Terreno Las Brisas", ubicacion: "Nuevo Chimbote", estado: "Activo", etapa: "Listo para publicar", propietario: "Propietario registrado" },
-];
-
-const historicos: Inmueble[] = [
-  { id: "HIS-001", tipo: "Casa", nombre: "Casa Los Jardines", ubicacion: "Chimbote", estado: "Histórico", propietario: "Propietario registrado", motivoLiberacion: "Vendido" },
-  { id: "HIS-002", tipo: "Terreno", nombre: "Terreno La Unión", ubicacion: "Nuevo Chimbote", estado: "Histórico", propietario: "Propietario registrado", motivoLiberacion: "Propietario se retiró" },
-];
+const activos: Inmueble[] = [];
+const historicos: Inmueble[] = [];
 
 const etapaTone: Record<Etapa, string> = {
   "Visita pendiente": "bg-amber-50 text-amber-700",
@@ -75,9 +58,9 @@ export default function CarteraPage() {
   const [tipo, setTipo] = useState("Todos");
   const [busqueda, setBusqueda] = useState("");
   const [vista, setVista] = useState<"posiciones" | "lista">("posiciones");
-  const [seleccionado, setSeleccionado] = useState<Inmueble | null>(null);
+  const [seleccionado, setSeleccionado] = useState<Inmueble | null>(null);\n  const [inmuebles, setInmuebles] = useState<Inmueble[]>([]);\n  const [cargando, setCargando] = useState(true);\n  const [error, setError] = useState("");\n\n  useEffect(() => {\n    let activo = true;\n    fetch("/api/cartera")\n      .then(async (res) => {\n        if (!res.ok) throw new Error("No se pudo cargar la cartera.");\n        return res.json();\n      })\n      .then((data) => {\n        if (activo) setInmuebles(data.inmuebles ?? []);\n      })\n      .catch((err) => {\n        if (activo) setError(err instanceof Error ? err.message : "No se pudo cargar la cartera.");\n      })\n      .finally(() => {\n        if (activo) setCargando(false);\n      });\n    return () => { activo = false; };\n  }, []);
 
-  const todos = [...activos, ...historicos];
+  const activos = useMemo(() => inmuebles.filter((x) => x.estado === "Activo"), [inmuebles]);\n  const historicos = useMemo(() => inmuebles.filter((x) => x.estado === "Histórico"), [inmuebles]);\n  const todos = inmuebles;
   const filtrados = useMemo(() => todos.filter((x) => {
     const texto = busqueda.toLowerCase().trim();
     const coincideTexto = !texto || `${x.id} ${x.posicion ?? ""} ${x.nombre} ${x.ubicacion} ${x.propietario}`.toLowerCase().includes(texto);
@@ -128,7 +111,7 @@ export default function CarteraPage() {
           ))}
         </div>
 
-        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        {error && <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}\n        {cargando && <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">Cargando cartera desde la base de datos…</div>}\n\n        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <div className="relative flex-1">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="search" /></span>
