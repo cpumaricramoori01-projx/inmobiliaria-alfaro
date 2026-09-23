@@ -58,9 +58,33 @@ export default function CarteraPage() {
   const [tipo, setTipo] = useState("Todos");
   const [busqueda, setBusqueda] = useState("");
   const [vista, setVista] = useState<"posiciones" | "lista">("posiciones");
-  const [seleccionado, setSeleccionado] = useState<Inmueble | null>(null);\n  const [inmuebles, setInmuebles] = useState<Inmueble[]>([]);\n  const [cargando, setCargando] = useState(true);\n  const [error, setError] = useState("");\n\n  useEffect(() => {\n    let activo = true;\n    fetch("/api/cartera")\n      .then(async (res) => {\n        if (!res.ok) throw new Error("No se pudo cargar la cartera.");\n        return res.json();\n      })\n      .then((data) => {\n        if (activo) setInmuebles(data.inmuebles ?? []);\n      })\n      .catch((err) => {\n        if (activo) setError(err instanceof Error ? err.message : "No se pudo cargar la cartera.");\n      })\n      .finally(() => {\n        if (activo) setCargando(false);\n      });\n    return () => { activo = false; };\n  }, []);
+  const [seleccionado, setSeleccionado] = useState<Inmueble | null>(null);
+  const [inmuebles, setInmuebles] = useState<Inmueble[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState("");
 
-  const activos = useMemo(() => inmuebles.filter((x) => x.estado === "Activo"), [inmuebles]);\n  const historicos = useMemo(() => inmuebles.filter((x) => x.estado === "Histórico"), [inmuebles]);\n  const todos = inmuebles;
+  useEffect(() => {
+    let activo = true;
+    fetch("/api/cartera")
+      .then(async (res) => {
+        if (!res.ok) throw new Error("No se pudo cargar la cartera.");
+        return res.json();
+      })
+      .then((data) => {
+        if (activo) setInmuebles(data.inmuebles ?? []);
+      })
+      .catch((err) => {
+        if (activo) setError(err instanceof Error ? err.message : "No se pudo cargar la cartera.");
+      })
+      .finally(() => {
+        if (activo) setCargando(false);
+      });
+    return () => { activo = false; };
+  }, []);
+
+  const activos = useMemo(() => inmuebles.filter((x) => x.estado === "Activo"), [inmuebles]);
+  const historicos = useMemo(() => inmuebles.filter((x) => x.estado === "Histórico"), [inmuebles]);
+  const todos = inmuebles;
   const filtrados = useMemo(() => todos.filter((x) => {
     const texto = busqueda.toLowerCase().trim();
     const coincideTexto = !texto || `${x.id} ${x.posicion ?? ""} ${x.nombre} ${x.ubicacion} ${x.propietario}`.toLowerCase().includes(texto);
@@ -111,7 +135,10 @@ export default function CarteraPage() {
           ))}
         </div>
 
-        {error && <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}\n        {cargando && <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">Cargando cartera desde la base de datos…</div>}\n\n        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        {error && <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
+        {cargando && <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">Cargando cartera desde la base de datos…</div>}
+
+        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <div className="relative flex-1">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="search" /></span>
