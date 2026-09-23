@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   inmAsignacionesPosicion,
@@ -42,21 +42,19 @@ export async function POST(request: Request) {
     }
 
     const result = await db.transaction(async (tx) => {
-      const [position] = await tx
-        .select({ id: inmPosiciones.id, activo: inmPosiciones.activo })
-        .from(inmPosiciones)
-        .where(eq(inmPosiciones.numero, posicion))
-        .limit(1);
+      const [position] = await tx.execute(
+        sql`SELECT id, activo FROM inm_posiciones WHERE numero = ${posicion} LIMIT 1 FOR UPDATE`
+      ) as unknown as [{ id: number; activo: number } | undefined];
 
       if (!position || !position.activo) {
         throw new Error("La posición seleccionada no existe o está deshabilitada.");
       }
 
-      const [locked] = await tx.execute(
-        sql`SELECT id FROM inm_asignaciones_posicion WHERE posicion_id = ${position.id} AND activa = 1 LIMIT 1 FOR UPDATE`
+      const [activeAssignment] = await tx.execute(
+        sql`SELECT id FROM inm_asignaciones_posicion WHERE posicion_id = ${position.id} AND activa = 1 LIMIT 1`
       ) as unknown as [{ id: number } | undefined];
 
-      if (locked) {
+      if (activeAssignment) {
         throw new Error("La posición seleccionada acaba de ser ocupada. Actualiza la pantalla y elige otra.");
       }
 
