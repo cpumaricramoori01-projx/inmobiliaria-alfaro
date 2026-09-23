@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Tipo = "Casa" | "Departamento" | "Terreno" | "Local" | "Oficina" | "Otros";
+type Posicion = { numero: number; disponible: boolean };
 
 export default function RegistrarInmueblePage() {
   const [posicion, setPosicion] = useState("");
+  const [posiciones, setPosiciones] = useState<Posicion[]>([]);
+  const [cargandoPosiciones, setCargandoPosiciones] = useState(true);
   const [tipo, setTipo] = useState<Tipo | "">("");
   const [nombre, setNombre] = useState("");
   const [ubicacion, setUbicacion] = useState("");
@@ -20,7 +23,23 @@ export default function RegistrarInmueblePage() {
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
 
-  const posiciones = useMemo(() => Array.from({ length: 90 }, (_, i) => i + 1), []);
+  useEffect(() => {
+    cargarPosiciones();
+  }, []);
+
+  async function cargarPosiciones() {
+    setCargandoPosiciones(true);
+    try {
+      const response = await fetch("/api/posiciones", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No fue posible consultar las posiciones.");
+      setPosiciones(data.posiciones ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No fue posible consultar las posiciones.");
+    } finally {
+      setCargandoPosiciones(false);
+    }
+  }
 
   async function buscarPropietario() {
     setError("");
@@ -89,13 +108,16 @@ export default function RegistrarInmueblePage() {
       setApellidos("");
       setTelefono("");
       setPropietarioEncontrado(false);
+      await cargarPosiciones();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No fue posible registrar el inmueble.");
+      await cargarPosiciones();
     } finally {
       setGuardando(false);
     }
   }
 
+  const disponibles = useMemo(() => posiciones.filter((p) => p.disponible), [posiciones]);
   const dniValido = /^\d{8}$/.test(dni);
   const puedeRegistrar = Boolean(posicion && tipo && nombre.trim() && dniValido && nombres.trim() && apellidos.trim() && !guardando);
 
@@ -122,12 +144,15 @@ export default function RegistrarInmueblePage() {
 
             <div className="space-y-6 p-6">
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">Posición en cartera <span className="text-rose-500">*</span></label>
-                <select value={posicion} onChange={(e) => setPosicion(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100">
-                  <option value="">Seleccionar posición disponible</option>
-                  {posiciones.map((n) => <option key={n} value={n}>{String(n).padStart(2, "0")} · Consultar disponibilidad al guardar</option>)}
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <label className="block text-sm font-semibold text-slate-700">Posición en cartera <span className="text-rose-500">*</span></label>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">{disponibles.length} disponibles</span>
+                </div>
+                <select value={posicion} onChange={(e) => setPosicion(e.target.value)} disabled={cargandoPosiciones || disponibles.length === 0} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-100">
+                  <option value="">{cargandoPosiciones ? "Consultando posiciones..." : disponibles.length ? "Seleccionar posición disponible" : "No hay posiciones disponibles"}</option>
+                  {disponibles.map((p) => <option key={p.numero} value={p.numero}>{String(p.numero).padStart(2, "0")} · Disponible</option>)}
                 </select>
-                <p className="mt-1.5 text-xs text-slate-400">La disponibilidad se valida nuevamente en el servidor al registrar, para evitar duplicidades.</p>
+                <p className="mt-1.5 text-xs text-slate-400">Las posiciones ocupadas no aparecen como opciones. La disponibilidad se vuelve a validar al guardar.</p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
@@ -195,7 +220,7 @@ export default function RegistrarInmueblePage() {
               <div className="ml-4 h-5 border-l border-dashed border-slate-200"/>
               <div className="flex gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-50 text-sm font-bold text-violet-600">3</span><div><p className="text-sm font-semibold text-slate-800">Tasación</p><p className="mt-0.5 text-xs text-slate-500">Se habilita al completar la visita.</p></div></div>
             </div>
-            <div className="mt-5 rounded-xl bg-slate-50 p-4"><p className="text-xs font-semibold text-slate-700">Capacidad</p><p className="mt-1 text-lg font-bold text-slate-950">90 <span className="text-sm font-medium text-slate-400">posiciones administradas</span></p><p className="mt-2 text-[11px] text-slate-400">La disponibilidad real se consulta directamente en la base de datos.</p></div>
+            <div className="mt-5 rounded-xl bg-slate-50 p-4"><p className="text-xs font-semibold text-slate-700">Capacidad</p><p className="mt-1 text-lg font-bold text-slate-950">90 <span className="text-sm font-medium text-slate-400">posiciones administradas</span></p><p className="mt-2 text-[11px] text-slate-400">Disponibles: <strong>{cargandoPosiciones ? "..." : disponibles.length}</strong> · La disponibilidad se consulta directamente en la base de datos.</p></div>
           </aside>
         </div>
       </div>
