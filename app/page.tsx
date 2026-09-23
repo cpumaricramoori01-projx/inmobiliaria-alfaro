@@ -1,29 +1,30 @@
-const resumen = [
-  { titulo: "Inmuebles activos", valor: "42", detalle: "de 90 posiciones", tone: "dark" },
-  { titulo: "Posiciones disponibles", valor: "48", detalle: "listas para nuevos inmuebles", tone: "blue" },
-  { titulo: "Visitas pendientes", valor: "6", detalle: "requieren atención", tone: "amber" },
-  { titulo: "Tasaciones pendientes", valor: "4", detalle: "requieren atención", tone: "orange" },
-];
+"use client";
 
-const pendientes = [
-  { numero: "54", nombre: "Terreno Los Pinos", etapa: "Visita pendiente", detalle: "Registrado recientemente", tone: "amber" },
-  { numero: "39", nombre: "Terreno Plaza 28 de Julio", etapa: "Tasación pendiente", detalle: "Visita realizada", tone: "orange" },
-  { numero: "45", nombre: "Terreno La Campiña", etapa: "En negociación", detalle: "A la espera de decisión del propietario", tone: "violet" },
-  { numero: "52", nombre: "Casa Los Pinos", etapa: "Texto pendiente", detalle: "Tasación aprobada", tone: "rose" },
-];
+import { useEffect, useState } from "react";
 
-const recientes = [
-  { numero: "61", nombre: "Casa Urbanización Buenos Aires", etapa: "Visita realizada", fecha: "Hoy" },
-  { numero: "58", nombre: "Departamento Nuevo Chimbote", etapa: "Tasación realizada", fecha: "Ayer" },
-  { numero: "55", nombre: "Terreno Los Álamos", etapa: "Listo para publicar", fecha: "Ayer" },
-];
-
-const metricas = [
-  { titulo: "Aprobaciones", valor: "3", detalle: "pendientes de decisión", tone: "violet" },
-  { titulo: "En negociación", valor: "2", detalle: "con el propietario", tone: "violet" },
-  { titulo: "Textos pendientes", valor: "1", detalle: "requiere completar", tone: "rose" },
-  { titulo: "Listos para publicar", valor: "5", detalle: "esperando publicación", tone: "emerald" },
-];
+type DashboardData = {
+  resumen: {
+    activos: number;
+    posicionesDisponibles: number;
+    visitasPendientes: number;
+    tasacionesPendientes: number;
+    aprobaciones: number;
+    negociaciones: number;
+    textosPendientes: number;
+    listosParaPublicar: number;
+  };
+  pendientes: {
+    etapa: string;
+    total: number;
+    tone: string;
+  }[];
+  recientes: {
+    numero: string;
+    nombre: string;
+    etapa: string;
+    fecha: string | Date | null;
+  }[];
+};
 
 const toneStyles: Record<string, string> = {
   dark: "border-slate-900 bg-slate-900 text-white",
@@ -40,9 +41,55 @@ const dotStyles: Record<string, string> = {
   orange: "bg-orange-500",
   violet: "bg-violet-500",
   rose: "bg-rose-500",
+  emerald: "bg-emerald-500",
 };
 
+function formatDate(value: string | Date | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("es-PE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 export default function Home() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/dashboard")
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || "No se pudo cargar el dashboard.");
+        return body;
+      })
+      .then(setData)
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar el dashboard."))
+      .finally(() => setCargando(false));
+  }, []);
+
+  const resumen = data
+    ? [
+        { titulo: "Inmuebles activos", valor: data.resumen.activos, detalle: "de 90 posiciones", tone: "dark" },
+        { titulo: "Posiciones disponibles", valor: data.resumen.posicionesDisponibles, detalle: "listas para nuevos inmuebles", tone: "blue" },
+        { titulo: "Visitas pendientes", valor: data.resumen.visitasPendientes, detalle: "requieren atención", tone: "amber" },
+        { titulo: "Tasaciones pendientes", valor: data.resumen.tasacionesPendientes, detalle: "requieren atención", tone: "orange" },
+      ]
+    : [];
+
+  const metricas = data
+    ? [
+        { titulo: "Aprobaciones", valor: data.resumen.aprobaciones, detalle: "pendientes de decisión", tone: "violet" },
+        { titulo: "En negociación", valor: data.resumen.negociaciones, detalle: "con el propietario", tone: "violet" },
+        { titulo: "Textos pendientes", valor: data.resumen.textosPendientes, detalle: "requiere completar", tone: "rose" },
+        { titulo: "Listos para publicar", valor: data.resumen.listosParaPublicar, detalle: "esperando publicación", tone: "emerald" },
+      ]
+    : [];
+
   return (
     <main className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
@@ -69,6 +116,18 @@ export default function Home() {
             Una vista rápida de las posiciones, pendientes y avances del proceso comercial.
           </p>
         </div>
+
+        {cargando && (
+          <div className="mb-6 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-500 shadow-sm">
+            Cargando información real de la cartera...
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {resumen.map((x) => (
@@ -100,23 +159,23 @@ export default function Home() {
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
               <div>
                 <h3 className="font-bold text-slate-950">Requieren atención</h3>
-                <p className="mt-1 text-xs text-slate-500">El trabajo pendiente que puede mover el flujo hacia la siguiente etapa.</p>
+                <p className="mt-1 text-xs text-slate-500">Trabajo pendiente que puede mover el flujo hacia la siguiente etapa.</p>
               </div>
               <a href="/visitas-pendientes" className="text-xs font-semibold text-slate-600 transition hover:text-slate-950">Ver pendientes →</a>
             </div>
             <div className="divide-y divide-slate-100">
-              {pendientes.map((x) => (
-                <div key={x.numero} className="flex items-center justify-between gap-4 px-6 py-4 transition hover:bg-slate-50/70">
+              {data?.pendientes.map((x) => (
+                <div key={x.etapa} className="flex items-center justify-between gap-4 px-6 py-4 transition hover:bg-slate-50/70">
                   <div className="flex min-w-0 items-center gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-bold text-slate-700">{x.numero}</div>
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-bold text-slate-700">{x.total}</div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-800">{x.nombre}</p>
-                      <p className="mt-1 truncate text-xs text-slate-500">{x.etapa} · {x.detalle}</p>
+                      <p className="truncate text-sm font-semibold text-slate-800">{x.etapa}</p>
+                      <p className="mt-1 truncate text-xs text-slate-500">Inmuebles en esta etapa del flujo</p>
                     </div>
                   </div>
                   <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
                     <span className={`h-1.5 w-1.5 rounded-full ${dotStyles[x.tone]}`} />
-                    Pendiente
+                    {x.total > 0 ? "Pendiente" : "Sin pendientes"}
                   </span>
                 </div>
               ))}
@@ -129,14 +188,14 @@ export default function Home() {
               <p className="mt-1 text-xs text-slate-500">Últimos movimientos registrados en la cartera.</p>
             </div>
             <div className="divide-y divide-slate-100">
-              {recientes.map((x) => (
-                <div key={x.numero} className="flex items-center gap-3 px-6 py-4">
+              {data?.recientes.map((x, index) => (
+                <div key={`${x.numero}-${index}`} className="flex items-center gap-3 px-6 py-4">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-600">{x.numero}</div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-slate-800">{x.nombre}</p>
                     <p className="mt-1 text-xs text-slate-500">{x.etapa}</p>
                   </div>
-                  <span className="text-[11px] text-slate-400">{x.fecha}</span>
+                  <span className="text-[11px] text-slate-400">{formatDate(x.fecha)}</span>
                 </div>
               ))}
             </div>
