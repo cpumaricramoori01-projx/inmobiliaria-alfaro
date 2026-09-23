@@ -85,11 +85,11 @@ export default function Sidebar() {
     <>
       <button
         type="button"
-        aria-label="Abrir menú"
-        onClick={() => setOpen(true)}
+        aria-label={open ? "Cerrar menú" : "Abrir menú"}
+        onClick={() => setOpen((value) => !value)}
         className="fixed left-4 top-4 z-[60] flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm lg:hidden"
       >
-        <Icon name="menu"/>
+        <Icon name={open ? "close" : "menu"}/>
       </button>
 
       {open && (
