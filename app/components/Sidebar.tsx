@@ -16,6 +16,7 @@ const fase1 = [
 ];
 
 const fase2 = [{ href: "/datos-inmuebles", label: "Ingresar datos de inmuebles", icon: "database", tone: "cyan" }];
+const mantenimiento = [{ href: "/mantenimiento", label: "Mantenimiento BD", icon: "settings", tone: "slate" }];
 
 const toneClasses: Record<string, { bg: string; text: string }> = {
   blue: { bg: "bg-blue-50", text: "text-blue-600" },
@@ -27,6 +28,7 @@ const toneClasses: Record<string, { bg: string; text: string }> = {
   pink: { bg: "bg-pink-50", text: "text-pink-600" },
   indigo: { bg: "bg-indigo-50", text: "text-indigo-600" },
   cyan: { bg: "bg-cyan-50", text: "text-cyan-600" },
+  slate: { bg: "bg-slate-100", text: "text-slate-600" },
 };
 
 function Icon({ name }: { name: string }) {
@@ -44,6 +46,7 @@ function Icon({ name }: { name: string }) {
     database: <><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5"/><path d="M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7"/></>,
     menu: <><path d="M4 7h16M4 12h16M4 17h16"/></>,
     close: <><path d="M6 6l12 12M18 6 6 18"/></>,
+    settings: <><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19 13 .9 1.5-1.5 2.6-1.7-.2a7.7 7.7 0 0 1-1.3.8l-.6 1.6h-3l-.6-1.6a7.7 7.7 0 0 1-1.3-.8l-1.7.2-1.5-2.6.9-1.5a7 7 0 0 1 0-1.5l-.9-1.5 1.5-2.6 1.7.2a7.7 7.7 0 0 1 1.3-.8l.6-1.6h3l.6 1.6a7.7 7.7 0 0 1 1.3.8l1.7-.2 1.5 2.6-.9 1.5a7 7 0 0 1 0 1.5Z"/></>,
   };
   return <svg {...common}>{paths[name]}</svg>;
 }
@@ -74,6 +77,8 @@ function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
       <div className="space-y-1">{fase1.map(item => <MenuLink key={item.href} item={item} onNavigate={onNavigate}/>)}</div>
       <div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Fase 2 · Datos del inmueble</div>
       <div className="space-y-1">{fase2.map(item => <MenuLink key={item.href} item={item} onNavigate={onNavigate}/>)}</div>
+      <div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Mantenimiento</div>
+      <div className="space-y-1">{mantenimiento.map(item => <MenuLink key={item.href} item={item} onNavigate={onNavigate}/>)}</div>
     </>
   );
 }
