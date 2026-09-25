@@ -28,7 +28,7 @@ type Publicada = {
 
 export default function Page() {
   const [pendientes, setPendientes] = useState<Item[]>([]);
-  const [publicadas, setPublicadas] = useState<Publicada[]>([]);
+  const [listos, setListos] = useState<Publicada[]>([]);
   const [textos, setTextos] = useState<Record<number, string>>({});
   const [enlaces, setEnlaces] = useState<Record<number, string>>({});
   const [cargando, setCargando] = useState(true);
@@ -44,7 +44,7 @@ export default function Page() {
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || "No se pudieron cargar las publicaciones.");
       setPendientes(data.pendientes ?? []);
-      setPublicadas(data.publicadas ?? []);
+      setListos(data.listos ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron cargar las publicaciones.");
     } finally {
@@ -153,8 +153,7 @@ export default function Page() {
                 <p className="mt-1 text-xs text-slate-500">Aquí aparecen los inmuebles cuyo texto ya fue registrado. Cuando la publicación se haya realizado, confírmala aquí.</p>
               </div>
               <div className="divide-y divide-slate-100">
-                {publicadas.length ? <div className="p-8 text-center text-sm text-slate-500">No hay publicaciones pendientes de confirmación.</div> : null}
-                {!publicadas.length && <div className="p-8 text-center text-sm text-slate-500">No hay publicaciones registradas todavía.</div>}
+                {listos.length ? listos.map(item => <div key={item.inmuebleId} className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-slate-900">{item.referencia}</p><p className="mt-1 text-xs text-slate-500">{item.codigo} · posición {item.posicion ? String(item.posicion).padStart(2, "0") : "—"} · {item.tipo}</p></div><button disabled={publicando === item.inmuebleId} onClick={() => marcarPublicado(item)} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{publicando === item.inmuebleId ? "Registrando..." : "Marcar como publicado"}</button></div>) : <div className="p-8 text-center text-sm text-slate-500">No hay publicaciones listas para confirmar.</div>}
               </div>
             </section>
           </>
