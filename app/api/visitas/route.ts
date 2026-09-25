@@ -7,7 +7,7 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-async function getSystemUser(tx: typeof db) {
+async function getSystemUser(tx: any) {
   const email = "sistema@inmobiliaria-alfaro.local";
   let [user] = await tx.select().from(inmUsuarios).where(eq(inmUsuarios.email, email)).limit(1);
   if (!user) {
