@@ -7,6 +7,7 @@ import {
   inmPosiciones,
   inmPropietarios,
   inmTimeline,
+  inmPublicaciones,
 } from "@/db/schema";
 
 const etapaMap: Record<string, string> = {
@@ -17,6 +18,7 @@ const etapaMap: Record<string, string> = {
   en_negociacion: "En negociación",
   listo_para_publicar: "Listo para publicar",
   publicado: "Publicado",
+  aprobado: "Aprobado",
 };
 
 const eventoMap: Record<string, string> = {
@@ -33,7 +35,7 @@ const eventoMap: Record<string, string> = {
 
 export async function GET() {
   try {
-    const [activosResult, posicionesResult, etapasResult, recientes] = await Promise.all([
+    const [activosResult, posicionesResult, etapasResult, textosResult, recientes] = await Promise.all([
       db
         .select({ total: sql<number>`count(*)` })
         .from(inmInmuebles)
@@ -59,6 +61,18 @@ export async function GET() {
         .from(inmInmuebles)
         .where(eq(inmInmuebles.estado, "activo"))
         .groupBy(inmInmuebles.etapa),
+
+      db
+        .select({
+          total: sql<number>`count(*)`,
+        })
+        .from(inmInmuebles)
+        .leftJoin(inmPublicaciones, eq(inmPublicaciones.inmuebleId, inmInmuebles.id))
+        .where(and(
+          eq(inmInmuebles.estado, "activo"),
+          eq(inmInmuebles.etapa, "aprobado"),
+          sql`inm_publicaciones.id is null`
+        )),
 
       db
         .select({
@@ -97,7 +111,7 @@ export async function GET() {
         tasacionesPendientes: etapas.tasacion_pendiente ?? 0,
         aprobaciones: etapas.pendiente_aprobacion ?? 0,
         negociaciones: etapas.en_negociacion ?? 0,
-        textosPendientes: etapas.listo_para_publicar ? 0 : 0,
+        textosPendientes: Number(textosResult[0]?.total ?? 0),
         listosParaPublicar: etapas.listo_para_publicar ?? 0,
       },
       pendientes: [
@@ -105,6 +119,7 @@ export async function GET() {
         { etapa: "Tasación pendiente", total: etapas.tasacion_pendiente ?? 0, tone: "orange" },
         { etapa: "Pendiente de aprobación", total: etapas.pendiente_aprobacion ?? 0, tone: "violet" },
         { etapa: "En negociación", total: etapas.en_negociacion ?? 0, tone: "violet" },
+        { etapa: "Texto pendiente", total: Number(textosResult[0]?.total ?? 0), tone: "rose" },
         { etapa: "Listo para publicar", total: etapas.listo_para_publicar ?? 0, tone: "emerald" },
       ],
       recientes: recientes.map((item) => ({
