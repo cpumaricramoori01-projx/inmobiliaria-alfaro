@@ -8,3 +8,68 @@ const map=(r:any)=>({inmuebleId:r.inmuebleId,codigo:r.codigo,posicion:r.posicion
 async function approved(){return db.select({inmuebleId:inmInmuebles.id,codigo:inmInmuebles.codigo,tipo:inmInmuebles.tipo,referencia:inmInmuebles.referencia,direccion:inmInmuebles.direccion,distrito:inmInmuebles.distrito,provincia:inmInmuebles.provincia,departamento:inmInmuebles.departamento,propietarioNombres:inmPropietarios.nombres,propietarioApellidos:inmPropietarios.apellidos,posicion:inmPosiciones.numero,valorReferencia:inmTasaciones.valorReferencia,precioObjetivo:inmTasaciones.precioObjetivo,situacion:inmTasaciones.situacion}).from(inmTasaciones).innerJoin(inmInmuebles,eq(inmInmuebles.id,inmTasaciones.inmuebleId)).innerJoin(inmPropietarios,eq(inmPropietarios.id,inmInmuebles.propietarioId)).leftJoin(inmAsignacionesPosicion,and(eq(inmAsignacionesPosicion.inmuebleId,inmInmuebles.id),eq(inmAsignacionesPosicion.activa,true))).leftJoin(inmPosiciones,eq(inmPosiciones.id,inmAsignacionesPosicion.posicionId)).leftJoin(inmPublicaciones,eq(inmPublicaciones.inmuebleId,inmInmuebles.id)).where(and(eq(inmInmuebles.estado,"activo"),eq(inmTasaciones.situacion,"aprobado"),isNull(inmPublicaciones.id))).orderBy(desc(inmTasaciones.fechaActualizacion));}
 export async function GET(){try{const rows=await approved();return NextResponse.json({ok:true,pendientes:rows.map(map)});}catch(error){console.error(error);return NextResponse.json({ok:false,error:"No se pudieron consultar los textos pendientes."},{status:500});}}
 export async function POST(request:Request){try{const b=await request.json(),inmuebleId=Number(b.inmuebleId),texto=clean(b.texto),driveLink=clean(b.driveLink);if(!Number.isInteger(inmuebleId)||inmuebleId<=0)return NextResponse.json({ok:false,error:"Inmueble no válido."},{status:400});if(!texto)return NextResponse.json({ok:false,error:"El texto de publicación es obligatorio."},{status:400});if(!/^https?:\/\//i.test(driveLink))return NextResponse.json({ok:false,error:"El enlace de Google Drive debe ser una URL HTTP o HTTPS."},{status:400});const result=await db.transaction(async tx=>{const [p]=await tx.select().from(inmInmuebles).where(eq(inmInmuebles.id,inmuebleId)).limit(1);if(!p||p.estado!=="activo")throw new Error("El inmueble no está activo.");const [t]=await tx.select().from(inmTasaciones).where(and(eq(inmTasaciones.inmuebleId,inmuebleId),eq(inmTasaciones.situacion,"aprobado"))).limit(1);if(!t)throw new Error("El inmueble no tiene una tasación aprobada.");const [e]=await tx.select({id:inmPublicaciones.id}).from(inmPublicaciones).where(eq(inmPublicaciones.inmuebleId,inmuebleId)).limit(1);if(e)throw new Error("El inmueble ya tiene una publicación registrada.");const u=await getSystemUser(tx);await tx.insert(inmPublicaciones).values({inmuebleId,texto,driveLink,usuarioRegistroId:u.id,publicado:false});await tx.update(inmInmuebles).set({etapa:"listo_para_publicar"}).where(eq(inmInmuebles.id,inmuebleId));await tx.insert(inmTimeline).values({inmuebleId,evento:"publicacion_registrada",observacion:"Texto y enlace de Google Drive registrados. Inmueble listo para publicar.",usuarioId:u.id});return {etapa:"listo_para_publicar"};});return NextResponse.json({ok:true,...result},{status:201});}catch(error){const m=error instanceof Error?error.message:"No fue posible registrar la publicación.";return NextResponse.json({ok:false,error:m},{status:/no está activo|no tiene|ya tiene/i.test(m)?409:500});}}
+
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const inmuebleId = Number(body.inmuebleId);
+    if (!Number.isInteger(inmuebleId) || inmuebleId <= 0) {
+      return NextResponse.json({ ok: false, error: "Inmueble no válido." }, { status: 400 });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [property] = await tx
+        .select()
+        .from(inmInmuebles)
+        .where(eq(inmInmuebles.id, inmuebleId))
+        .limit(1);
+
+      if (!property || property.estado !== "activo") {
+        throw new Error("El inmueble no está activo.");
+      }
+
+      const [publication] = await tx
+        .select()
+        .from(inmPublicaciones)
+        .where(eq(inmPublicaciones.inmuebleId, inmuebleId))
+        .limit(1);
+
+      if (!publication) throw new Error("El inmueble no tiene una publicación registrada.");
+      if (publication.publicado) throw new Error("La publicación ya figura como publicada.");
+
+      const user = await getSystemUser(tx);
+      const ahora = new Date();
+
+      await tx
+        .update(inmPublicaciones)
+        .set({
+          publicado: true,
+          fechaPublicacion: ahora,
+          usuarioPublicacionId: user.id,
+        })
+        .where(eq(inmPublicaciones.id, publication.id));
+
+      await tx
+        .update(inmInmuebles)
+        .set({ etapa: "publicado" })
+        .where(eq(inmInmuebles.id, inmuebleId));
+
+      await tx.insert(inmTimeline).values({
+        inmuebleId,
+        evento: "publicado",
+        observacion: "La publicación fue marcada como publicada.",
+        usuarioId: user.id,
+      });
+
+      return { codigo: property.codigo, etapa: "publicado", fechaPublicacion: ahora };
+    });
+
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "No fue posible marcar la publicación.";
+    return NextResponse.json(
+      { ok: false, error: message },
+      { status: /no está activo|no tiene|ya figura/i.test(message) ? 409 : 500 },
+    );
+  }
+}
