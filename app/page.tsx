@@ -28,20 +28,20 @@ type DashboardData = {
 
 const toneStyles: Record<string, string> = {
   dark: "border-slate-900 bg-slate-900 text-white",
-  blue: "border-blue-100 bg-blue-50/70",
-  amber: "border-amber-100 bg-amber-50/70",
-  orange: "border-orange-100 bg-orange-50/70",
-  violet: "border-violet-100 bg-violet-50/70",
-  rose: "border-rose-100 bg-rose-50/70",
-  emerald: "border-emerald-100 bg-emerald-50/70",
+  blue: "border-[#e7e5e2] bg-white",
+  amber: "border-[#ead8d8] bg-[#fffafa]",
+  orange: "border-[#ead8d8] bg-[#fffafa]",
+  violet: "border-[#e7e5e2] bg-white",
+  rose: "border-[#ead8d8] bg-[#fffafa]",
+  emerald: "border-[#e7e5e2] bg-white",
 };
 
 const dotStyles: Record<string, string> = {
-  amber: "bg-amber-500",
-  orange: "bg-orange-500",
-  violet: "bg-violet-500",
-  rose: "bg-rose-500",
-  emerald: "bg-emerald-500",
+  amber: "bg-[#c80000]",
+  orange: "bg-[#c80000]",
+  violet: "bg-[#c80000]",
+  rose: "bg-[#c80000]",
+  emerald: "bg-[#c80000]",
 };
 
 function formatDate(value: string | Date | null) {
@@ -140,7 +140,7 @@ export default function Home() {
             <div key={x.titulo} className={`rounded-2xl border p-5 shadow-sm ${toneStyles[x.tone]}`}>
               <div className="flex items-start justify-between gap-3">
                 <p className={`text-xs font-semibold ${x.tone === "dark" ? "text-slate-300" : "text-slate-600"}`}>{x.titulo}</p>
-                <span className={`h-2 w-2 rounded-full ${x.tone === "dark" ? "bg-white" : x.tone === "blue" ? "bg-blue-500" : x.tone === "amber" ? "bg-amber-500" : "bg-orange-500"}`} />
+                <span className={`h-2 w-2 rounded-full ${x.tone === "dark" ? "bg-white" : x.tone === "blue" || x.tone === "amber" || x.tone === "orange" ? "bg-[#c80000]" : "bg-[#c80000]"}`} />
               </div>
               <p className={`mt-4 text-4xl font-bold tracking-tight ${x.tone === "dark" ? "text-white" : "text-slate-950"}`}>{x.valor}</p>
               <p className={`mt-2 text-xs ${x.tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{x.detalle}</p>
