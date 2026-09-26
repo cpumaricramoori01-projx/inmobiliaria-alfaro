@@ -122,8 +122,8 @@ export default function RegistrarInmueblePage() {
   const puedeRegistrar = Boolean(posicion && tipo && nombre.trim() && dniValido && nombres.trim() && apellidos.trim() && !guardando);
 
   return (
-    <main className="min-h-screen bg-[#f5f7fa] p-6 lg:p-8">
-      <div className="mx-auto max-w-6xl">
+    <main className="min-h-screen bg-[#f5f7fa] px-5 py-6 lg:px-8 lg:py-8">
+      <div className="mx-auto max-w-7xl">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[.14em] text-emerald-600">Fase 1 · Nuevo registro</p>
