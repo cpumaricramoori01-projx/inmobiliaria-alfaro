@@ -93,7 +93,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#f5f7fa]">
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur">
-        <div className="flex min-h-[76px] items-center justify-between px-6 lg:px-8">
+        <div className="mx-auto flex min-h-[76px] w-full max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Panel de control</p>
             <h1 className="mt-1 text-xl font-bold tracking-tight text-slate-950">Dashboard</h1>
