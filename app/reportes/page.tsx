@@ -31,10 +31,10 @@ const reportes: Reporte[] = [
 const grupos = ["Todos", "Cartera", "Gestión", "Salidas", "Histórico", "Flujo"];
 const tone: Record<string, string> = {
   Cartera: "bg-blue-100 text-blue-700",
-  Gestión: "bg-violet-100 text-violet-700",
+  Gestión: "bg-[#fdf2f2] text-[#c80000]",
   Salidas: "bg-rose-100 text-rose-700",
   Histórico: "bg-slate-100 text-slate-700",
-  Flujo: "bg-cyan-100 text-cyan-700",
+  Flujo: "bg-cyan-100 text-[#c80000]",
 };
 
 function fecha(value: any) {
@@ -112,13 +112,13 @@ export default function Page() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f7fa] px-5 py-6 lg:px-8 lg:py-8">
+    <main className="min-h-screen bg-[#f7f7f5] px-5 py-6 lg:px-8 lg:py-8">
       <div className="mx-auto max-w-7xl print:max-w-none">
         <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between print:mb-4">
           <div className="flex gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-100 text-xl text-indigo-600">▥</div>
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#fdf2f2] text-xl text-[#c80000]">▥</div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-indigo-500">Fase 1 · Información</p>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#c80000]">Fase 1 · Información</p>
               <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">Reportes</h1>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">Consulta datos reales de la cartera, gestión, salidas, histórico y tiempos del flujo.</p>
             </div>
@@ -129,11 +129,11 @@ export default function Page() {
           </div>
         </header>
 
-        <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.045)] print:hidden">
+        <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:hidden">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div><h2 className="text-base font-bold text-slate-900">Filtros</h2><p className="mt-1 text-sm text-slate-500">Los filtros se aplican directamente sobre los datos de la base de datos.</p></div>
             <div className="flex gap-2">
-              <button onClick={cargar} className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Aplicar filtros</button>
+              <button onClick={cargar} className="rounded-xl bg-[#c80000] px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Aplicar filtros</button>
               <button onClick={() => { limpiar(); setTimeout(cargar, 0); }} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300">Limpiar</button>
             </div>
           </div>
@@ -149,7 +149,7 @@ export default function Page() {
 
         {error && <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div>}
 
-        {resumen && <section className="mt-6 rounded-2xl border border-slate-200 bg-slate-900 p-5 shadow-[0_14px_40px_rgba(15,23,42,0.10)]">
+        {resumen && <section className="mt-6 rounded-2xl border border-slate-200 bg-white border border-slate-200 p-5 shadow-sm">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Lectura rápida</p><h2 className="mt-1 text-base font-bold text-white">Resumen del reporte seleccionado</h2></div>
             <span className="text-xs text-slate-400">{resumen.total} resultado{resumen.total === 1 ? "" : "s"}</span>
@@ -162,7 +162,7 @@ export default function Page() {
           </div>
         </section>}
 
-        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.045)] print:hidden">
+        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:hidden">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">¿Qué necesitas revisar?</p>
@@ -176,7 +176,7 @@ export default function Page() {
                 ["Salidas", "¿Qué salió?", "Salidas"],
                 ["Flujo", "¿Cuánto demora?", "Flujo"],
               ].map(([label, question, value]) => (
-                <button key={String(label)} onClick={() => setCategoria(String(value))} className={`rounded-xl border px-3 py-2.5 text-left transition ${categoria === value ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"}`}>
+                <button key={String(label)} onClick={() => setCategoria(String(value))} className={`rounded-xl border px-3 py-2.5 text-left transition ${categoria === value ? "border-slate-900 bg-white border border-slate-200 text-slate-900" : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"}`}>
                   <p className="text-[10px] font-bold uppercase tracking-wide opacity-60">{label}</p>
                   <p className="mt-1 text-xs font-semibold">{question}</p>
                 </button>
@@ -188,7 +188,7 @@ export default function Page() {
         <section className="mt-8 print:hidden">
           <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div><h2 className="text-base font-bold text-slate-900">Reportes disponibles</h2><p className="mt-1 text-sm text-slate-500">Selecciona el informe que quieres consultar.</p></div>
-            <div className="flex flex-wrap gap-2">{grupos.map(g => <button key={g} onClick={() => setCategoria(g)} className={`rounded-full px-3.5 py-2 text-xs font-bold ${categoria === g ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"}`}>{g}</button>)}</div>
+            <div className="flex flex-wrap gap-2">{grupos.map(g => <button key={g} onClick={() => setCategoria(g)} className={`rounded-full px-3.5 py-2 text-xs font-bold ${categoria === g ? "bg-white border border-slate-200 text-slate-900" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"}`}>{g}</button>)}</div>
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {visibles.map(r => <button key={r.nombre} onClick={() => setSeleccionado(r.nombre)} className={`rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${seleccionado === r.nombre ? "border-indigo-300 ring-2 ring-indigo-50" : "border-slate-200"}`}>
@@ -197,9 +197,9 @@ export default function Page() {
           </div>
         </section>
 
-        <section className="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.045)] print:mt-0 print:border-0 print:shadow-none">
+        <section className="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm print:mt-0 print:border-0 print:shadow-none">
           <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-bold uppercase tracking-wide text-indigo-500">{reporteInfo.categoria}</p><h2 className="mt-1 text-lg font-bold text-slate-950">{seleccionado}</h2><p className="mt-1 text-xs text-slate-500">{reporteInfo.descripcion}</p></div>
+            <div><p className="text-xs font-bold uppercase tracking-wide text-[#c80000]">{reporteInfo.categoria}</p><h2 className="mt-1 text-lg font-bold text-slate-950">{seleccionado}</h2><p className="mt-1 text-xs text-slate-500">{reporteInfo.descripcion}</p></div>
             {cargando && <span className="text-xs font-semibold text-slate-400">Consultando…</span>}
           </div>
           <div className="overflow-x-auto">
