@@ -143,6 +143,30 @@ export default function RegistrarInmueblePage() {
           </div>
         </div>
 
+        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_30px_rgba(15,23,42,0.045)]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Antes de guardar</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800">Completa lo esencial. El resto puede hacerse después.</p>
+            </div>
+            <span className={`rounded-full px-3 py-1.5 text-[10px] font-bold ${puedeRegistrar ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+              {puedeRegistrar ? "Listo para registrar" : "Registro en preparación"}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            {[
+              ["01", "Posición", Boolean(posicion)],
+              ["02", "Propietario", Boolean(dniValido && nombres.trim() && apellidos.trim())],
+              ["03", "Inmueble", Boolean(tipo && nombre.trim())],
+            ].map(([num, label, done]) => (
+              <div key={String(num)} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${done ? "border-emerald-200 bg-emerald-50/70" : "border-slate-200 bg-slate-50/60"}`}>
+                <span className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold ${done ? "bg-emerald-600 text-white" : "bg-white text-slate-400"}`}>{done ? "✓" : num}</span>
+                <div><p className={`text-xs font-semibold ${done ? "text-emerald-800" : "text-slate-600"}`}>{label}</p><p className="text-[10px] text-slate-400">{done ? "Completo" : "Pendiente"}</p></div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_320px]">
           <section className="rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.045)]">
             <div className="border-b border-slate-100 bg-slate-50/70 px-6 py-5">
