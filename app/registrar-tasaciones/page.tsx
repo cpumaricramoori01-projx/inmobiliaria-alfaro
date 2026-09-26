@@ -113,8 +113,8 @@ export default function Page() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f7fa] p-5 lg:p-8">
-      <div className="mx-auto max-w-6xl">
+    <main className="min-h-screen bg-[#f5f7fa] px-5 py-6 lg:px-8 lg:py-8">
+      <div className="mx-auto max-w-7xl">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[.15em] text-orange-500">Fase 1 · Gestión comercial</p>
