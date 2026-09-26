@@ -98,22 +98,18 @@ export default function Sidebar() {
       )}
 
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,18rem)] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 lg:top-0 lg:w-72 lg:translate-x-0 lg:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="flex h-[76px] shrink-0 items-center border-b border-slate-100 px-5 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-11 w-[132px] shrink-0 items-center overflow-hidden rounded-xl bg-white">
-              <img
-                src="/branding/logo.png"
-                alt="Inmobiliaria Alberto Alfaro"
-                className="h-auto w-full object-contain"
-              />
-            </div>
-            <div className="min-w-0">
-              <div className="truncate text-sm font-bold tracking-tight text-slate-950">Inmobiliaria Alberto Alfaro</div>
-              <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Secretaría virtual</div>
-            </div>
+        <div className="flex h-[104px] shrink-0 flex-col items-center justify-center border-b border-slate-100 px-5">
+          <div className="flex h-[54px] w-[170px] items-center justify-center overflow-hidden">
+            <img
+              src="/branding/logo.png"
+              alt="Inmobiliaria Alberto Alfaro"
+              className="h-auto max-h-full w-full object-contain"
+            />
+          </div>
+          <div className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Secretaría virtual
           </div>
         </div>
-
         <nav className="flex-1 overflow-y-auto px-3 py-5">
           <MenuContent onNavigate={() => setOpen(false)}/>
         </nav>
