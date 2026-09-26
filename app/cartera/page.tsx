@@ -135,7 +135,33 @@ export default function CarteraPage() {
           ))}
         </div>
 
-        <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-900 p-5 text-white shadow-[0_14px_40px_rgba(15,23,42,0.12)]">
+        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.045)]">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Flujo de trabajo</p>
+              <h2 className="mt-1 text-lg font-bold text-slate-900">Dónde está cada inmueble</h2>
+              <p className="mt-1 text-xs text-slate-500">Sigue la cartera de izquierda a derecha y atiende primero lo que tiene trabajo pendiente.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {[
+                ["Visita", visitasPendientes, "bg-amber-50 text-amber-700"],
+                ["Tasación", tasacionesPendientes, "bg-orange-50 text-orange-700"],
+                ["Negociación", negociacion, "bg-violet-50 text-violet-700"],
+                ["Publicación", listos, "bg-emerald-50 text-emerald-700"],
+              ].map(([label, value, tone], index) => (
+                <div key={String(label)} className="flex items-center gap-2">
+                  <div className={`rounded-xl px-3 py-2 ${tone}`}>
+                    <p className="text-[10px] font-bold uppercase tracking-wide opacity-70">{String(index + 1).padStart(2, "0")} · {label}</p>
+                    <p className="mt-0.5 text-lg font-bold">{value}</p>
+                  </div>
+                  {index < 3 && <span className="hidden text-slate-300 sm:block">→</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-3 rounded-2xl border border-slate-200 bg-slate-900 p-5 text-white shadow-[0_14px_40px_rgba(15,23,42,0.12)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Resumen operativo</p>
