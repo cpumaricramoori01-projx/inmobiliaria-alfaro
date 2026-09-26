@@ -209,12 +209,12 @@ export default function Home() {
         </div>
 
         <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
               <h3 className="font-bold text-slate-950">Acciones rápidas</h3>
               <p className="mt-1 text-xs text-slate-500">Accesos directos al trabajo operativo.</p>
             </div>
-            <a href="/cartera" className="text-xs font-semibold text-slate-500 hover:text-slate-900">Ver cartera completa →</a>
+            <a href="/cartera" className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-200 hover:text-slate-950">Abrir cartera →</a>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
