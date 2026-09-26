@@ -24,6 +24,7 @@ export default function Page() {
   const [procesando, setProcesando] = useState<number | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [inmuebleSeleccionado, setInmuebleSeleccionado] = useState<number | null>(null);
 
   const hoy = new Date().toISOString().slice(0, 10);
 
@@ -34,7 +35,16 @@ export default function Page() {
       const response = await fetch("/api/visitas", { cache: "no-store" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "No se pudieron cargar las visitas pendientes.");
-      setItems(body.items ?? []);
+      const todos = body.items ?? [];
+      const params = new URLSearchParams(window.location.search);
+      const inmuebleParam = params.get("inmueble");
+      const inmuebleId = inmuebleParam ? Number(inmuebleParam) : null;
+
+      setItems(
+        inmuebleId !== null && Number.isInteger(inmuebleId)
+          ? todos.filter((item: Visita) => item.id === inmuebleId)
+          : todos
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron cargar las visitas pendientes.");
     } finally {
@@ -42,7 +52,17 @@ export default function Page() {
     }
   }
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const inmuebleParam = params.get("inmueble");
+    const inmuebleId = inmuebleParam ? Number(inmuebleParam) : null;
+
+    setInmuebleSeleccionado(
+      inmuebleId !== null && Number.isInteger(inmuebleId) ? inmuebleId : null
+    );
+
+    cargar();
+  }, []);
 
   async function marcarRealizada(item: Visita) {
     setError(null);
