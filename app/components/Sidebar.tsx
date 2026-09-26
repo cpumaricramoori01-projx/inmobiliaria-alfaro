@@ -5,29 +5,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const fase1 = [
-  { href: "/cartera", label: "Cartera de inmuebles", icon: "home", tone: "blue" },
-  { href: "/registrar-inmueble", label: "Registrar inmueble", icon: "plus", tone: "emerald" },
-  { href: "/liberar-inmuebles", label: "Liberar inmueble", icon: "release", tone: "rose" },
-  { href: "/registrar-visitas", label: "Registrar visitas", icon: "visit", tone: "violet" },
-  { href: "/registrar-tasaciones", label: "Registrar tasaciones", icon: "valuation", tone: "orange" },
-  { href: "/visitas-pendientes", label: "Visitas pendientes", icon: "clock", tone: "amber" },
-  { href: "/tasaciones-textos-pendientes", label: "Tasaciones y textos", icon: "clipboard", tone: "pink" },
-  { href: "/reportes", label: "Reportes", icon: "report", tone: "indigo" },
+  { href: "/cartera", label: "Cartera de inmuebles", icon: "home" },
+  { href: "/registrar-inmueble", label: "Registrar inmueble", icon: "plus" },
+  { href: "/liberar-inmuebles", label: "Liberar inmueble", icon: "release" },
+  { href: "/registrar-visitas", label: "Registrar visitas", icon: "visit" },
+  { href: "/registrar-tasaciones", label: "Registrar tasaciones", icon: "valuation" },
+  { href: "/visitas-pendientes", label: "Visitas pendientes", icon: "clock" },
+  { href: "/tasaciones-textos-pendientes", label: "Tasaciones y textos", icon: "clipboard" },
+  { href: "/reportes", label: "Reportes", icon: "report" },
 ];
 
-const fase2 = [{ href: "/datos-inmuebles", label: "Ingresar datos de inmuebles", icon: "database", tone: "cyan" }];
-
-const toneClasses: Record<string, { bg: string; text: string }> = {
-  blue: { bg: "bg-blue-50", text: "text-blue-600" },
-  emerald: { bg: "bg-emerald-50", text: "text-emerald-600" },
-  rose: { bg: "bg-rose-50", text: "text-rose-600" },
-  violet: { bg: "bg-violet-50", text: "text-violet-600" },
-  orange: { bg: "bg-orange-50", text: "text-orange-600" },
-  amber: { bg: "bg-amber-50", text: "text-amber-600" },
-  pink: { bg: "bg-pink-50", text: "text-pink-600" },
-  indigo: { bg: "bg-indigo-50", text: "text-indigo-600" },
-  cyan: { bg: "bg-cyan-50", text: "text-cyan-600" },
-};
+const fase2 = [{ href: "/datos-inmuebles", label: "Ingresar datos de inmuebles", icon: "database" }];
 
 function Icon({ name }: { name: string }) {
   const common = { className: "h-[18px] w-[18px]", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -48,20 +36,19 @@ function Icon({ name }: { name: string }) {
   return <svg {...common}>{paths[name]}</svg>;
 }
 
-function MenuLink({ item, onNavigate }: { item: { href: string; label: string; icon: string; tone: string }; onNavigate?: () => void }) {
+function MenuLink({ item, onNavigate }: { item: { href: string; label: string; icon: string }; onNavigate?: () => void }) {
   const pathname = usePathname();
   const active = item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(`${item.href}/`);
-  const tone = toneClasses[item.tone];
   return (
     <Link
       href={item.href}
       onClick={onNavigate}
-      className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition ${active ? "bg-slate-900 text-white shadow-[0_8px_20px_rgba(15,23,42,0.12)]" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}
+      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition ${active ? "bg-[#171717] text-white shadow-[0_8px_22px_rgba(23,23,23,0.12)]" : "text-slate-600 hover:bg-[#f5f4f2] hover:text-[#171717]"}`}
     >
-      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-white/10 text-white" : `${tone.bg} ${tone.text}`}`}>
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-white/10 text-white" : "bg-[#f2f1ef] text-[#66615c]"}`}>
         <Icon name={item.icon}/>
       </span>
-      <span className="min-w-0 flex-1 leading-5">{item.label}</span>{active && <span className="h-1.5 w-1.5 rounded-full bg-white/80" />}
+      <span className="min-w-0 flex-1 leading-5">{item.label}</span>{active && <span className="h-1.5 w-1.5 rounded-full bg-[#c80000]" />}
     </Link>
   );
 }
@@ -69,11 +56,11 @@ function MenuLink({ item, onNavigate }: { item: { href: string; label: string; i
 function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <>
-      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-2">
-        <MenuLink item={{ href: "/", label: "Dashboard", icon: "dashboard", tone: "indigo" }} onNavigate={onNavigate}/>
+      <div className="rounded-2xl border border-[#e7e5e2] bg-[#faf9f7] p-2">
+        <MenuLink item={{ href: "/", label: "Dashboard", icon: "dashboard" }} onNavigate={onNavigate}/>
       </div>
 
-      <div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Operación</div>
+      <div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#96928c]">Operación</div>
       <div className="space-y-1">{fase1.slice(0, 3).map(item => <MenuLink key={item.href} item={item} onNavigate={onNavigate}/>)}</div>
 
       <div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Seguimiento</div>
@@ -81,7 +68,7 @@ function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <div className="mb-2 mt-7 flex items-center justify-between px-3">
         <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Próxima fase</span>
-        <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[9px] font-semibold text-cyan-600">FASE 2</span>
+        <span className="rounded-full bg-[#fff1f1] px-2 py-0.5 text-[9px] font-semibold text-[#c80000]">FASE 2</span>
       </div>
       <div className="space-y-1">
         {fase2.map(item => (
@@ -101,7 +88,7 @@ export default function Sidebar() {
         type="button"
         aria-label={open ? "Cerrar menú" : "Abrir menú"}
         onClick={() => setOpen((value) => !value)}
-        className="fixed left-4 top-4 z-[60] flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm lg:hidden"
+        className="fixed left-4 top-4 z-[60] flex h-11 w-11 items-center justify-center rounded-xl border border-[#e7e5e2] bg-white text-slate-700 shadow-sm lg:hidden"
       >
         <Icon name={open ? "close" : "menu"}/>
       </button>
@@ -113,7 +100,7 @@ export default function Sidebar() {
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,18rem)] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 lg:top-0 lg:w-72 lg:translate-x-0 lg:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex h-[76px] shrink-0 items-center border-b border-slate-100 px-5 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-bold text-white shadow-sm">AA</div>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#171717] text-sm font-bold text-white shadow-sm">AA</div>
             <div className="min-w-0">
               <div className="truncate text-sm font-bold tracking-tight text-slate-950">Inmobiliaria Alberto Alfaro</div>
               <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Secretaría virtual</div>
@@ -128,8 +115,8 @@ export default function Sidebar() {
         <div className="shrink-0 border-t border-slate-100 p-4">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
             <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#fff1f1] text-[#c80000]">
+                <span className="h-2 w-2 rounded-full bg-[#c80000]" />
               </span>
               <div>
                 <div className="text-xs font-bold text-slate-800">Sistema operativo</div>
