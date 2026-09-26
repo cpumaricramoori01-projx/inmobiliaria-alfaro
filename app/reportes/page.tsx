@@ -112,7 +112,7 @@ export default function Page() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f7fa] p-6 lg:p-8">
+    <main className="min-h-screen bg-[#f5f7fa] px-5 py-6 lg:px-8 lg:py-8">
       <div className="mx-auto max-w-7xl print:max-w-none">
         <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between print:mb-4">
           <div className="flex gap-3">
