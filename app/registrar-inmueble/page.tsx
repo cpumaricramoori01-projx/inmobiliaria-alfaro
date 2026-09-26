@@ -133,9 +133,19 @@ export default function RegistrarInmueblePage() {
           <Link href="/cartera" className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300">← Volver a cartera</Link>
         </div>
 
-        <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_320px]">
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-900 p-4 text-white shadow-[0_14px_40px_rgba(15,23,42,0.10)]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Inicio del flujo</p>
+              <p className="mt-1 text-sm font-semibold">Registrar → Visita pendiente → Tasación → Aprobación → Publicación</p>
+            </div>
+            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[10px] font-bold text-emerald-300">Estás en: Registro</span>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_320px]">
           <section className="rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.045)]">
-            <div className="border-b border-slate-100 px-6 py-5">
+            <div className="border-b border-slate-100 bg-slate-50/70 px-6 py-5">
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-xl font-bold text-emerald-600">+</span>
                 <div><h2 className="font-bold text-slate-900">Datos de registro</h2><p className="mt-0.5 text-xs text-slate-500">Estos datos permiten iniciar el flujo comercial.</p></div>
