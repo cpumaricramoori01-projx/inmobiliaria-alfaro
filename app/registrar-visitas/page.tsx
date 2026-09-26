@@ -76,8 +76,8 @@ export default function Page() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fa] p-5 lg:p-8">
-      <div className="mx-auto max-w-6xl">
+    <main className="min-h-screen bg-[#f5f7fa] px-5 py-6 lg:px-8 lg:py-8">
+      <div className="mx-auto max-w-7xl">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="flex items-center gap-2"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 text-violet-700">✓</span><p className="text-xs font-bold uppercase tracking-[.14em] text-slate-400">Fase 1 · Registro de actividad</p></div>
