@@ -162,6 +162,29 @@ export default function Page() {
           </div>
         </section>}
 
+        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.045)] print:hidden">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">¿Qué necesitas revisar?</p>
+              <h2 className="mt-1 text-lg font-bold text-slate-900">Elige una vista y te mostramos el detalle.</h2>
+              <p className="mt-1 text-xs text-slate-500">Empieza por la situación actual y luego entra al detalle que necesites.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                ["Cartera", "¿Qué tenemos?", "Cartera"],
+                ["Gestión", "¿Qué falta?", "Gestión"],
+                ["Salidas", "¿Qué salió?", "Salidas"],
+                ["Flujo", "¿Cuánto demora?", "Flujo"],
+              ].map(([label, question, value]) => (
+                <button key={String(label)} onClick={() => setCategoria(String(value))} className={`rounded-xl border px-3 py-2.5 text-left transition ${categoria === value ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"}`}>
+                  <p className="text-[10px] font-bold uppercase tracking-wide opacity-60">{label}</p>
+                  <p className="mt-1 text-xs font-semibold">{question}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section className="mt-8 print:hidden">
           <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div><h2 className="text-base font-bold text-slate-900">Reportes disponibles</h2><p className="mt-1 text-sm text-slate-500">Selecciona el informe que quieres consultar.</p></div>
