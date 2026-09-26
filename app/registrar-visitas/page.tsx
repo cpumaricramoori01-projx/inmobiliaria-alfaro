@@ -76,7 +76,7 @@ export default function Page() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 p-5 lg:p-8">
+    <main className="min-h-screen bg-[#f5f7fa] p-5 lg:p-8">
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -84,14 +84,14 @@ export default function Page() {
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950">Registrar visitas realizadas</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Registra la visita cuando realmente haya ocurrido. Cada registro actualiza la cartera y pasa el inmueble a Tasación pendiente.</p>
           </div>
-          <Link href="/visitas-pendientes" className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">← Ver visitas pendientes</Link>
+          <Link href="/visitas-pendientes" className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300">← Ver visitas pendientes</Link>
         </div>
 
         {mensaje && <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{mensaje}</div>}
         {error && <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{error}</div>}
 
         <div className="mt-7 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Por registrar</p><p className="mt-2 text-3xl font-bold text-slate-950">{items.length}</p><p className="mt-1 text-xs text-slate-500">procesos reales en BD</p></div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.045)]"><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Por registrar</p><p className="mt-2 text-3xl font-bold text-slate-950">{items.length}</p><p className="mt-1 text-xs text-slate-500">procesos reales en BD</p></div>
           <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Al completar</p><p className="mt-2 text-lg font-bold text-violet-950">Tasación pendiente</p><p className="mt-1 text-xs text-violet-700/80">transición guardada en BD</p></div>
           <div className="rounded-2xl border border-cyan-200 bg-cyan-50/70 p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Trazabilidad</p><p className="mt-2 text-lg font-bold text-cyan-950">Automática</p><p className="mt-1 text-xs text-cyan-700/80">usuario, fecha y evento</p></div>
         </div>
@@ -101,7 +101,7 @@ export default function Page() {
           {cargando ? <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">Cargando visitas pendientes...</div> : items.length > 0 ? (
             <div className="space-y-4">
               {items.map((item) => (
-                <article key={item.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <article key={item.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.045)]">
                   <div className="p-5 lg:p-6">
                     <div className="flex flex-col gap-5">
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -113,7 +113,7 @@ export default function Page() {
                         <div><label htmlFor={`drive-${item.id}`} className="text-xs font-semibold text-slate-600">Evidencia / fotografías en Google Drive (opcional)</label><input id={`drive-${item.id}`} type="url" value={enlacesDrive[item.id] ?? ""} onChange={(e) => setEnlacesDrive((a) => ({ ...a, [item.id]: e.target.value }))} placeholder="https://drive.google.com/..." className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-2 focus:ring-violet-100" /><p className="mt-1 text-[11px] text-slate-400">Se guarda el enlace, no el archivo.</p></div>
                       </div>
                       <div><label htmlFor={`obs-${item.id}`} className="text-xs font-semibold text-slate-600">Observación de la visita (opcional)</label><textarea id={`obs-${item.id}`} rows={3} value={observaciones[item.id] ?? ""} onChange={(e) => setObservaciones((a) => ({ ...a, [item.id]: e.target.value }))} placeholder="Ej.: se realizó visita, se tomaron medidas y fotografías..." className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-2 focus:ring-violet-100" /></div>
-                      <div className="flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold text-slate-700">Al registrar</p><p className="mt-1 text-xs text-slate-500">La visita queda guardada y el inmueble pasa a <strong>Tasación pendiente</strong>.</p></div><button type="button" disabled={procesando === item.id} onClick={() => marcarRealizada(item)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">{procesando === item.id ? "Guardando..." : "Registrar visita realizada"}</button></div>
+                      <div className="flex flex-col gap-3 rounded-xl bg-[#f5f7fa] p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold text-slate-700">Al registrar</p><p className="mt-1 text-xs text-slate-500">La visita queda guardada y el inmueble pasa a <strong>Tasación pendiente</strong>.</p></div><button type="button" disabled={procesando === item.id} onClick={() => marcarRealizada(item)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">{procesando === item.id ? "Guardando..." : "Registrar visita realizada"}</button></div>
                     </div>
                   </div>
                 </article>
