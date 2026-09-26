@@ -68,7 +68,7 @@ export default function Page() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f7fa] px-5 py-6 lg:px-8 lg:py-8">
+    <main className="min-h-screen bg-[#f7f7f5] px-5 py-6 lg:px-8 lg:py-8">
       <div className="mx-auto max-w-7xl">
         <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -84,7 +84,7 @@ export default function Page() {
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm"><span className="font-semibold text-slate-900">{items.length}</span><span className="ml-1 text-slate-500">inmuebles activos</span></div>
         </header>
 
-        <section className="mt-6 rounded-2xl border border-slate-200 bg-slate-900 p-5 text-white shadow-[0_14px_40px_rgba(15,23,42,0.10)]">
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-white border border-slate-200 p-5 text-white shadow-sm">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Acción principal</p>
@@ -94,7 +94,7 @@ export default function Page() {
           </div>
         </section>
 
-        {mensaje && <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{mensaje}</div>}
+        {mensaje && <div className="mt-6 rounded-2xl border border-[#ead8d8] bg-[#fdf2f2] px-4 py-3 text-sm font-semibold text-slate-800">{mensaje}</div>}
         {error && <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{error}</div>}
 
         <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -105,7 +105,7 @@ export default function Page() {
 
         <section className="mt-6">
           {cargando ? <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">Cargando cartera activa...</div> :
-          filtrados.length === 0 ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-6 py-12 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-xl text-emerald-700">✓</div><h2 className="mt-4 font-bold text-emerald-950">{items.length === 0 ? "No hay inmuebles activos" : "No hay coincidencias"}</h2><p className="mt-1 text-sm text-emerald-800/80">{items.length === 0 ? "Cuando existan inmuebles activos aparecerán aquí para registrar su salida." : "Prueba con otro término de búsqueda."}</p></div> :
+          filtrados.length === 0 ? <div className="rounded-2xl border border-[#ead8d8] bg-[#fdf2f2]/70 px-6 py-12 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-xl text-[#c80000]">✓</div><h2 className="mt-4 font-bold text-slate-950">{items.length === 0 ? "No hay inmuebles activos" : "No hay coincidencias"}</h2><p className="mt-1 text-sm text-slate-800/80">{items.length === 0 ? "Cuando existan inmuebles activos aparecerán aquí para registrar su salida." : "Prueba con otro término de búsqueda."}</p></div> :
           <div className="space-y-4">{filtrados.map((item) => {
             const motivo = selecciones[item.inmuebleId] ?? "";
             return <article key={item.inmuebleId} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -113,7 +113,7 @@ export default function Page() {
                 <div className="flex flex-col gap-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex items-center gap-4"><div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-base font-bold text-rose-700">{item.posicion}</div><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-900">{item.nombre}</h3><span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">{item.tipo}</span></div><p className="mt-1 text-xs text-slate-500">{item.ubicacion} · {item.codigo}</p><p className="mt-1 text-xs text-slate-500">Propietario: {item.propietario} · DNI {item.dni}</p></div></div>
-                    <span className="self-start rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">Activo</span>
+                    <span className="self-start rounded-full bg-[#fdf2f2] px-3 py-1.5 text-xs font-bold text-[#c80000]">Activo</span>
                   </div>
                   <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
                     <label className="text-xs font-semibold text-slate-600">Motivo de liberación *
