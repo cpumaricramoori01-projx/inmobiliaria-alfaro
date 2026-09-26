@@ -118,12 +118,28 @@ export default function RegistrarInmueblePage() {
   }
 
   const disponibles = useMemo(() => posiciones.filter((p) => p.disponible), [posiciones]);
+
+  useEffect(() => {
+    if (disponibles.length === 0) {
+      setPosicion("");
+      return;
+    }
+
+    setPosicion((actual) => {
+      const sigueDisponible = disponibles.some(
+        (p) => String(p.numero) === actual
+      );
+
+      return sigueDisponible ? actual : String(disponibles[0].numero);
+    });
+  }, [disponibles]);
+
   const dniValido = /^\d{8}$/.test(dni);
   const puedeRegistrar = Boolean(posicion && tipo && nombre.trim() && dniValido && nombres.trim() && apellidos.trim() && !guardando);
 
   return (
-    <main className="min-h-screen bg-[#f7f7f5] px-5 py-6 lg:px-8 lg:py-8">
-      <div className="mx-auto w-full max-w-7xl">
+    <main className="min-h-screen bg-[#f7f7f5] p-6 lg:p-8">
+      <div className="mx-auto max-w-[1500px]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[.14em] text-[#c80000]">Fase 1 · Nuevo registro</p>
@@ -186,7 +202,7 @@ export default function RegistrarInmueblePage() {
                   <option value="">{cargandoPosiciones ? "Consultando posiciones..." : disponibles.length ? "Seleccionar posición disponible" : "No hay posiciones disponibles"}</option>
                   {disponibles.map((p) => <option key={p.numero} value={p.numero}>{String(p.numero).padStart(2, "0")} · Disponible</option>)}
                 </select>
-                <p className="mt-1.5 text-xs text-slate-400">Las posiciones ocupadas no aparecen como opciones. La disponibilidad se vuelve a validar al guardar.</p>
+                <p className="mt-1.5 text-xs text-slate-400">La primera posición disponible se selecciona automáticamente. Puedes cambiarla antes de guardar; la disponibilidad se vuelve a validar al registrar.</p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-[#faf9f7] p-5">

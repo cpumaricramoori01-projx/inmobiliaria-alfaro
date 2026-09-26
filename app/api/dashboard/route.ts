@@ -43,9 +43,17 @@ export async function GET() {
         .from(inmPosiciones)
         .leftJoin(
           inmAsignacionesPosicion,
-          and(eq(inmAsignacionesPosicion.posicionId, inmPosiciones.id), eq(inmAsignacionesPosicion.activa, true))
+          and(
+            eq(inmAsignacionesPosicion.posicionId, inmPosiciones.id),
+            eq(inmAsignacionesPosicion.activa, true)
+          )
         )
-        .where(sql`inm_asignaciones_posicion.id is null`),
+        .where(
+          and(
+            eq(inmPosiciones.activo, true),
+            sql`inm_asignaciones_posicion.id is null`
+          )
+        ),
 
       db.select({ etapa: inmInmuebles.etapa, total: sql<number>`count(*)` })
         .from(inmInmuebles)
