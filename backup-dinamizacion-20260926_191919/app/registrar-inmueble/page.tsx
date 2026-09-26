@@ -1,16 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 type Tipo = "Casa" | "Departamento" | "Terreno" | "Local" | "Oficina" | "Otros";
 type Posicion = { numero: number; disponible: boolean };
 
 export default function RegistrarInmueblePage() {
-  const searchParams = useSearchParams();
-  const posicionSolicitada = searchParams.get("posicion");
-
   const [posicion, setPosicion] = useState("");
   const [posiciones, setPosiciones] = useState<Posicion[]>([]);
   const [cargandoPosiciones, setCargandoPosiciones] = useState(true);
@@ -122,36 +118,6 @@ export default function RegistrarInmueblePage() {
   }
 
   const disponibles = useMemo(() => posiciones.filter((p) => p.disponible), [posiciones]);
-
-  useEffect(() => {
-    if (disponibles.length === 0) {
-      setPosicion("");
-      return;
-    }
-
-    setPosicion((actual) => {
-      const sigueDisponible = disponibles.some(
-        (p) => String(p.numero) === actual
-      );
-
-      if (sigueDisponible) {
-        return actual;
-      }
-
-      const solicitadaDisponible = posicionSolicitada
-        ? disponibles.some(
-            (p) => String(p.numero) === posicionSolicitada
-          )
-        : false;
-
-      if (solicitadaDisponible) {
-        return posicionSolicitada ?? String(disponibles[0].numero);
-      }
-
-      return String(disponibles[0].numero);
-    });
-  }, [disponibles, posicionSolicitada]);
-
   const dniValido = /^\d{8}$/.test(dni);
   const puedeRegistrar = Boolean(posicion && tipo && nombre.trim() && dniValido && nombres.trim() && apellidos.trim() && !guardando);
 
@@ -220,7 +186,7 @@ export default function RegistrarInmueblePage() {
                   <option value="">{cargandoPosiciones ? "Consultando posiciones..." : disponibles.length ? "Seleccionar posición disponible" : "No hay posiciones disponibles"}</option>
                   {disponibles.map((p) => <option key={p.numero} value={p.numero}>{String(p.numero).padStart(2, "0")} · Disponible</option>)}
                 </select>
-                <p className="mt-1.5 text-xs text-slate-400">La primera posición disponible se selecciona automáticamente. Puedes cambiarla antes de guardar; la disponibilidad se vuelve a validar al registrar.</p>
+                <p className="mt-1.5 text-xs text-slate-400">Las posiciones ocupadas no aparecen como opciones. La disponibilidad se vuelve a validar al guardar.</p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-[#faf9f7] p-5">

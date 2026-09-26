@@ -129,8 +129,79 @@ export default function Home() {
       ]
     : [];
 
+  const actualizarCabeceraDashboard = () => {
+    const ahora = new Date();
+    const hora = ahora.getHours();
+
+    let saludo = "Buenos días";
+    let icono = "☀️";
+
+    if (hora >= 12 && hora < 18) {
+      saludo = "Buenas tardes";
+      icono = "🌤️";
+    } else if (hora >= 18 && hora < 23) {
+      saludo = "Buenas noches";
+      icono = "🌅";
+    } else if (hora >= 23 || hora < 5) {
+      saludo = "Buenas noches";
+      icono = "🌙";
+    }
+
+    const fecha = ahora.toLocaleDateString("es-PE", {
+      weekday: "long",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
+    const horaActual = ahora.toLocaleTimeString("es-PE", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    const pendientesVisita = data?.resumen.visitasPendientes ?? 0;
+    const pendientesTasacion = data?.resumen.tasacionesPendientes ?? 0;
+    const listosPublicar = data?.resumen.listosParaPublicar ?? 0;
+    const activos = data?.resumen.activos ?? 0;
+
+    let resumen = "La cartera está al día. Puedes revisar el estado general o consultar reportes.";
+
+    if (pendientesVisita > 0 && pendientesTasacion > 0 && listosPublicar > 0) {
+      resumen = `Tienes ${pendientesVisita} visita${pendientesVisita === 1 ? "" : "s"} pendiente${pendientesVisita === 1 ? "" : "s"}, ${pendientesTasacion} tasación${pendientesTasacion === 1 ? "" : "es"} pendiente${pendientesTasacion === 1 ? "" : "s"} y ${listosPublicar} inmueble${listosPublicar === 1 ? "" : "s"} listo${listosPublicar === 1 ? "" : "s"} para publicar.`;
+    } else if (pendientesVisita > 0) {
+      resumen = `Tienes ${pendientesVisita} visita${pendientesVisita === 1 ? "" : "s"} pendiente${pendientesVisita === 1 ? "" : "s"} por atender en la cartera.`;
+    } else if (pendientesTasacion > 0) {
+      resumen = `Hay ${pendientesTasacion} tasación${pendientesTasacion === 1 ? "" : "es"} pendiente${pendientesTasacion === 1 ? "" : "s"} para continuar el proceso.`;
+    } else if (listosPublicar > 0) {
+      resumen = `Hay ${listosPublicar} inmueble${listosPublicar === 1 ? "" : "s"} listo${listosPublicar === 1 ? "" : "s"} para publicación.`;
+    } else if (activos > 0) {
+      resumen = `Tienes ${activos} inmueble${activos === 1 ? "" : "s"} activo${activos === 1 ? "" : "s"} en cartera.`;
+    }
+
+    const greeting = document.getElementById("dashboard-greeting");
+    const date = document.getElementById("dashboard-date");
+    const clock = document.getElementById("dashboard-clock");
+    const summary = document.getElementById("dashboard-summary");
+    const contextIcon = document.getElementById("dashboard-context-icon");
+
+    if (greeting) greeting.textContent = `${saludo}, Alberto.`;
+    if (date) date.textContent = fecha;
+    if (clock) clock.textContent = horaActual;
+    if (summary) summary.textContent = resumen;
+    if (contextIcon) contextIcon.textContent = icono;
+  };
+
+  useEffect(() => {
+    actualizarCabeceraDashboard();
+    const intervalo = window.setInterval(actualizarCabeceraDashboard, 60000);
+
+    return () => window.clearInterval(intervalo);
+  }, [data]);
+
   return (
-    <main className="min-h-screen bg-[#f7f7f5] text-slate-950">
+    <main className="min-h-screen bg-[#f7f7f5] p-6 lg:p-8">
+      <div className="mx-auto max-w-[1500px]">
       {/* Encabezado */}
       <header className="sticky top-0 z-20 border-b border-[#e7e5e2] bg-[#f7f7f5]/95 backdrop-blur">
         <div className="flex min-h-[76px] items-center justify-between px-5 sm:px-6 lg:px-8">
@@ -171,18 +242,31 @@ export default function Home() {
               <span className="h-px w-8 bg-[#c80000]" />
 
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#777]">
-                Hoy · Resumen de cartera
+                <span id="dashboard-context-icon" className="mr-2">☀️</span>
+                <span id="dashboard-context-label">Hoy · Resumen de cartera</span>
               </span>
             </div>
 
-            <h2 className="mt-4 text-[28px] font-bold tracking-[-0.025em] text-[#171717] sm:text-[32px]">
-              Buenos días, Alberto.
-            </h2>
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h2 id="dashboard-greeting" className="text-[28px] font-bold tracking-[-0.025em] text-[#171717] sm:text-[32px]">
+                Buenos días, Alberto.
+              </h2>
 
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b6b6b]">
+              <span id="dashboard-date" className="rounded-full border border-[#e7e5e2] bg-[#faf9f7] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777]">
+                Cargando fecha...
+              </span>
+            </div>
+
+            <p id="dashboard-summary" className="mt-2 max-w-2xl text-sm leading-6 text-[#6b6b6b]">
               Aquí tienes lo importante de la cartera: qué está pendiente,
               qué avanzó y dónde puedes continuar trabajando.
             </p>
+
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777]">
+              <span id="dashboard-clock">--:--</span>
+              <span className="h-1 w-1 rounded-full bg-[#c80000]" />
+              <span>Secretaría virtual</span>
+            </div>
 
             <div className="mt-6 flex flex-wrap gap-2.5">
               <a
@@ -503,6 +587,7 @@ export default function Home() {
             Ver reportes
           </a>
         </section>
+      </div>
       </div>
     </main>
   );
