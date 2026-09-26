@@ -109,8 +109,8 @@ export default function CarteraPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f7fa] p-6 lg:p-8">
-      <div className="mx-auto max-w-[1500px]">
+    <main className="min-h-screen bg-[#f5f7fa] px-5 py-6 lg:px-8 lg:py-8">
+      <div className="mx-auto max-w-7xl">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-slate-400"><span>Fase 1</span><span className="text-slate-300">/</span><span>Cartera</span></div>
