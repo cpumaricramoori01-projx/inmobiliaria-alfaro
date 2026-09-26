@@ -91,7 +91,7 @@ export default function Home() {
     : [];
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-[#f5f7fa]">
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur">
         <div className="flex min-h-[76px] items-center justify-between px-6 lg:px-8">
           <div>
