@@ -108,7 +108,7 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="p-5 sm:p-6 lg:p-8">
+      <div className="mx-auto w-full max-w-7xl px-5 py-6 sm:px-6 lg:px-8 lg:py-8">
         <section className="relative mb-7 overflow-hidden rounded-3xl bg-slate-900 px-6 py-7 text-white shadow-lg sm:px-8 sm:py-8">
           <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/5" />
           <div className="absolute -bottom-24 right-40 h-64 w-64 rounded-full bg-white/[0.03]" />
