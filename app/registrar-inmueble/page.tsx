@@ -1,17 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 type Tipo = "Casa" | "Departamento" | "Terreno" | "Local" | "Oficina" | "Otros";
 type Posicion = { numero: number; disponible: boolean };
 
 export default function RegistrarInmueblePage() {
-  const searchParams = useSearchParams();
-  const posicionSolicitada = searchParams.get("posicion");
-
   const [posicion, setPosicion] = useState("");
+  const [posicionSolicitada, setPosicionSolicitada] = useState<string | null>(null);
   const [posiciones, setPosiciones] = useState<Posicion[]>([]);
   const [cargandoPosiciones, setCargandoPosiciones] = useState(true);
   const [tipo, setTipo] = useState<Tipo | "">("");
@@ -28,6 +25,8 @@ export default function RegistrarInmueblePage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setPosicionSolicitada(params.get("posicion"));
     cargarPosiciones();
   }, []);
 

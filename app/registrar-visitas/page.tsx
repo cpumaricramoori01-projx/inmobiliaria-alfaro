@@ -34,7 +34,7 @@ export default function Page() {
       const response = await fetch("/api/visitas", { cache: "no-store" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "No se pudieron cargar las visitas pendientes.");
-      setItems(body.visitas ?? []);
+      setItems(body.items ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron cargar las visitas pendientes.");
     } finally {

@@ -21,7 +21,7 @@ export default function Page() {
         if (!response.ok) throw new Error(body.error || "No se pudieron cargar las visitas.");
         return body;
       })
-      .then((body) => setItems(body.visitas ?? []))
+      .then((body) => setItems(body.items ?? []))
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar las visitas."))
       .finally(() => setCargando(false));
   }, []);
