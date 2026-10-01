@@ -149,7 +149,7 @@ export default function Page() {
         </section>
 
         <section className="mt-7">
-          <div className="mb-3"><h2 className="font-bold text-slate-900">Tasaciones por registrar</h2><p className="mt-1 text-sm text-slate-500">Estos inmuebles ya tienen visita realizada y están en etapa de tasación pendiente.</p></div>
+          <div className="mb-3"><h2 className="font-bold text-slate-900">Tasaciones por registrar</h2><p className="mt-1 text-sm text-slate-500">Estos inmuebles están activos, tienen posición asignada y todavía no tienen tasación registrada.</p></div>
           {cargando ? <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">Cargando...</div> : items.length === 0 ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-6 py-12 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-xl text-emerald-700">✓</div><h3 className="mt-4 font-bold text-emerald-950">No hay tasaciones pendientes</h3><p className="mt-1 text-sm text-emerald-800/80">Las visitas realizadas ya tienen tasación registrada o no existen inmuebles pendientes.</p></div>
           ) : (

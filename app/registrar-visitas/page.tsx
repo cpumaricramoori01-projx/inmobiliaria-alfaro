@@ -24,18 +24,28 @@ export default function Page() {
   const [procesando, setProcesando] = useState<number | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [inmuebleSeleccionado, setInmuebleSeleccionado] = useState<number | null>(null);
 
   const hoy = new Date().toISOString().slice(0, 10);
 
   async function cargar() {
     setCargando(true);
     setError(null);
+
     try {
-      const response = await fetch("/api/visitas", { cache: "no-store" });
+      const response = await fetch("/api/visitas", {
+        cache: "no-store",
+      });
+
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "No se pudieron cargar las visitas pendientes.");
+
+      if (!response.ok) {
+        throw new Error(
+          body.error || "No se pudieron cargar las visitas pendientes."
+        );
+      }
+
       const todos = body.items ?? [];
+
       const params = new URLSearchParams(window.location.search);
       const inmuebleParam = params.get("inmueble");
       const inmuebleId = inmuebleParam ? Number(inmuebleParam) : null;
@@ -46,37 +56,31 @@ export default function Page() {
           : todos
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudieron cargar las visitas pendientes.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudieron cargar las visitas pendientes."
+      );
     } finally {
       setCargando(false);
     }
   }
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const inmuebleParam = params.get("inmueble");
-    const inmuebleId = inmuebleParam ? Number(inmuebleParam) : null;
-
-    setInmuebleSeleccionado(
-      inmuebleId !== null && Number.isInteger(inmuebleId) ? inmuebleId : null
-    );
-
     cargar();
   }, []);
 
   async function marcarRealizada(item: Visita) {
-    setError(null);
-    setMensaje(null);
-    if (!fechas[item.id]) {
-      setError(`Registra la fecha en que se realizó la visita de “${item.nombre}”.`);
-      return;
-    }
-
     setProcesando(item.id);
+    setMensaje(null);
+    setError(null);
+
     try {
       const response = await fetch("/api/visitas", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           inmuebleId: item.id,
           fechaVisita: fechas[item.id],
@@ -84,65 +88,457 @@ export default function Page() {
           driveLink: enlacesDrive[item.id] ?? "",
         }),
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "No fue posible registrar la visita.");
-      setItems((actuales) => actuales.filter((actual) => actual.id !== item.id));
-      setMensaje(`Visita de “${item.nombre}” registrada correctamente. El inmueble pasa a Tasación pendiente.`);
+
+      const raw = await response.text();
+
+      let body: {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+      } = {};
+
+      if (raw.trim()) {
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          throw new Error(
+            `El servidor respondió con un formato inesperado (HTTP ${response.status}).`
+          );
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          body.error ||
+            `No fue posible registrar la visita (HTTP ${response.status}).`
+        );
+      }
+
+      setItems((actuales) =>
+        actuales.filter((actual) => actual.id !== item.id)
+      );
+
+      setMensaje(
+        `Visita de “${item.nombre}” registrada correctamente. El inmueble permanece activo en cartera.`
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No fue posible registrar la visita.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible registrar la visita."
+      );
     } finally {
       setProcesando(null);
     }
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fa] p-5 lg:p-8">
+    <main className="min-h-screen bg-[#f7f7f5] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        {/* Encabezado */}
+        <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="flex items-center gap-2"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 text-violet-700">✓</span><p className="text-xs font-bold uppercase tracking-[.14em] text-slate-400">Fase 1 · Registro de actividad</p></div>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950">Registrar visitas realizadas</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Registra la visita cuando realmente haya ocurrido. Cada registro actualiza la cartera y pasa el inmueble a Tasación pendiente.</p>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-[#c80000]">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="h-5 w-5"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M8 6h8M8 10h8M8 14h5M6 3.75h12A1.25 1.25 0 0 1 19.25 5v14A1.25 1.25 0 0 1 18 20.25H6A1.25 1.25 0 0 1 4.75 19V5A1.25 1.25 0 0 1 6 3.75Z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="m8.5 17 1.5 1.5 3-3"
+                  />
+                </svg>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
+                  Fase 1 · Gestión de cartera
+                </p>
+                <p className="mt-0.5 text-sm font-medium text-slate-500">
+                  Registro de actividad
+                </p>
+              </div>
+            </div>
+
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-950">
+              Registrar visitas realizadas
+            </h1>
+
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              Confirma las visitas que realmente se realizaron. Al registrar
+              una visita, el inmueble continúa activo en cartera y su actividad
+              queda registrada para el seguimiento posterior.
+            </p>
           </div>
-          <Link href="/visitas-pendientes" className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300">← Ver visitas pendientes</Link>
+
+          <Link
+            href="/visitas-pendientes"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            <span className="text-base">←</span>
+            Ver visitas pendientes
+          </Link>
+        </header>
+
+        {/* Flujo */}
+        <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                Flujo de trabajo
+              </p>
+              <h2 className="mt-1 text-base font-bold text-slate-900">
+                La visita es la actividad que corresponde atender ahora
+              </h2>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#c80000] text-xs font-bold text-white">
+                  01
+                </span>
+                <span className="text-xs font-semibold text-red-800">
+                  Visita pendiente
+                </span>
+              </div>
+
+              <span className="hidden text-slate-300 sm:block">→</span>
+
+              <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-slate-500 shadow-sm">
+                  02
+                </span>
+                <span className="text-xs font-semibold text-slate-600">
+                  Visita registrada
+                </span>
+              </div>
+
+              <span className="hidden text-slate-300 sm:block">→</span>
+
+              <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-slate-500 shadow-sm">
+                  03
+                </span>
+                <span className="text-xs font-semibold text-slate-600">
+                  Tasación, cuando corresponda
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Mensajes */}
+        {mensaje && (
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700">
+              ✓
+            </div>
+            <div>
+              <p className="font-bold">Visita registrada</p>
+              <p className="mt-0.5 text-emerald-700">{mensaje}</p>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-800">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-100 font-bold text-red-700">
+              !
+            </div>
+            <div>
+              <p className="font-bold">No se pudo completar el registro</p>
+              <p className="mt-0.5 text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Resumen */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Visitas pendientes
+            </p>
+            <p className="mt-2 text-3xl font-bold text-slate-950">
+              {items.length}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Inmuebles que requieren registro
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-red-100 bg-red-50/70 p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+              Acción actual
+            </p>
+            <p className="mt-2 text-lg font-bold text-red-950">
+              Registrar visita
+            </p>
+            <p className="mt-1 text-xs text-red-700/80">
+              Solo cuando la visita haya ocurrido
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Trazabilidad
+            </p>
+            <p className="mt-2 text-lg font-bold text-slate-900">
+              Automática
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Fecha, usuario y evento quedan registrados
+            </p>
+          </div>
         </div>
 
-        <section className="mt-6 rounded-2xl border border-slate-200 bg-slate-900 p-5 text-white shadow-[0_14px_40px_rgba(15,23,42,0.10)]"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Acción principal</p><p className="mt-1 text-sm font-semibold">Confirma la fecha real de la visita y deja la evidencia o notas.</p></div><span className="rounded-full border border-violet-300/20 bg-violet-300/10 px-3 py-1.5 text-xs font-bold text-violet-200">Siguiente: Tasación</span></div></section>
+        {/* Lista */}
+        <section className="mt-8">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">
+                Inmuebles con visita pendiente
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Registra la fecha real de la visita y, si corresponde, agrega
+                observaciones o el enlace de fotografías.
+              </p>
+            </div>
 
-        {mensaje && <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{mensaje}</div>}
-        {error && <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{error}</div>}
+            <span className="w-fit rounded-full bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700">
+              {items.length} pendientes
+            </span>
+          </div>
 
-        <div className="mt-7 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.045)]"><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Por registrar</p><p className="mt-2 text-3xl font-bold text-slate-950">{items.length}</p><p className="mt-1 text-xs text-slate-500">procesos reales en BD</p></div>
-          <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Al completar</p><p className="mt-2 text-lg font-bold text-violet-950">Tasación pendiente</p><p className="mt-1 text-xs text-violet-700/80">transición guardada en BD</p></div>
-          <div className="rounded-2xl border border-cyan-200 bg-cyan-50/70 p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Trazabilidad</p><p className="mt-2 text-lg font-bold text-cyan-950">Automática</p><p className="mt-1 text-xs text-cyan-700/80">usuario, fecha y evento</p></div>
-        </div>
-
-        <section className="mt-6">
-          <div className="mb-3 flex items-end justify-between"><div><h2 className="font-bold text-slate-900">Visitas por confirmar</h2><p className="mt-1 text-xs text-slate-500">La lista proviene directamente de los inmuebles en visita_pendiente.</p></div><span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700">{items.length} pendientes</span></div>
-          {cargando ? <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">Cargando visitas pendientes...</div> : items.length > 0 ? (
-            <div className="space-y-4">
+          {cargando ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 border-slate-200 border-t-[#c80000] animate-spin" />
+              <p className="mt-4 text-sm font-medium text-slate-500">
+                Cargando visitas pendientes...
+              </p>
+            </div>
+          ) : items.length > 0 ? (
+            <div className="space-y-5">
               {items.map((item) => (
-                <article key={item.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.045)]">
-                  <div className="p-5 lg:p-6">
-                    <div className="flex flex-col gap-5">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="flex items-center gap-4"><div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-base font-bold text-violet-700">{item.posicion}</div><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-900">{item.nombre}</h3><span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">{item.tipo}</span></div><p className="mt-1 text-xs text-slate-500">{item.ubicacion} · {item.codigo}</p><p className="mt-1 text-xs text-slate-500">Propietario: {item.propietario} · DNI {item.dni}</p></div></div>
-                        <span className="self-start rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700">Visita pendiente</span>
+                <article
+                  key={item.id}
+                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.045)]"
+                >
+                  <div className="p-5 sm:p-6">
+                    {/* Cabecera inmueble */}
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-sm font-bold text-[#c80000]">
+                          {item.posicion}
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-base font-bold text-slate-900">
+                              {item.nombre}
+                            </h3>
+
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                              {item.tipo}
+                            </span>
+                          </div>
+
+                          <p className="mt-1 text-xs text-slate-500">
+                            {item.codigo}
+                          </p>
+
+                          <p className="mt-1 text-sm text-slate-600">
+                            {item.ubicacion}
+                          </p>
+
+                          <p className="mt-2 text-xs text-slate-500">
+                            <span className="font-semibold text-slate-600">
+                              Propietario:
+                            </span>{" "}
+                            {item.propietario || "Sin propietario registrado"}
+                            {item.dni ? ` · DNI ${item.dni}` : ""}
+                          </p>
+                        </div>
                       </div>
-                      <div className="grid gap-4 lg:grid-cols-2">
-                        <div><label htmlFor={`fecha-${item.id}`} className="text-xs font-semibold text-slate-600">Fecha de visita realizada *</label><input id={`fecha-${item.id}`} type="date" max={hoy} value={fechas[item.id] ?? ""} onChange={(e) => setFechas((a) => ({ ...a, [item.id]: e.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-2 focus:ring-violet-100" /></div>
-                        <div><label htmlFor={`drive-${item.id}`} className="text-xs font-semibold text-slate-600">Evidencia / fotografías en Google Drive (opcional)</label><input id={`drive-${item.id}`} type="url" value={enlacesDrive[item.id] ?? ""} onChange={(e) => setEnlacesDrive((a) => ({ ...a, [item.id]: e.target.value }))} placeholder="https://drive.google.com/..." className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-2 focus:ring-violet-100" /><p className="mt-1 text-[11px] text-slate-400">Se guarda el enlace, no el archivo.</p></div>
+
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700">
+                          Visita pendiente
+                        </span>
+
+                        {item.dias > 0 && (
+                          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
+                            {item.dias}{" "}
+                            {item.dias === 1 ? "día" : "días"} en cartera
+                          </span>
+                        )}
                       </div>
-                      <div><label htmlFor={`obs-${item.id}`} className="text-xs font-semibold text-slate-600">Observación de la visita (opcional)</label><textarea id={`obs-${item.id}`} rows={3} value={observaciones[item.id] ?? ""} onChange={(e) => setObservaciones((a) => ({ ...a, [item.id]: e.target.value }))} placeholder="Ej.: se realizó visita, se tomaron medidas y fotografías..." className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-violet-300 focus:bg-white focus:ring-2 focus:ring-violet-100" /></div>
-                      <div className="flex flex-col gap-3 rounded-xl bg-[#f5f7fa] p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold text-slate-700">Al registrar</p><p className="mt-1 text-xs text-slate-500">La visita queda guardada y el inmueble pasa a <strong>Tasación pendiente</strong>.</p></div><button type="button" disabled={procesando === item.id} onClick={() => marcarRealizada(item)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">{procesando === item.id ? "Guardando..." : "Registrar visita realizada"}</button></div>
+                    </div>
+
+                    <div className="my-6 border-t border-slate-100" />
+
+                    {/* Campos */}
+                    <div className="grid gap-5 lg:grid-cols-2">
+                      <div>
+                        <label
+                          htmlFor={`fecha-${item.id}`}
+                          className="text-xs font-bold text-slate-700"
+                        >
+                          Fecha de visita realizada *
+                        </label>
+
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          Indica el día en que efectivamente se realizó la
+                          visita.
+                        </p>
+
+                        <input
+                          id={`fecha-${item.id}`}
+                          type="date"
+                          max={hoy}
+                          value={fechas[item.id] ?? ""}
+                          onChange={(e) =>
+                            setFechas((actuales) => ({
+                              ...actuales,
+                              [item.id]: e.target.value,
+                            }))
+                          }
+                          className="mt-2 w-full rounded-xl border border-slate-200 bg-[#fafafa] px-3 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#c80000] focus:bg-white focus:ring-2 focus:ring-red-100"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor={`drive-${item.id}`}
+                          className="text-xs font-bold text-slate-700"
+                        >
+                          Fotografías / evidencia en Google Drive
+                        </label>
+
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          Opcional. Se guarda únicamente el enlace.
+                        </p>
+
+                        <input
+                          id={`drive-${item.id}`}
+                          type="url"
+                          value={enlacesDrive[item.id] ?? ""}
+                          onChange={(e) =>
+                            setEnlacesDrive((actuales) => ({
+                              ...actuales,
+                              [item.id]: e.target.value,
+                            }))
+                          }
+                          placeholder="https://drive.google.com/..."
+                          className="mt-2 w-full rounded-xl border border-slate-200 bg-[#fafafa] px-3 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#c80000] focus:bg-white focus:ring-2 focus:ring-red-100"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-5">
+                      <label
+                        htmlFor={`obs-${item.id}`}
+                        className="text-xs font-bold text-slate-700"
+                      >
+                        Observaciones de la visita
+                      </label>
+
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        Opcional. Puedes dejar constancia de lo observado,
+                        medidas, fotografías tomadas u otra información útil.
+                      </p>
+
+                      <textarea
+                        id={`obs-${item.id}`}
+                        rows={3}
+                        value={observaciones[item.id] ?? ""}
+                        onChange={(e) =>
+                          setObservaciones((actuales) => ({
+                            ...actuales,
+                            [item.id]: e.target.value,
+                          }))
+                        }
+                        placeholder="Ej.: Se realizó la visita, se tomaron medidas y fotografías del inmueble..."
+                        className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-[#fafafa] px-3 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#c80000] focus:bg-white focus:ring-2 focus:ring-red-100"
+                      />
+                    </div>
+
+                    {/* Acción */}
+                    <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-[#f7f7f5] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">
+                          ¿La visita ya se realizó?
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          Al registrarla, quedará guardada en el historial de
+                          actividad del inmueble.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={procesando === item.id}
+                        onClick={() => marcarRealizada(item)}
+                        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#c80000] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#a90000] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {procesando === item.id ? (
+                          <>
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                            Guardando...
+                          </>
+                        ) : (
+                          <>
+                            <span>✓</span>
+                            Registrar visita realizada
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 </article>
               ))}
             </div>
           ) : (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-6 py-12 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-xl text-emerald-700">✓</div><h3 className="mt-4 font-bold text-emerald-950">No hay visitas pendientes</h3><p className="mt-1 text-sm text-emerald-800/80">La bandeja está sincronizada con la base de datos.</p><Link href="/tasaciones-textos-pendientes" className="mt-5 inline-flex rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Ver siguiente etapa</Link></div>
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-6 py-14 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-xl font-bold text-emerald-700">
+                ✓
+              </div>
+
+              <h3 className="mt-4 text-lg font-bold text-emerald-950">
+                No hay visitas pendientes
+              </h3>
+
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-emerald-800/80">
+                Todas las visitas que corresponden actualmente están
+                registradas. Puedes continuar con las demás actividades de la
+                cartera.
+              </p>
+
+              <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+                <Link
+                  href="/cartera"
+                  className="inline-flex items-center justify-center rounded-xl bg-[#c80000] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#a90000]"
+                >
+                  Volver a cartera
+                </Link>
+
+                <Link
+                  href="/tasaciones-textos-pendientes"
+                  className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50"
+                >
+                  Revisar otras actividades
+                </Link>
+              </div>
+            </div>
           )}
         </section>
       </div>

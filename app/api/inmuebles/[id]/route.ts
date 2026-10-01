@@ -136,7 +136,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
 
     await db.update(inmInmuebles).set(propertyValues).where(eq(inmInmuebles.id, row.id));
 
-    if (body.propietario) {
+    if (body.propietario && row.propietarioId !== null) {
       await db.update(inmPropietarios).set({
         dni: clean(body.propietario.dni) || row.propietarioDni || "",
         nombres: clean(body.propietario.nombres) || row.propietarioNombres || "",

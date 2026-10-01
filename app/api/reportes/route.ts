@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   inmAsignacionesPosicion,
   inmInmuebles,
   inmLiberaciones,
+  inmNegociaciones,
   inmPosiciones,
   inmPropietarios,
   inmPublicaciones,
@@ -12,20 +13,6 @@ import {
   inmTimeline,
   inmVisitas,
 } from "@/db/schema";
-
-const etapaMap: Record<string, string> = {
-  visita_pendiente: "Visita pendiente",
-  tasacion_pendiente: "Tasación pendiente",
-  pendiente_aprobacion: "Pendiente de aprobación",
-  en_negociacion: "En negociación",
-  aprobado: "Aprobado",
-  rechazado: "Rechazado",
-  tasacion_rechazada: "Tasación rechazada",
-  texto_pendiente: "Texto pendiente",
-  listo_para_publicar: "Listo para publicar",
-  publicado: "Publicado",
-  liberado: "Liberado",
-};
 
 const tipoMap: Record<string, string> = {
   casa: "Casa",
@@ -38,26 +25,83 @@ const tipoMap: Record<string, string> = {
 
 function fmtDate(value: Date | string | null | undefined) {
   if (!value) return null;
+
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-function daysBetween(a?: Date | string | null, b?: Date | string | null) {
+function daysBetween(
+  a?: Date | string | null,
+  b?: Date | string | null,
+) {
   if (!a || !b) return null;
+
   const diff = new Date(b).getTime() - new Date(a).getTime();
+
   if (!Number.isFinite(diff)) return null;
+
   return Math.max(0, Math.round(diff / 86400000));
+}
+
+function normalizarTipo(value: string | null | undefined) {
+  if (!value) return "Otros";
+  return tipoMap[value.toLowerCase()] ?? value;
+}
+
+function esActivo(estado: string | null | undefined) {
+  return estado?.toLowerCase() === "activo";
+}
+
+function esTasacionAprobada(
+  situacion: string | null | undefined,
+) {
+  return ["aprobado", "aprobada"].includes(
+    situacion?.toLowerCase() ?? "",
+  );
+}
+
+function esTasacionRechazada(
+  situacion: string | null | undefined,
+) {
+  return ["rechazado", "rechazada", "tasacion_rechazada"].includes(
+    situacion?.toLowerCase() ?? "",
+  );
+}
+
+function agregarSituaciones(item: {
+  visitaPendiente: boolean;
+  tasacionPendiente: boolean;
+  aprobacionPendiente: boolean;
+  materialPendiente: boolean;
+  negociacionEnCurso: boolean;
+  listoParaPublicar: boolean;
+  publicado: boolean;
+}) {
+  const situaciones: string[] = [];
+
+  if (item.visitaPendiente) situaciones.push("Visita pendiente");
+  if (item.tasacionPendiente) situaciones.push("Tasación pendiente");
+  if (item.aprobacionPendiente) {
+    situaciones.push("Pendiente de aprobación");
+  }
+  if (item.materialPendiente) situaciones.push("Material pendiente");
+  if (item.negociacionEnCurso) situaciones.push("En negociación");
+  if (item.listoParaPublicar) situaciones.push("Listo para publicar");
+  if (item.publicado) situaciones.push("Publicado");
+
+  return situaciones;
 }
 
 export async function GET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams;
+
     const reporte = sp.get("reporte") || "Cartera activa";
     const desde = sp.get("desde") || "";
     const hasta = sp.get("hasta") || "";
-    const etapa = sp.get("etapa") || "Todas";
+    const situacion = sp.get("situacion") || "Todas";
     const estado = sp.get("estado") || "Todos";
-    const posicion = sp.get("posicion") || "";
+    const posicionFiltro = sp.get("posicion") || "";
     const tipo = sp.get("tipo") || "Todos";
 
     const inmuebleRows = await db
@@ -67,7 +111,6 @@ export async function GET(request: NextRequest) {
         referencia: inmInmuebles.referencia,
         tipo: inmInmuebles.tipo,
         estado: inmInmuebles.estado,
-        etapa: inmInmuebles.etapa,
         fechaRegistro: inmInmuebles.fechaRegistro,
         fechaSalida: inmInmuebles.fechaSalida,
         distrito: inmInmuebles.distrito,
@@ -77,7 +120,10 @@ export async function GET(request: NextRequest) {
         propietarioApellidos: inmPropietarios.apellidos,
       })
       .from(inmInmuebles)
-      .leftJoin(inmPropietarios, eq(inmPropietarios.id, inmInmuebles.propietarioId))
+      .leftJoin(
+        inmPropietarios,
+        eq(inmPropietarios.id, inmInmuebles.propietarioId),
+      )
       .orderBy(asc(inmInmuebles.fechaRegistro));
 
     const positionRows = await db
@@ -89,151 +135,695 @@ export async function GET(request: NextRequest) {
         fechaFin: inmAsignacionesPosicion.fechaFin,
       })
       .from(inmAsignacionesPosicion)
-      .leftJoin(inmPosiciones, eq(inmPosiciones.id, inmAsignacionesPosicion.posicionId))
-      .orderBy(asc(inmAsignacionesPosicion.fechaInicio));
+      .leftJoin(
+        inmPosiciones,
+        eq(inmPosiciones.id, inmAsignacionesPosicion.posicionId),
+      )
+      .orderBy(
+        asc(inmAsignacionesPosicion.fechaInicio),
+      );
 
-    const visitas = await db.select().from(inmVisitas).orderBy(asc(inmVisitas.fechaRegistro));
-    const tasaciones = await db.select().from(inmTasaciones).orderBy(asc(inmTasaciones.fechaRegistro));
-    const publicaciones = await db.select().from(inmPublicaciones).orderBy(asc(inmPublicaciones.fechaRegistro));
-    const liberaciones = await db.select().from(inmLiberaciones).orderBy(asc(inmLiberaciones.fechaRegistro));
-    const timeline = await db.select().from(inmTimeline).orderBy(asc(inmTimeline.fechaEvento));
+    const visitas = await db
+      .select()
+      .from(inmVisitas)
+      .orderBy(desc(inmVisitas.fechaRegistro));
 
-    const posByInmueble = new Map<number, typeof positionRows>();
-    for (const p of positionRows) {
-      const arr = posByInmueble.get(p.inmuebleId) || [];
-      arr.push(p);
-      posByInmueble.set(p.inmuebleId, arr);
+    const tasaciones = await db
+      .select()
+      .from(inmTasaciones)
+      .orderBy(desc(inmTasaciones.fechaRegistro));
+
+    const publicaciones = await db
+      .select()
+      .from(inmPublicaciones)
+      .orderBy(desc(inmPublicaciones.fechaRegistro));
+
+    const negociaciones = await db
+      .select()
+      .from(inmNegociaciones)
+      .orderBy(desc(inmNegociaciones.fechaRegistro));
+
+    const liberaciones = await db
+      .select()
+      .from(inmLiberaciones)
+      .orderBy(desc(inmLiberaciones.fechaRegistro));
+
+    const timeline = await db
+      .select()
+      .from(inmTimeline)
+      .orderBy(asc(inmTimeline.fechaEvento));
+
+    const posByInmueble = new Map<
+      number,
+      typeof positionRows
+    >();
+
+    for (const position of positionRows) {
+      const arr = posByInmueble.get(position.inmuebleId) || [];
+      arr.push(position);
+      posByInmueble.set(position.inmuebleId, arr);
     }
-    const visitaByInmueble = new Map(visitas.map(v => [v.inmuebleId, v]));
-    const tasacionByInmueble = new Map(tasaciones.map(t => [t.inmuebleId, t]));
-    const publicacionByInmueble = new Map(publicaciones.map(p => [p.inmuebleId, p]));
-    const liberacionByInmueble = new Map(liberaciones.map(l => [l.inmuebleId, l]));
-    const timelineByInmueble = new Map<number, typeof timeline>();
+
+    const visitaByInmueble = new Map<number, (typeof visitas)[number]>();
+
+    for (const visita of visitas) {
+      if (!visitaByInmueble.has(visita.inmuebleId)) {
+        visitaByInmueble.set(visita.inmuebleId, visita);
+      }
+    }
+
+    const tasacionByInmueble = new Map<
+      number,
+      (typeof tasaciones)[number]
+    >();
+
+    for (const tasacion of tasaciones) {
+      if (!tasacionByInmueble.has(tasacion.inmuebleId)) {
+        tasacionByInmueble.set(tasacion.inmuebleId, tasacion);
+      }
+    }
+
+    const publicacionByInmueble = new Map<
+      number,
+      (typeof publicaciones)[number]
+    >();
+
+    for (const publicacion of publicaciones) {
+      if (!publicacionByInmueble.has(publicacion.inmuebleId)) {
+        publicacionByInmueble.set(
+          publicacion.inmuebleId,
+          publicacion,
+        );
+      }
+    }
+
+    const negociacionByInmueble = new Map<
+      number,
+      (typeof negociaciones)[number]
+    >();
+
+    for (const negociacion of negociaciones) {
+      if (!negociacionByInmueble.has(negociacion.inmuebleId)) {
+        negociacionByInmueble.set(
+          negociacion.inmuebleId,
+          negociacion,
+        );
+      }
+    }
+
+    const liberacionByInmueble = new Map<
+      number,
+      (typeof liberaciones)[number]
+    >();
+
+    for (const liberacion of liberaciones) {
+      if (!liberacionByInmueble.has(liberacion.inmuebleId)) {
+        liberacionByInmueble.set(
+          liberacion.inmuebleId,
+          liberacion,
+        );
+      }
+    }
+
+    const timelineByInmueble = new Map<
+      number,
+      typeof timeline
+    >();
+
     for (const event of timeline) {
-      const arr = timelineByInmueble.get(event.inmuebleId) || [];
+      const arr =
+        timelineByInmueble.get(event.inmuebleId) || [];
+
       arr.push(event);
       timelineByInmueble.set(event.inmuebleId, arr);
     }
 
-    const base = inmuebleRows.map(x => {
-      const activePosition = posByInmueble.get(x.id)?.find(p => p.activa);
-      const tas = tasacionByInmueble.get(x.id);
-      const pub = publicacionByInmueble.get(x.id);
-      const lib = liberacionByInmueble.get(x.id);
-      const item = {
+    const base = inmuebleRows.map((x) => {
+      const positions = posByInmueble.get(x.id) || [];
+
+      const activePosition = positions.find(
+        (position) => position.activa,
+      );
+
+      const latestPosition =
+        positions.length > 0
+          ? positions[positions.length - 1]
+          : null;
+
+      const visita = visitaByInmueble.get(x.id);
+      const tasacion = tasacionByInmueble.get(x.id);
+      const publicacion = publicacionByInmueble.get(x.id);
+      const negociacion = negociacionByInmueble.get(x.id);
+      const liberacion = liberacionByInmueble.get(x.id);
+
+      const activo = esActivo(x.estado);
+
+      const visitaRealizada = Boolean(
+        visita?.completada,
+      );
+
+      const visitaPendiente =
+        activo && !visitaRealizada;
+
+      const tasacionPendiente =
+        activo &&
+        visitaRealizada &&
+        !tasacion;
+
+      const aprobacionPendiente =
+        activo &&
+        Boolean(
+          tasacion &&
+            tasacion.situacion?.toLowerCase() ===
+              "pendiente_aprobacion",
+        );
+
+      const materialPendiente =
+        activo &&
+        esTasacionAprobada(tasacion?.situacion) &&
+        !publicacion;
+
+      const negociacionEnCurso =
+        activo &&
+        negociacion?.estado?.toLowerCase() ===
+          "en_curso";
+
+      const listoParaPublicar =
+        activo &&
+        Boolean(
+          publicacion &&
+            !publicacion.publicado,
+        );
+
+      const publicado =
+        activo &&
+        Boolean(publicacion?.publicado);
+
+      const situaciones = agregarSituaciones({
+        visitaPendiente,
+        tasacionPendiente,
+        aprobacionPendiente,
+        materialPendiente,
+        negociacionEnCurso,
+        listoParaPublicar,
+        publicado,
+      });
+
+      const fechaVisita =
+        visita?.fechaCompletada ??
+        visita?.fechaVisita ??
+        null;
+
+      return {
         inmuebleId: x.id,
         codigo: x.codigo,
         nombre: x.referencia,
-        tipo: tipoMap[x.tipo?.toLowerCase()] ?? x.tipo,
-        ubicacion: [x.distrito, x.provincia, x.departamento].filter(Boolean).join(", ") || "Sin ubicación",
-        propietario: [x.propietario, x.propietarioApellidos].filter(Boolean).join(" ") || "Sin propietario",
-        posicion: activePosition?.posicion ?? posByInmueble.get(x.id)?.at(-1)?.posicion ?? null,
-        estado: x.estado?.toLowerCase() === "activo" ? "Activo" : "Histórico",
-        etapa: etapaMap[x.etapa?.toLowerCase()] ?? x.etapa,
-        fechaRegistro: fmtDate(x.fechaRegistro),
-        fechaSalida: fmtDate(x.fechaSalida),
-        fechaVisita: fmtDate(visitaByInmueble.get(x.id)?.fechaCompletada ?? visitaByInmueble.get(x.id)?.fechaVisita),
-        tasacion: tas ? Number(tas.precioObjetivo ?? tas.valorReferencia ?? 0) : null,
-        situacionTasacion: tas?.situacion ?? null,
-        publicacionRegistrada: Boolean(pub),
-        publicado: Boolean(pub?.publicado),
-        motivoLiberacion: lib?.motivo ?? null,
-        detalleLiberacion: lib?.detalleOtro ?? null,
+        tipo: normalizarTipo(x.tipo),
+        ubicacion:
+          [
+            x.distrito,
+            x.provincia,
+            x.departamento,
+          ]
+            .filter(Boolean)
+            .join(", ") || "Sin ubicación",
+        propietario:
+          [
+            x.propietario,
+            x.propietarioApellidos,
+          ]
+            .filter(Boolean)
+            .join(" ") || "Sin propietario",
+        posicion:
+          activePosition?.posicion ??
+          latestPosition?.posicion ??
+          null,
+        estado: activo ? "Activo" : "Histórico",
+
+        visitaRealizada,
+        visitaPendiente,
+        fechaVisita: fmtDate(fechaVisita),
+
+        tasacionRegistrada: Boolean(tasacion),
+        tasacionPendiente,
+        fechaTasacion: fmtDate(
+          tasacion?.fechaTasacion,
+        ),
+        tasacion:
+          tasacion
+            ? Number(
+                tasacion.precioObjetivo ??
+                  tasacion.valorReferencia ??
+                  0,
+              )
+            : null,
+        situacionTasacion:
+          tasacion?.situacion ?? null,
+        aprobacionPendiente,
+        tasacionAprobada:
+          esTasacionAprobada(
+            tasacion?.situacion,
+          ),
+        tasacionRechazada:
+          esTasacionRechazada(
+            tasacion?.situacion,
+          ),
+
+        materialPendiente,
+
+        negociacionEnCurso,
+        estadoNegociacion:
+          negociacion?.estado ?? null,
+
+        publicacionRegistrada:
+          Boolean(publicacion),
+        listoParaPublicar,
+        publicado,
+        fechaPublicacion: fmtDate(
+          publicacion?.fechaPublicacion,
+        ),
+
+        situaciones,
+
+        fechaRegistro: fmtDate(
+          x.fechaRegistro,
+        ),
+        fechaSalida: fmtDate(
+          x.fechaSalida,
+        ),
+
+        motivoLiberacion:
+          liberacion?.motivo ?? null,
+        detalleLiberacion:
+          liberacion?.detalleOtro ?? null,
       };
-      return item;
     });
 
-    const filtered = base.filter(x => {
-      const fecha = x.fechaRegistro ? new Date(x.fechaRegistro) : null;
-      if (desde && (!fecha || fecha < new Date(`${desde}T00:00:00`))) return false;
-      if (hasta && (!fecha || fecha > new Date(`${hasta}T23:59:59`))) return false;
-      if (etapa !== "Todas" && x.etapa !== etapa && !(etapa === "Aprobación / negociación" && ["Pendiente de aprobación", "En negociación"].includes(x.etapa))) return false;
-      if (estado !== "Todos") {
-        const ok = estado === x.estado
-          || (estado === "En negociación" && x.etapa === "En negociación")
-          || (estado === "Aprobado" && x.etapa === "Aprobado")
-          || (estado === "Rechazado" && ["Rechazado", "Tasación rechazada"].includes(x.etapa));
-        if (!ok) return false;
+    const filtered = base.filter((x) => {
+      const fecha = x.fechaRegistro
+        ? new Date(x.fechaRegistro)
+        : null;
+
+      if (
+        desde &&
+        (!fecha ||
+          fecha <
+            new Date(`${desde}T00:00:00`))
+      ) {
+        return false;
       }
-      if (posicion && String(x.posicion) !== posicion.replace(/^0+/, "")) return false;
-      if (tipo !== "Todos" && x.tipo !== tipo) return false;
+
+      if (
+        hasta &&
+        (!fecha ||
+          fecha >
+            new Date(`${hasta}T23:59:59`))
+      ) {
+        return false;
+      }
+
+      if (
+        situacion !== "Todas" &&
+        !x.situaciones.includes(situacion)
+      ) {
+        return false;
+      }
+
+      if (
+        estado !== "Todos" &&
+        x.estado !== estado
+      ) {
+        return false;
+      }
+
+      if (
+        posicionFiltro &&
+        String(x.posicion) !==
+          posicionFiltro.replace(/^0+/, "")
+      ) {
+        return false;
+      }
+
+      if (
+        tipo !== "Todos" &&
+        x.tipo !== tipo
+      ) {
+        return false;
+      }
+
       return true;
     });
 
-    const active = filtered.filter(x => x.estado === "Activo");
+    const active = filtered.filter(
+      (x) => x.estado === "Activo",
+    );
+
     let rows: any[] = filtered;
 
     if (reporte === "Posiciones disponibles") {
-      const occupied = new Set(base.filter(x => x.estado === "Activo" && x.posicion).map(x => x.posicion));
-      rows = Array.from({ length: 90 }, (_, i) => i + 1)
-        .filter(n => !occupied.has(n))
-        .map(n => ({ posicion: n, estado: "Disponible" }));
-    } else if (reporte === "Visitas realizadas") {
-      rows = filtered.filter(x => Boolean(x.fechaVisita)).map(x => ({ ...x, fechaVisita: x.fechaVisita }));
-    } else if (reporte === "Tasaciones realizadas") {
-      rows = filtered.filter(x => x.tasacion !== null);
-    } else if (reporte === "Aprobaciones y negociación") {
-      rows = filtered.filter(x => ["Pendiente de aprobación", "En negociación", "Aprobado", "Rechazado", "Tasación rechazada"].includes(x.etapa));
-    } else if (reporte === "Textos pendientes") {
-      rows = filtered.filter(x => x.etapa === "Aprobado" && !x.publicacionRegistrada);
-    } else if (reporte === "Listos para publicar") {
-      rows = filtered.filter(x => x.etapa === "Listo para publicar" && !x.publicado);
-    } else if (reporte === "Publicados") {
-      rows = filtered.filter(x => x.publicado);
-    } else if (reporte === "Vendidos") {
-      rows = filtered.filter(x => x.motivoLiberacion === "vendido");
-    } else if (reporte === "Retirados / cancelados") {
-      rows = filtered.filter(x => ["cancelacion_propietario", "cancelacion_externa", "otro"].includes(x.motivoLiberacion || ""));
-    } else if (reporte === "Motivos de liberación") {
-      rows = filtered.filter(x => Boolean(x.motivoLiberacion));
-    } else if (reporte === "Tiempo de permanencia") {
-      rows = filtered.map(x => ({ ...x, dias: daysBetween(x.fechaRegistro, x.fechaSalida) ?? daysBetween(x.fechaRegistro, new Date()) }));
-    } else if (reporte === "Posición ocupada") {
-      rows = positionRows.map(p => {
-        const x = base.find(i => i.inmuebleId === p.inmuebleId);
-        return x ? { ...x, posicion: p.posicion, fechaInicioPosicion: fmtDate(p.fechaInicio), fechaFinPosicion: fmtDate(p.fechaFin), activaPosicion: p.activa } : null;
-      }).filter(Boolean);
+      const occupied = new Set(
+        base
+          .filter(
+            (x) =>
+              x.estado === "Activo" &&
+              x.posicion !== null,
+          )
+          .map((x) => x.posicion),
+      );
+
+      const posicionSolicitada =
+        posicionFiltro
+          ? Number(posicionFiltro)
+          : null;
+
+      rows = Array.from(
+        { length: 90 },
+        (_, i) => i + 1,
+      )
+        .filter(
+          (numero) =>
+            !occupied.has(numero) &&
+            (!posicionSolicitada ||
+              numero === posicionSolicitada),
+        )
+        .map((numero) => ({
+          posicion: numero,
+          estado: "Disponible",
+        }));
+    } else if (
+      reporte === "Visitas realizadas"
+    ) {
+      rows = filtered.filter(
+        (x) => x.visitaRealizada,
+      );
+    } else if (
+      reporte === "Visitas pendientes"
+    ) {
+      rows = filtered.filter(
+        (x) => x.visitaPendiente,
+      );
+    } else if (
+      reporte === "Tasaciones realizadas"
+    ) {
+      rows = filtered.filter(
+        (x) => x.tasacionRegistrada,
+      );
+    } else if (
+      reporte === "Tasaciones pendientes"
+    ) {
+      rows = filtered.filter(
+        (x) => x.tasacionPendiente,
+      );
+    } else if (
+      reporte === "Aprobaciones pendientes"
+    ) {
+      rows = filtered.filter(
+        (x) => x.aprobacionPendiente,
+      );
+    } else if (
+      reporte === "Negociaciones"
+    ) {
+      rows = filtered.filter(
+        (x) => x.negociacionEnCurso,
+      );
+    } else if (
+      reporte === "Aprobaciones y negociación"
+    ) {
+      rows = filtered.filter(
+        (x) =>
+          x.aprobacionPendiente ||
+          x.negociacionEnCurso ||
+          x.tasacionAprobada ||
+          x.tasacionRechazada,
+      );
+    } else if (
+      reporte === "Material pendiente"
+    ) {
+      rows = filtered.filter(
+        (x) => x.materialPendiente,
+      );
+    } else if (
+      reporte === "Listos para publicar"
+    ) {
+      rows = filtered.filter(
+        (x) => x.listoParaPublicar,
+      );
+    } else if (
+      reporte === "Publicados"
+    ) {
+      rows = filtered.filter(
+        (x) => x.publicado,
+      );
+    } else if (
+      reporte === "Vendidos"
+    ) {
+      rows = filtered.filter(
+        (x) => x.motivoLiberacion === "vendido",
+      );
+    } else if (
+      reporte === "Retirados / cancelados"
+    ) {
+      rows = filtered.filter(
+        (x) =>
+          [
+            "cancelacion_propietario",
+            "cancelacion_externa",
+            "otro",
+          ].includes(
+            x.motivoLiberacion || "",
+          ),
+      );
+    } else if (
+      reporte === "Motivos de liberación"
+    ) {
+      rows = filtered.filter(
+        (x) => Boolean(x.motivoLiberacion),
+      );
+    } else if (
+      reporte === "Tiempo de permanencia"
+    ) {
+      rows = filtered.map((x) => ({
+        ...x,
+        dias:
+          daysBetween(
+            x.fechaRegistro,
+            x.fechaSalida,
+          ) ??
+          daysBetween(
+            x.fechaRegistro,
+            new Date(),
+          ),
+      }));
+    } else if (
+      reporte === "Posición ocupada"
+    ) {
+      rows = positionRows
+        .map((position) => {
+          const x = base.find(
+            (item) =>
+              item.inmuebleId ===
+              position.inmuebleId,
+          );
+
+          if (!x) return null;
+
+          if (
+            posicionFiltro &&
+            String(position.posicion) !==
+              posicionFiltro.replace(/^0+/, "")
+          ) {
+            return null;
+          }
+
+          return {
+            ...x,
+            posicion: position.posicion,
+            fechaInicioPosicion:
+              fmtDate(position.fechaInicio),
+            fechaFinPosicion:
+              fmtDate(position.fechaFin),
+            activaPosicion:
+              position.activa,
+          };
+        })
+        .filter(Boolean);
     } else if (reporte.includes("→")) {
       const events = timelineByInmueble;
-      const targetMap: Record<string, [string, string]> = {
-        "Registro → visita": ["inmueble_registrado", "visita_realizada"],
-        "Visita → tasación": ["visita_realizada", "tasacion_realizada"],
-        "Tasación → aprobación": ["tasacion_realizada", "tasacion_actualizada"],
-        "Aprobación → publicación": ["tasacion_actualizada", "publicacion_registrada"],
+
+      const targetMap: Record<
+        string,
+        [string, string]
+      > = {
+        "Registro → visita": [
+          "inmueble_registrado",
+          "visita_realizada",
+        ],
+        "Visita → tasación": [
+          "visita_realizada",
+          "tasacion_realizada",
+        ],
+        "Tasación → aprobación": [
+          "tasacion_realizada",
+          "tasacion_actualizada",
+        ],
+        "Aprobación → publicación": [
+          "tasacion_actualizada",
+          "publicacion_registrada",
+        ],
       };
-      const [from, to] = targetMap[reporte] || ["", ""];
-      rows = filtered.map(x => {
-        const ev = events.get(x.inmuebleId) || [];
-        const a = ev.find(e => e.evento === from)?.fechaEvento;
-        const b = ev.find(e => e.evento === to)?.fechaEvento;
-        return { ...x, fechaInicioFlujo: fmtDate(a), fechaFinFlujo: fmtDate(b), dias: daysBetween(a, b) };
-      }).filter((x: any) => x.fechaInicioFlujo);
-    } else if (reporte === "Histórico de inmuebles") {
-      rows = filtered.filter(x => x.estado === "Histórico");
-    } else if (reporte === "Inmuebles por estado") {
+
+      const [from, to] =
+        targetMap[reporte] || ["", ""];
+
+      rows = filtered
+        .map((x) => {
+          const ev =
+            events.get(x.inmuebleId) || [];
+
+          const startEvent = ev.find(
+            (event) =>
+              event.evento === from,
+          );
+
+          const endEvent = ev.find(
+            (event) =>
+              event.evento === to &&
+              (!startEvent ||
+                new Date(event.fechaEvento).getTime() >=
+                  new Date(
+                    startEvent.fechaEvento,
+                  ).getTime()),
+          );
+
+          const fechaInicioFlujo =
+            fmtDate(
+              startEvent?.fechaEvento,
+            );
+
+          const fechaFinFlujo =
+            fmtDate(
+              endEvent?.fechaEvento,
+            );
+
+          return {
+            ...x,
+            fechaInicioFlujo,
+            fechaFinFlujo,
+            dias: daysBetween(
+              startEvent?.fechaEvento,
+              endEvent?.fechaEvento,
+            ),
+          };
+        })
+        .filter(
+          (x: any) =>
+            x.fechaInicioFlujo,
+        );
+    } else if (
+      reporte === "Histórico de inmuebles"
+    ) {
+      rows = filtered.filter(
+        (x) => x.estado === "Histórico",
+      );
+    } else if (
+      reporte === "Inmuebles por estado"
+    ) {
       rows = filtered;
-    } else if (reporte === "Inmuebles por etapa") {
+    } else if (
+      reporte === "Situación de cartera"
+    ) {
       rows = filtered;
-    } else if (reporte === "Cartera activa") {
+    } else if (
+      reporte === "Cartera activa"
+    ) {
       rows = active;
     }
 
+    const activosBase = base.filter(
+      (x) => x.estado === "Activo",
+    );
+
+    const disponibles = Math.max(
+      0,
+      90 -
+        activosBase.filter(
+          (x) => x.posicion !== null,
+        ).length,
+    );
+
     const resumen = {
       total: rows.length,
-      activos: base.filter(x => x.estado === "Activo").length,
-      historicos: base.filter(x => x.estado === "Histórico").length,
-      disponibles: Math.max(0, 90 - base.filter(x => x.estado === "Activo").filter(x => x.posicion).length),
-      visitasPendientes: base.filter(x => x.estado === "Activo" && x.etapa === "Visita pendiente").length,
-      tasacionesPendientes: base.filter(x => x.estado === "Activo" && x.etapa === "Tasación pendiente").length,
-      aprobaciones: base.filter(x => x.estado === "Activo" && x.etapa === "Pendiente de aprobación").length,
-      negociaciones: base.filter(x => x.estado === "Activo" && x.etapa === "En negociación").length,
-      listosParaPublicar: base.filter(x => x.estado === "Activo" && x.etapa === "Listo para publicar").length,
-      publicados: base.filter(x => x.estado === "Activo" && x.publicado).length,
+      activos: activosBase.length,
+      historicos: base.filter(
+        (x) => x.estado === "Histórico",
+      ).length,
+      disponibles,
+
+      visitasPendientes:
+        activosBase.filter(
+          (x) => x.visitaPendiente,
+        ).length,
+
+      visitasRealizadas:
+        activosBase.filter(
+          (x) => x.visitaRealizada,
+        ).length,
+
+      tasacionesPendientes:
+        activosBase.filter(
+          (x) => x.tasacionPendiente,
+        ).length,
+
+      tasacionesRealizadas:
+        activosBase.filter(
+          (x) => x.tasacionRegistrada,
+        ).length,
+
+      aprobaciones:
+        activosBase.filter(
+          (x) => x.aprobacionPendiente,
+        ).length,
+
+      negociaciones:
+        activosBase.filter(
+          (x) => x.negociacionEnCurso,
+        ).length,
+
+      materialPendiente:
+        activosBase.filter(
+          (x) => x.materialPendiente,
+        ).length,
+
+      listosParaPublicar:
+        activosBase.filter(
+          (x) => x.listoParaPublicar,
+        ).length,
+
+      publicados:
+        activosBase.filter(
+          (x) => x.publicado,
+        ).length,
     };
 
-    return NextResponse.json({ ok: true, reporte, resumen, rows });
+    return NextResponse.json({
+      ok: true,
+      reporte,
+      resumen,
+      rows,
+    });
   } catch (error) {
-    console.error("Error en reportes:", error);
-    return NextResponse.json({ ok: false, error: "No se pudo generar el reporte." }, { status: 500 });
+    console.error(
+      "Error en reportes:",
+      error,
+    );
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "No se pudo generar el reporte.",
+      },
+      { status: 500 },
+    );
   }
 }

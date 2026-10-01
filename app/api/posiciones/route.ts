@@ -8,16 +8,6 @@ import {
   inmPropietarios,
 } from "@/db/schema";
 
-const etapaMap: Record<string, string> = {
-  visita_pendiente: "Visita pendiente",
-  visita_realizada: "Visita realizada",
-  tasacion_pendiente: "Tasación pendiente",
-  pendiente_aprobacion: "Pendiente de aprobación",
-  en_negociacion: "En negociación",
-  listo_para_publicar: "Listo para publicar",
-  publicado: "Publicado",
-};
-
 const tipoMap: Record<string, string> = {
   casa: "Casa",
   departamento: "Departamento",
@@ -37,7 +27,6 @@ export async function GET() {
         codigo: inmInmuebles.codigo,
         referencia: inmInmuebles.referencia,
         tipo: inmInmuebles.tipo,
-        etapa: inmInmuebles.etapa,
         propietarioNombres: inmPropietarios.nombres,
         propietarioApellidos: inmPropietarios.apellidos,
       })
@@ -67,9 +56,6 @@ export async function GET() {
         nombre: row.referencia ?? null,
         tipo: row.tipo
           ? tipoMap[row.tipo.toLowerCase()] ?? row.tipo
-          : null,
-        etapa: row.etapa
-          ? etapaMap[row.etapa.toLowerCase()] ?? row.etapa
           : null,
         propietario:
           [row.propietarioNombres, row.propietarioApellidos]

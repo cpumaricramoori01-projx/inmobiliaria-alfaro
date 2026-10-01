@@ -50,16 +50,20 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      !referencia ||
-      !/^\d{8}$/.test(dni) ||
-      !nombres ||
-      !apellidos
-    ) {
+    if (!referencia) {
+      return NextResponse.json(
+        { error: "Completa posición, tipo y referencia." },
+        { status: 400 }
+      );
+    }
+
+    const hasOwnerData = Boolean(dni || nombres || apellidos || telefono);
+
+    if (hasOwnerData && (!/^\d{8}$/.test(dni) || !nombres || !apellidos)) {
       return NextResponse.json(
         {
           error:
-            "Completa posición, tipo, referencia, DNI, nombres y apellidos.",
+            "Si registras propietario, completa DNI, nombres y apellidos.",
         },
         { status: 400 }
       );
@@ -109,44 +113,41 @@ export async function POST(request: Request) {
         );
       }
 
-      // Buscar propietario por DNI
-      let [owner] = await tx
-        .select()
-        .from(inmPropietarios)
-        .where(eq(inmPropietarios.dni, dni))
-        .limit(1);
+      // Propietario es opcional en Fase 1.
+      // Si se proporcionan datos completos, buscar o crear propietario.
+      let propietarioId: number | null = null;
 
-      // Si existe, actualizar sus datos
-      if (owner) {
-        await tx
-          .update(inmPropietarios)
-          .set({
-            nombres,
-            apellidos,
-            telefono: telefono || null,
-          })
-          .where(eq(inmPropietarios.id, owner.id));
-      } else {
-        // Si no existe, crear propietario
-        const [createdOwner] = await tx
-          .insert(inmPropietarios)
-          .values({
-            dni,
-            nombres,
-            apellidos,
-            telefono: telefono || null,
-          })
-          .$returningId();
-
-        [owner] = await tx
+      if (hasOwnerData) {
+        let [owner] = await tx
           .select()
           .from(inmPropietarios)
-          .where(eq(inmPropietarios.id, createdOwner.id))
+          .where(eq(inmPropietarios.dni, dni))
           .limit(1);
-      }
 
-      if (!owner) {
-        throw new Error("No fue posible obtener el propietario.");
+        if (owner) {
+          await tx
+            .update(inmPropietarios)
+            .set({
+              nombres,
+              apellidos,
+              telefono: telefono || null,
+            })
+            .where(eq(inmPropietarios.id, owner.id));
+
+          propietarioId = owner.id;
+        } else {
+          const [createdOwner] = await tx
+            .insert(inmPropietarios)
+            .values({
+              dni,
+              nombres,
+              apellidos,
+              telefono: telefono || null,
+            })
+            .$returningId();
+
+          propietarioId = createdOwner.id;
+        }
       }
 
       // Generar código del inmueble
@@ -161,7 +162,7 @@ export async function POST(request: Request) {
         .insert(inmInmuebles)
         .values({
           codigo,
-          propietarioId: owner.id,
+          propietarioId,
           tipo,
           referencia,
           direccion: direccion || null,
@@ -216,7 +217,7 @@ export async function POST(request: Request) {
         evento: "inmueble_registrado",
         observacion: `Inmueble registrado en la posición ${String(
           posicion
-        ).padStart(2, "0")} y enviado a visita pendiente.`,
+        ).padStart(2, "0")}.`,
         usuarioId: user.id,
       });
 
@@ -224,7 +225,6 @@ export async function POST(request: Request) {
         inmuebleId: createdProperty.id,
         codigo,
         posicion,
-        etapa: "visita_pendiente",
       };
     });
 

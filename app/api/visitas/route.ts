@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   inmAsignacionesPosicion,
@@ -45,14 +45,23 @@ export async function GET() {
         provincia: inmInmuebles.provincia,
         departamento: inmInmuebles.departamento,
         propietario: sql<string>`
-          CONCAT(${inmPropietarios.nombres}, ' ', ${inmPropietarios.apellidos})
+          CONCAT(
+            COALESCE(${inmPropietarios.nombres}, ''),
+            CASE
+              WHEN ${inmPropietarios.nombres} IS NOT NULL
+                AND ${inmPropietarios.apellidos} IS NOT NULL
+                THEN ' '
+              ELSE ''
+            END,
+            COALESCE(${inmPropietarios.apellidos}, '')
+          )
         `,
         dni: inmPropietarios.dni,
         posicion: inmPosiciones.numero,
         fechaRegistro: inmInmuebles.fechaRegistro,
       })
       .from(inmInmuebles)
-      .innerJoin(
+      .leftJoin(
         inmPropietarios,
         eq(inmInmuebles.propietarioId, inmPropietarios.id)
       )
@@ -67,7 +76,19 @@ export async function GET() {
         inmPosiciones,
         eq(inmAsignacionesPosicion.posicionId, inmPosiciones.id)
       )
-      .where(eq(inmInmuebles.etapa, "visita_pendiente"))
+      .leftJoin(
+        inmVisitas,
+        and(
+          eq(inmVisitas.inmuebleId, inmInmuebles.id),
+          eq(inmVisitas.completada, true)
+        )
+      )
+      .where(
+        and(
+          eq(inmInmuebles.estado, "activo"),
+          sql`${inmVisitas.id} IS NULL`
+        )
+      )
       .orderBy(asc(inmInmuebles.fechaRegistro));
 
     const ahora = Date.now();
@@ -88,8 +109,8 @@ export async function GET() {
           [row.direccion, row.distrito, row.provincia, row.departamento]
             .filter(Boolean)
             .join(", ") || "Ubicación no registrada",
-        propietario: row.propietario,
-        dni: row.dni,
+        propietario: row.propietario || "",
+        dni: row.dni || "",
         posicion: String(row.posicion),
         dias,
       };
@@ -163,7 +184,7 @@ export async function POST(request: Request) {
         .select({
           id: inmInmuebles.id,
           codigo: inmInmuebles.codigo,
-          etapa: inmInmuebles.etapa,
+          estado: inmInmuebles.estado,
           referencia: inmInmuebles.referencia,
         })
         .from(inmInmuebles)
@@ -174,9 +195,28 @@ export async function POST(request: Request) {
         throw new Error("El inmueble seleccionado no existe.");
       }
 
-      if (property.etapa !== "visita_pendiente") {
+      if (property.estado !== "activo") {
         throw new Error(
-          "El inmueble ya no se encuentra pendiente de visita. Actualiza la pantalla."
+          "El inmueble ya no se encuentra activo en cartera. Actualiza la pantalla."
+        );
+      }
+
+      const [activePosition] = await tx
+        .select({
+          id: inmAsignacionesPosicion.id,
+        })
+        .from(inmAsignacionesPosicion)
+        .where(
+          and(
+            eq(inmAsignacionesPosicion.inmuebleId, inmuebleId),
+            eq(inmAsignacionesPosicion.activa, true)
+          )
+        )
+        .limit(1);
+
+      if (!activePosition) {
+        throw new Error(
+          "El inmueble no tiene una posición activa en cartera."
         );
       }
 
@@ -237,13 +277,6 @@ export async function POST(request: Request) {
         usuarioId: user.id,
       });
 
-      await tx
-        .update(inmInmuebles)
-        .set({
-          etapa: "tasacion_pendiente",
-        })
-        .where(eq(inmInmuebles.id, inmuebleId));
-
       await tx.insert(inmTimeline).values({
         inmuebleId,
         evento: "visita_realizada",
@@ -257,7 +290,7 @@ export async function POST(request: Request) {
         inmuebleId,
         codigo: property.codigo,
         referencia: property.referencia,
-        etapa: "tasacion_pendiente",
+        estadoVisita: "realizada",
       };
     });
 
@@ -272,11 +305,14 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Error al registrar visita:", error);
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : "No fue posible registrar la visita.";
-
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "No fue posible registrar la visita.",
+      },
+      { status: 500 }
+    );
   }
 }

@@ -1,24 +1,16 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   inmAsignacionesPosicion,
   inmInmuebles,
+  inmNegociaciones,
   inmPosiciones,
-  inmTimeline,
   inmPublicaciones,
   inmTasaciones,
+  inmTimeline,
+  inmVisitas,
 } from "@/db/schema";
-
-const etapaMap: Record<string, string> = {
-  visita_pendiente: "Visita pendiente",
-  visita_realizada: "Visita realizada",
-  tasacion_pendiente: "Tasación pendiente",
-  pendiente_aprobacion: "Pendiente de aprobación",
-  en_negociacion: "En negociación",
-  listo_para_publicar: "Listo para publicar",
-  publicado: "Publicado",
-};
 
 const eventoMap: Record<string, string> = {
   inmueble_registrado: "Inmueble registrado",
@@ -34,93 +26,261 @@ const eventoMap: Record<string, string> = {
 
 export async function GET() {
   try {
-    const [activosResult, posicionesResult, etapasResult, textosResult, recientes] = await Promise.all([
-      db.select({ total: sql<number>`count(*)` })
+    const [
+      inmueblesActivos,
+      visitas,
+      tasaciones,
+      negociaciones,
+      publicaciones,
+      recientes,
+      posicionesDisponibles,
+    ] = await Promise.all([
+      db
+        .select({
+          id: inmInmuebles.id,
+        })
         .from(inmInmuebles)
         .where(eq(inmInmuebles.estado, "activo")),
 
-      db.select({ total: sql<number>`count(*)` })
+      db
+        .select({
+          inmuebleId: inmVisitas.inmuebleId,
+          completada: inmVisitas.completada,
+          fechaRegistro: inmVisitas.fechaRegistro,
+        })
+        .from(inmVisitas)
+        .orderBy(desc(inmVisitas.fechaRegistro)),
+
+      db
+        .select({
+          inmuebleId: inmTasaciones.inmuebleId,
+          situacion: inmTasaciones.situacion,
+        })
+        .from(inmTasaciones),
+
+      db
+        .select({
+          inmuebleId: inmNegociaciones.inmuebleId,
+          estado: inmNegociaciones.estado,
+          fechaRegistro: inmNegociaciones.fechaRegistro,
+        })
+        .from(inmNegociaciones)
+        .orderBy(desc(inmNegociaciones.fechaRegistro)),
+
+      db
+        .select({
+          inmuebleId: inmPublicaciones.inmuebleId,
+          publicado: inmPublicaciones.publicado,
+        })
+        .from(inmPublicaciones),
+
+      db
+        .select({
+          numero: inmPosiciones.numero,
+          nombre: inmInmuebles.referencia,
+          evento: inmTimeline.evento,
+          fecha: inmTimeline.fechaEvento,
+        })
+        .from(inmTimeline)
+        .innerJoin(
+          inmInmuebles,
+          eq(inmInmuebles.id, inmTimeline.inmuebleId)
+        )
+        .leftJoin(
+          inmAsignacionesPosicion,
+          eq(
+            inmAsignacionesPosicion.inmuebleId,
+            inmInmuebles.id
+          )
+        )
+        .leftJoin(
+          inmPosiciones,
+          eq(
+            inmPosiciones.id,
+            inmAsignacionesPosicion.posicionId
+          )
+        )
+        .orderBy(desc(inmTimeline.fechaEvento))
+        .limit(5),
+
+      db
+        .select({
+          posicionId: inmPosiciones.id,
+          inmuebleId: inmAsignacionesPosicion.inmuebleId,
+        })
         .from(inmPosiciones)
         .leftJoin(
           inmAsignacionesPosicion,
-          and(
-            eq(inmAsignacionesPosicion.posicionId, inmPosiciones.id),
-            eq(inmAsignacionesPosicion.activa, true)
+          eq(
+            inmAsignacionesPosicion.posicionId,
+            inmPosiciones.id
           )
         )
-        .where(
-          and(
-            eq(inmPosiciones.activo, true),
-            sql`inm_asignaciones_posicion.id is null`
-          )
+        .where(eq(inmPosiciones.activo, true))
+        .then((rows) =>
+          rows.filter((row) => row.inmuebleId == null).length
         ),
-
-      db.select({ etapa: inmInmuebles.etapa, total: sql<number>`count(*)` })
-        .from(inmInmuebles)
-        .where(eq(inmInmuebles.estado, "activo"))
-        .groupBy(inmInmuebles.etapa),
-
-      db.select({ total: sql<number>`count(*)` })
-        .from(inmInmuebles)
-        .innerJoin(inmTasaciones, eq(inmTasaciones.inmuebleId, inmInmuebles.id))
-        .leftJoin(inmPublicaciones, eq(inmPublicaciones.inmuebleId, inmInmuebles.id))
-        .where(and(
-          eq(inmInmuebles.estado, "activo"),
-          eq(inmTasaciones.situacion, "aprobado"),
-          sql`inm_publicaciones.id is null`
-        )),
-
-      db.select({
-        numero: inmPosiciones.numero,
-        nombre: inmInmuebles.referencia,
-        etapa: inmInmuebles.etapa,
-        evento: inmTimeline.evento,
-        fecha: inmTimeline.fechaEvento,
-      })
-        .from(inmTimeline)
-        .innerJoin(inmInmuebles, eq(inmInmuebles.id, inmTimeline.inmuebleId))
-        .leftJoin(
-          inmAsignacionesPosicion,
-          and(eq(inmAsignacionesPosicion.inmuebleId, inmInmuebles.id), eq(inmAsignacionesPosicion.activa, true))
-        )
-        .leftJoin(inmPosiciones, eq(inmPosiciones.id, inmAsignacionesPosicion.posicionId))
-        .orderBy(desc(inmTimeline.fechaEvento))
-        .limit(5),
     ]);
 
-    const etapas = Object.fromEntries(etapasResult.map((item) => [item.etapa, Number(item.total)]));
-    const totalActivos = Number(activosResult[0]?.total ?? 0);
-    const posicionesDisponibles = Number(posicionesResult[0]?.total ?? 0);
-    const textosPendientes = Number(textosResult[0]?.total ?? 0);
+    const activos = new Set(inmueblesActivos.map((item) => item.id));
+
+    const ultimaVisita = new Map<
+      number,
+      { completada: boolean }
+    >();
+
+    for (const visita of visitas) {
+      if (!activos.has(visita.inmuebleId)) continue;
+      if (ultimaVisita.has(visita.inmuebleId)) continue;
+
+      ultimaVisita.set(visita.inmuebleId, {
+        completada: visita.completada,
+      });
+    }
+
+    const tasacionPorInmueble = new Map<
+      number,
+      string
+    >();
+
+    for (const tasacion of tasaciones) {
+      if (!activos.has(tasacion.inmuebleId)) continue;
+
+      tasacionPorInmueble.set(
+        tasacion.inmuebleId,
+        tasacion.situacion
+      );
+    }
+
+    const negociacionPorInmueble = new Map<
+      number,
+      string
+    >();
+
+    for (const negociacion of negociaciones) {
+      if (!activos.has(negociacion.inmuebleId)) continue;
+      if (negociacionPorInmueble.has(negociacion.inmuebleId)) {
+        continue;
+      }
+
+      negociacionPorInmueble.set(
+        negociacion.inmuebleId,
+        negociacion.estado
+      );
+    }
+
+    const publicacionPorInmueble = new Map<
+      number,
+      boolean
+    >();
+
+    for (const publicacion of publicaciones) {
+      if (!activos.has(publicacion.inmuebleId)) continue;
+
+      publicacionPorInmueble.set(
+        publicacion.inmuebleId,
+        publicacion.publicado
+      );
+    }
+
+    let visitasPendientes = 0;
+    let tasacionesPendientes = 0;
+    let aprobaciones = 0;
+    let negociacionesEnCurso = 0;
+    let textosPendientes = 0;
+    let listosParaPublicar = 0;
+
+    for (const inmuebleId of activos) {
+      const visita = ultimaVisita.get(inmuebleId);
+      const tasacion = tasacionPorInmueble.get(inmuebleId);
+      const negociacion = negociacionPorInmueble.get(inmuebleId);
+      const publicacion = publicacionPorInmueble.get(inmuebleId);
+
+      if (!visita || !visita.completada) {
+        visitasPendientes++;
+      }
+
+      if (visita?.completada && !tasacion) {
+        tasacionesPendientes++;
+      }
+
+      if (tasacion === "pendiente_aprobacion") {
+        aprobaciones++;
+      }
+
+      if (negociacion === "en_curso") {
+        negociacionesEnCurso++;
+      }
+
+      if (tasacion === "aprobado" && publicacion === undefined) {
+        textosPendientes++;
+      }
+
+      if (publicacion === false) {
+        listosParaPublicar++;
+      }
+    }
+
+    const totalActivos = activos.size;
 
     return NextResponse.json({
       resumen: {
         activos: totalActivos,
         posicionesDisponibles,
-        visitasPendientes: etapas.visita_pendiente ?? 0,
-        tasacionesPendientes: etapas.tasacion_pendiente ?? 0,
-        aprobaciones: etapas.pendiente_aprobacion ?? 0,
-        negociaciones: etapas.en_negociacion ?? 0,
+        visitasPendientes,
+        tasacionesPendientes,
+        aprobaciones,
+        negociaciones: negociacionesEnCurso,
         textosPendientes,
-        listosParaPublicar: etapas.listo_para_publicar ?? 0,
+        listosParaPublicar,
       },
       pendientes: [
-        { etapa: "Visita pendiente", total: etapas.visita_pendiente ?? 0, tone: "amber" },
-        { etapa: "Tasación pendiente", total: etapas.tasacion_pendiente ?? 0, tone: "orange" },
-        { etapa: "Pendiente de aprobación", total: etapas.pendiente_aprobacion ?? 0, tone: "violet" },
-        { etapa: "En negociación", total: etapas.en_negociacion ?? 0, tone: "violet" },
-        { etapa: "Texto pendiente", total: textosPendientes, tone: "rose" },
-        { etapa: "Listo para publicar", total: etapas.listo_para_publicar ?? 0, tone: "emerald" },
+        {
+          etapa: "Visita pendiente",
+          total: visitasPendientes,
+          tone: "amber",
+        },
+        {
+          etapa: "Tasación pendiente",
+          total: tasacionesPendientes,
+          tone: "orange",
+        },
+        {
+          etapa: "Pendiente de aprobación",
+          total: aprobaciones,
+          tone: "violet",
+        },
+        {
+          etapa: "En negociación",
+          total: negociacionesEnCurso,
+          tone: "violet",
+        },
+        {
+          etapa: "Texto pendiente",
+          total: textosPendientes,
+          tone: "rose",
+        },
+        {
+          etapa: "Listo para publicar",
+          total: listosParaPublicar,
+          tone: "emerald",
+        },
       ],
       recientes: recientes.map((item) => ({
-        numero: item.numero ? String(item.numero).padStart(2, "0") : "—",
+        numero: item.numero
+          ? String(item.numero).padStart(2, "0")
+          : "—",
         nombre: item.nombre,
-        etapa: eventoMap[item.evento] ?? etapaMap[item.etapa] ?? item.evento,
+        etapa: eventoMap[item.evento] ?? item.evento,
         fecha: item.fecha,
       })),
     });
   } catch (error) {
     console.error("Error al consultar dashboard:", error);
-    return NextResponse.json({ error: "No se pudo consultar el dashboard." }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "No se pudo consultar el dashboard." },
+      { status: 500 }
+    );
   }
 }

@@ -3,14 +3,27 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Item = {
-  inmuebleId: number; codigo: string; posicion: string; nombre: string; ubicacion: string;
-  tipo: string; propietario: string; dni: string; etapa: string;
+  inmuebleId: number;
+  codigo: string;
+  posicion: string;
+  nombre: string;
+  ubicacion: string;
+  tipo: string;
+  propietario: string;
+  dni: string;
+  etapa: string;
 };
 
 const motivos = [
   { value: "vendido", label: "Vendido" },
-  { value: "cancelacion_propietario", label: "Cancelación del propietario" },
-  { value: "cancelacion_externa", label: "Cancelación externa" },
+  {
+    value: "cancelacion_propietario",
+    label: "Cancelación del propietario",
+  },
+  {
+    value: "cancelacion_externa",
+    label: "Cancelación externa",
+  },
   { value: "otro", label: "Otro" },
 ];
 
@@ -26,108 +39,503 @@ export default function Page() {
 
   const cargar = async () => {
     try {
-      setCargando(true); setError("");
-      const response = await fetch("/api/liberaciones", { cache: "no-store" });
+      setCargando(true);
+      setError("");
+
+      const response = await fetch("/api/liberaciones", {
+        cache: "no-store",
+      });
+
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "No se pudieron cargar los inmuebles.");
+
+      if (!response.ok || !data.ok) {
+        throw new Error(
+          data.error || "No se pudieron cargar los inmuebles."
+        );
+      }
+
       setItems(data.items ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudieron cargar los inmuebles.");
-    } finally { setCargando(false); }
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudieron cargar los inmuebles."
+      );
+    } finally {
+      setCargando(false);
+    }
   };
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    cargar();
+  }, []);
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
+
     if (!q) return items;
-    return items.filter((x) => [x.codigo, x.nombre, x.ubicacion, x.propietario, x.dni, x.posicion].join(" ").toLowerCase().includes(q));
+
+    return items.filter((x) =>
+      [
+        x.codigo,
+        x.nombre,
+        x.ubicacion,
+        x.propietario,
+        x.dni,
+        x.posicion,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    );
   }, [items, busqueda]);
 
   const liberar = async (item: Item) => {
-    setError(""); setMensaje("");
+    setError("");
+    setMensaje("");
+
     const motivo = selecciones[item.inmuebleId] ?? "";
     const detalleOtro = detalles[item.inmuebleId]?.trim() ?? "";
-    if (!motivo) return setError(`Selecciona el motivo para “${item.nombre}”.`);
-    if (motivo === "otro" && !detalleOtro) return setError(`Indica el detalle del motivo para “${item.nombre}”.`);
-    if (!window.confirm(`¿Confirmar la liberación de “${item.nombre}” (posición ${item.posicion})?\n\nSaldrá de la cartera activa y conservará su registro histórico.`)) return;
+
+    if (!motivo) {
+      setError(`Selecciona el motivo para “${item.nombre}”.`);
+      return;
+    }
+
+    if (motivo === "otro" && !detalleOtro) {
+      setError(
+        `Indica el detalle del motivo para “${item.nombre}”.`
+      );
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `¿Confirmar la liberación de “${item.nombre}” (posición ${item.posicion})?\n\nEl inmueble saldrá de la cartera activa, la posición quedará disponible y su registro histórico se conservará.`
+      )
+    ) {
+      return;
+    }
 
     try {
       setGuardando(item.inmuebleId);
+
       const response = await fetch("/api/liberaciones", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inmuebleId: item.inmuebleId, motivo, detalleOtro }),
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          inmuebleId: item.inmuebleId,
+          motivo,
+          detalleOtro,
+        }),
       });
+
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "No fue posible liberar el inmueble.");
-      setMensaje(`“${item.nombre}” fue liberado correctamente. La posición ${item.posicion} queda disponible.`);
+
+      if (!response.ok || !data.ok) {
+        throw new Error(
+          data.error || "No fue posible liberar el inmueble."
+        );
+      }
+
+      setMensaje(
+        `“${item.nombre}” fue liberado correctamente. La posición ${item.posicion} queda disponible.`
+      );
+
       await cargar();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No fue posible liberar el inmueble.");
-    } finally { setGuardando(null); }
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible liberar el inmueble."
+      );
+    } finally {
+      setGuardando(null);
+    }
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f7fa] p-5 lg:p-8">
-      <div className="mx-auto max-w-6xl">
-        <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[.15em] text-rose-500">Fase 1 · Gestión de cartera</p>
-            <div className="mt-2 flex items-start gap-3">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">↗</span>
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight text-slate-950">Liberar inmueble</h1>
-                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Registra la salida de un inmueble de la cartera activa. Se conserva el histórico y se libera su posición.</p>
+    <main className="min-h-screen bg-[#f7f7f5] p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1380px]">
+        {/* ENCABEZADO */}
+        <header className="mb-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="rounded-full bg-[#fff1f1] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#b00000]">
+                  Fase 1
+                </span>
+
+                <span className="text-xs text-slate-400">
+                  Gestión de cartera
+                </span>
               </div>
+
+              <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+                Liberar inmueble
+              </h1>
+
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                Registra la salida de un inmueble de la cartera activa. La
+                posición quedará disponible y el histórico del inmueble se
+                conservará.
+              </p>
+            </div>
+
+            <div className="w-fit rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                Cartera activa
+              </p>
+
+              <p className="mt-1 text-lg font-bold text-slate-950">
+                {items.length}
+                <span className="ml-1 text-xs font-medium text-slate-400">
+                  inmuebles
+                </span>
+              </p>
             </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm"><span className="font-semibold text-slate-900">{items.length}</span><span className="ml-1 text-slate-500">inmuebles activos</span></div>
         </header>
 
-        <section className="mt-6 rounded-2xl border border-slate-200 bg-slate-900 p-5 text-white shadow-[0_14px_40px_rgba(15,23,42,0.10)]">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Acción principal</p>
-              <p className="mt-1 text-sm font-semibold">Selecciona el motivo de salida y confirma. La posición quedará disponible y el histórico se conservará.</p>
+        {/* PROCESO */}
+        <section className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                  Antes de liberar
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-slate-800">
+                  Selecciona el inmueble, registra el motivo y confirma la
+                  salida.
+                </p>
+              </div>
+
+              <span className="w-fit rounded-full bg-[#fff1f1] px-3 py-1.5 text-[10px] font-bold text-[#a90000]">
+                La posición será reutilizable
+              </span>
             </div>
-            <span className="rounded-full border border-rose-300/20 bg-rose-300/10 px-3 py-1.5 text-xs font-bold text-rose-200">Salida → posición libre</span>
+          </div>
+
+          <div className="grid sm:grid-cols-3">
+            {[
+              {
+                numero: "01",
+                titulo: "Seleccionar",
+                detalle: "Inmueble activo",
+              },
+              {
+                numero: "02",
+                titulo: "Registrar motivo",
+                detalle: "Causa de salida",
+              },
+              {
+                numero: "03",
+                titulo: "Confirmar",
+                detalle: "Posición disponible",
+              },
+            ].map((paso, index) => (
+              <div
+                key={paso.numero}
+                className={`flex items-center gap-3 px-5 py-4 ${
+                  index > 0
+                    ? "border-t border-slate-100 sm:border-l sm:border-t-0"
+                    : ""
+                }`}
+              >
+                <span
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    index === 0
+                      ? "bg-[#c80000] text-white"
+                      : "bg-slate-100 text-slate-400"
+                  }`}
+                >
+                  {paso.numero}
+                </span>
+
+                <div>
+                  <p className="text-xs font-bold text-slate-700">
+                    {paso.titulo}
+                  </p>
+
+                  <p className="mt-0.5 text-[11px] text-slate-400">
+                    {paso.detalle}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
-        {mensaje && <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{mensaje}</div>}
-        {error && <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{error}</div>}
+        {/* AVISOS */}
+        {mensaje && (
+          <div className="mb-5 flex gap-3 rounded-2xl border border-[#d9eadf] bg-[#f3faf5] p-4">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#18713b] text-sm font-bold text-white">
+              ✓
+            </span>
 
-        <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Buscar inmueble
-            <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Código, nombre, propietario, DNI, ubicación o posición..." className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-400" />
-          </label>
+            <div>
+              <p className="text-sm font-bold text-[#18713b]">
+                Liberación realizada
+              </p>
+
+              <p className="mt-1 text-xs leading-5 text-[#2f6f48]">
+                {mensaje}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-5 rounded-2xl border border-[#ead1d1] bg-[#fff7f7] p-4">
+            <p className="text-sm font-bold text-[#a90000]">
+              No se pudo completar la operación
+            </p>
+
+            <p className="mt-1 text-xs leading-5 text-[#a90000]">
+              {error}
+            </p>
+          </div>
+        )}
+
+        {/* BUSCADOR */}
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-bold text-slate-800">
+                Inmuebles activos
+              </p>
+
+              <p className="mt-1 text-xs text-slate-500">
+                Busca el inmueble que deseas retirar de la cartera.
+              </p>
+            </div>
+
+            <span className="w-fit rounded-full bg-slate-100 px-3 py-1.5 text-[10px] font-bold text-slate-500">
+              {filtrados.length} resultado
+              {filtrados.length === 1 ? "" : "s"}
+            </span>
+          </div>
+
+          <div className="mt-4">
+            <label className="text-xs font-semibold text-slate-600">
+              Buscar inmueble
+
+              <input
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Código, nombre, propietario, DNI, ubicación o posición..."
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-[#fafafa] px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#c80000] focus:bg-white focus:ring-2 focus:ring-[#f5dede]"
+              />
+            </label>
+          </div>
         </section>
 
-        <section className="mt-6">
-          {cargando ? <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">Cargando cartera activa...</div> :
-          filtrados.length === 0 ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-6 py-12 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-xl text-emerald-700">✓</div><h2 className="mt-4 font-bold text-emerald-950">{items.length === 0 ? "No hay inmuebles activos" : "No hay coincidencias"}</h2><p className="mt-1 text-sm text-emerald-800/80">{items.length === 0 ? "Cuando existan inmuebles activos aparecerán aquí para registrar su salida." : "Prueba con otro término de búsqueda."}</p></div> :
-          <div className="space-y-4">{filtrados.map((item) => {
-            const motivo = selecciones[item.inmuebleId] ?? "";
-            return <article key={item.inmuebleId} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="p-5 lg:p-6">
-                <div className="flex flex-col gap-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="flex items-center gap-4"><div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-base font-bold text-rose-700">{item.posicion}</div><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-900">{item.nombre}</h3><span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">{item.tipo}</span></div><p className="mt-1 text-xs text-slate-500">{item.ubicacion} · {item.codigo}</p><p className="mt-1 text-xs text-slate-500">Propietario: {item.propietario} · DNI {item.dni}</p></div></div>
-                    <span className="self-start rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">Activo</span>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
-                    <label className="text-xs font-semibold text-slate-600">Motivo de liberación *
-                      <select value={motivo} onChange={(e) => setSelecciones((c) => ({ ...c, [item.inmuebleId]: e.target.value }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700"><option value="">Seleccionar motivo</option>{motivos.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select>
-                    </label>
-                    {motivo === "otro" ? <label className="text-xs font-semibold text-slate-600">Detalle *
-                      <input value={detalles[item.inmuebleId] ?? ""} onChange={(e) => setDetalles((c) => ({ ...c, [item.inmuebleId]: e.target.value }))} placeholder="Describe brevemente el motivo..." className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700" />
-                    </label> : <div className="rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-500">La liberación quedará registrada con fecha, motivo y trazabilidad del usuario.</div>}
-                  </div>
-                  <div className="flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs text-slate-500">Al confirmar, sale de activos y su posición deja de estar ocupada.</p><button disabled={guardando === item.inmuebleId} onClick={() => liberar(item)} className="rounded-xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50">{guardando === item.inmuebleId ? "Liberando..." : "Confirmar liberación"}</button></div>
-                </div>
+        {/* LISTADO */}
+        <section>
+          {cargando ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500 shadow-sm">
+              Cargando cartera activa...
+            </div>
+          ) : filtrados.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-xl text-slate-500">
+                {items.length === 0 ? "✓" : "⌕"}
               </div>
-            </article>;
-          })}</div>}
+
+              <h2 className="mt-4 font-bold text-slate-900">
+                {items.length === 0
+                  ? "No hay inmuebles activos"
+                  : "No hay coincidencias"}
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-500">
+                {items.length === 0
+                  ? "Cuando existan inmuebles activos aparecerán aquí para registrar su salida."
+                  : "Prueba con otro término de búsqueda."}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {filtrados.map((item) => {
+                const motivo = selecciones[item.inmuebleId] ?? "";
+
+                return (
+                  <article
+                    key={item.inmuebleId}
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                  >
+                    {/* IDENTIDAD */}
+                    <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="flex items-start gap-4">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#fff1f1] text-sm font-bold text-[#a90000]">
+                            {item.posicion}
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-bold text-slate-900">
+                                {item.nombre}
+                              </h3>
+
+                              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
+                                {item.tipo}
+                              </span>
+
+                              <span className="rounded-full bg-[#edf8f1] px-2.5 py-1 text-[10px] font-bold text-[#18713b]">
+                                Activo
+                              </span>
+                            </div>
+
+                            <p className="mt-1 text-xs text-slate-500">
+                              {item.ubicacion || "Ubicación pendiente"} ·{" "}
+                              {item.codigo}
+                            </p>
+
+                            <p className="mt-1 text-xs text-slate-500">
+                              Propietario:{" "}
+                              <span className="font-medium text-slate-700">
+                                {item.propietario || "Pendiente"}
+                              </span>
+
+                              {item.dni && (
+                                <>
+                                  {" "}
+                                  · DNI {item.dni}
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                          <span className="font-semibold text-slate-700">
+                            Posición {item.posicion}
+                          </span>
+                          <br />
+                          quedará disponible
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* MOTIVO */}
+                    <div className="p-5 sm:p-6">
+                      <div className="grid gap-5 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.2fr)]">
+                        <div>
+                          <label className="text-xs font-bold text-slate-600">
+                            Motivo de liberación{" "}
+                            <span className="text-[#c80000]">*</span>
+
+                            <select
+                              value={motivo}
+                              onChange={(e) =>
+                                setSelecciones((c) => ({
+                                  ...c,
+                                  [item.inmuebleId]: e.target.value,
+                                }))
+                              }
+                              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-700 outline-none transition focus:border-[#c80000] focus:ring-2 focus:ring-[#f5dede]"
+                            >
+                              <option value="">
+                                Seleccionar motivo
+                              </option>
+
+                              {motivos.map((m) => (
+                                <option key={m.value} value={m.value}>
+                                  {m.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+
+                        {motivo === "otro" ? (
+                          <div>
+                            <label className="text-xs font-bold text-slate-600">
+                              Detalle del motivo{" "}
+                              <span className="text-[#c80000]">*</span>
+
+                              <input
+                                value={
+                                  detalles[item.inmuebleId] ?? ""
+                                }
+                                onChange={(e) =>
+                                  setDetalles((c) => ({
+                                    ...c,
+                                    [item.inmuebleId]: e.target.value,
+                                  }))
+                                }
+                                placeholder="Describe brevemente el motivo..."
+                                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#c80000] focus:ring-2 focus:ring-[#f5dede]"
+                              />
+                            </label>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-[#faf9f7] p-4">
+                            <span className="mt-0.5 text-sm text-slate-400">
+                              ⓘ
+                            </span>
+
+                            <div>
+                              <p className="text-xs font-bold text-slate-700">
+                                Registro de salida
+                              </p>
+
+                              <p className="mt-1 text-xs leading-5 text-slate-500">
+                                La liberación conservará la fecha, el motivo
+                                y la trazabilidad del usuario. El inmueble no
+                                será eliminado del histórico.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* CONFIRMACIÓN */}
+                      <div className="mt-5 rounded-2xl border border-[#ead1d1] bg-[#fff7f7] p-4 sm:p-5">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex gap-3">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#fff1f1] text-sm font-bold text-[#c80000]">
+                              !
+                            </span>
+
+                            <div>
+                              <p className="text-sm font-bold text-slate-800">
+                                ¿Retirar este inmueble de la cartera?
+                              </p>
+
+                              <p className="mt-1 text-xs leading-5 text-slate-500">
+                                Al confirmar, dejará de estar activo y la
+                                posición{" "}
+                                <strong className="text-slate-700">
+                                  {item.posicion}
+                                </strong>{" "}
+                                podrá utilizarse para otro inmueble.
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            disabled={guardando === item.inmuebleId}
+                            onClick={() => liberar(item)}
+                            className="shrink-0 rounded-xl bg-[#c80000] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#ad0000] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                          >
+                            {guardando === item.inmuebleId
+                              ? "Liberando..."
+                              : "Confirmar liberación"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </section>
       </div>
     </main>

@@ -7,15 +7,21 @@ import { usePathname } from "next/navigation";
 const fase1 = [
   { href: "/cartera", label: "Cartera de inmuebles", icon: "home" },
   { href: "/registrar-inmueble", label: "Registrar inmueble", icon: "plus" },
-  { href: "/liberar-inmuebles", label: "Liberar inmueble", icon: "release" },
   { href: "/registrar-visitas", label: "Registrar visitas", icon: "visit" },
-  { href: "/registrar-tasaciones", label: "Registrar tasaciones", icon: "valuation" },
   { href: "/visitas-pendientes", label: "Visitas pendientes", icon: "clock" },
+  { href: "/registrar-tasaciones", label: "Registrar tasaciones", icon: "valuation" },
   { href: "/tasaciones-textos-pendientes", label: "Tasaciones y textos", icon: "clipboard" },
+  { href: "/liberar-inmuebles", label: "Liberar inmueble", icon: "release" },
   { href: "/reportes", label: "Reportes", icon: "report" },
 ];
 
-const fase2 = [{ href: "/datos-inmuebles", label: "Ingresar datos de inmuebles", icon: "database" }];
+const fase2 = [
+  {
+    href: "/datos-inmuebles",
+    label: "Ingresar datos de inmuebles",
+    icon: "database",
+  },
+];
 
 function Icon({ name }: { name: string }) {
   const common = { className: "h-[18px] w-[18px]", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -60,12 +66,47 @@ function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
         <MenuLink item={{ href: "/", label: "Dashboard", icon: "dashboard" }} onNavigate={onNavigate}/>
       </div>
 
-      <div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#96928c]">Operación</div>
-      <div className="space-y-1">{fase1.slice(0, 3).map(item => <MenuLink key={item.href} item={item} onNavigate={onNavigate}/>)}</div>
+    <div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#96928c]">
+  Operación
+</div>
 
-      <div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Seguimiento</div>
-      <div className="space-y-1">{fase1.slice(3).map(item => <MenuLink key={item.href} item={item} onNavigate={onNavigate}/>)}</div>
+<div className="space-y-1">
+  {fase1.slice(0, 2).map((item) => (
+    <MenuLink
+      key={item.href}
+      item={item}
+      onNavigate={onNavigate}
+    />
+  ))}
+</div>
 
+<div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+  Seguimiento
+</div>
+
+<div className="space-y-1">
+  {fase1.slice(2, 6).map((item) => (
+    <MenuLink
+      key={item.href}
+      item={item}
+      onNavigate={onNavigate}
+    />
+  ))}
+</div>
+
+<div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+  Cierre e información
+</div>
+
+<div className="space-y-1">
+  {fase1.slice(6).map((item) => (
+    <MenuLink
+      key={item.href}
+      item={item}
+      onNavigate={onNavigate}
+    />
+  ))}
+</div>
       <div className="mb-2 mt-7 flex items-center justify-between px-3">
         <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Próxima fase</span>
         <span className="rounded-full bg-[#fff1f1] px-2 py-0.5 text-[9px] font-semibold text-[#c80000]">FASE 2</span>

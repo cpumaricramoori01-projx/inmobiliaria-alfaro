@@ -40,7 +40,7 @@ export const inmPropietarios = mysqlTable("inm_propietarios", {
 export const inmInmuebles = mysqlTable("inm_inmuebles", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   codigo: varchar("codigo", { length: 30 }).notNull(),
-  propietarioId: bigint("propietario_id", { mode: "number", unsigned: true }).notNull().references(() => inmPropietarios.id),
+  propietarioId: bigint("propietario_id", { mode: "number", unsigned: true }).references(() => inmPropietarios.id),
   tipo: varchar("tipo", { length: 30 }).notNull(),
   referencia: varchar("referencia", { length: 255 }).notNull(),
   direccion: varchar("direccion", { length: 255 }),
@@ -105,6 +105,18 @@ export const inmTasaciones = mysqlTable("inm_tasaciones", {
 }, (table) => ({
   inmuebleIdx: uniqueIndex("uq_inm_tasaciones_inmueble").on(table.inmuebleId),
 }));
+
+export const inmNegociaciones = mysqlTable("inm_negociaciones", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  inmuebleId: bigint("inmueble_id", { mode: "number", unsigned: true }).notNull().references(() => inmInmuebles.id),
+  estado: varchar("estado", { length: 20 }).notNull().default("en_curso"),
+  fechaInicio: timestamp("fecha_inicio", { mode: "date" }).defaultNow().notNull(),
+  fechaFin: timestamp("fecha_fin", { mode: "date" }),
+  observaciones: text("observaciones"),
+  usuarioId: bigint("usuario_id", { mode: "number", unsigned: true }).notNull().references(() => inmUsuarios.id),
+  fechaRegistro: timestamp("fecha_registro", { mode: "date" }).defaultNow().notNull(),
+  fechaActualizacion: timestamp("fecha_actualizacion", { mode: "date" }).defaultNow().onUpdateNow().notNull(),
+});
 
 export const inmPublicaciones = mysqlTable("inm_publicaciones", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
