@@ -100,10 +100,13 @@ async function approved() {
       inmInmuebles,
       eq(inmInmuebles.id, inmTasaciones.inmuebleId)
     )
- .leftJoin(
-  inmPropietarios,
-  eq(inmPropietarios.id, inmInmuebles.propietarioId)
-)
+    .leftJoin(
+      inmPropietarios,
+      eq(
+        inmPropietarios.id,
+        inmInmuebles.propietarioId
+      )
+    )
     .leftJoin(
       inmAsignacionesPosicion,
       and(
@@ -135,7 +138,9 @@ async function approved() {
         isNull(inmPublicaciones.id)
       )
     )
-    .orderBy(desc(inmTasaciones.fechaActualizacion));
+    .orderBy(
+      desc(inmTasaciones.fechaActualizacion)
+    );
 }
 
 async function published() {
@@ -147,7 +152,10 @@ async function published() {
       referencia: inmInmuebles.referencia,
       posicion: inmPosiciones.numero,
       publicado: inmPublicaciones.publicado,
-      fechaPublicacion: inmPublicaciones.fechaPublicacion,
+      fechaPublicacion:
+        inmPublicaciones.fechaPublicacion,
+      texto: inmPublicaciones.texto,
+      driveLink: inmPublicaciones.driveLink,
     })
     .from(inmPublicaciones)
     .innerJoin(
@@ -177,7 +185,9 @@ async function published() {
         eq(inmPublicaciones.publicado, true)
       )
     )
-    .orderBy(desc(inmPublicaciones.fechaPublicacion));
+    .orderBy(
+      desc(inmPublicaciones.fechaPublicacion)
+    );
 }
 
 async function ready() {
@@ -190,6 +200,8 @@ async function ready() {
       posicion: inmPosiciones.numero,
       publicado: inmPublicaciones.publicado,
       fechaRegistro: inmPublicaciones.fechaRegistro,
+      texto: inmPublicaciones.texto,
+      driveLink: inmPublicaciones.driveLink,
     })
     .from(inmPublicaciones)
     .innerJoin(
@@ -219,7 +231,9 @@ async function ready() {
         eq(inmPublicaciones.publicado, false)
       )
     )
-    .orderBy(desc(inmPublicaciones.fechaRegistro));
+    .orderBy(
+      desc(inmPublicaciones.fechaRegistro)
+    );
 }
 
 export async function GET() {
@@ -240,7 +254,8 @@ export async function GET() {
     return NextResponse.json(
       {
         ok: false,
-        error: "No se pudieron consultar los textos pendientes.",
+        error:
+          "No se pudieron consultar los textos pendientes.",
       },
       { status: 500 }
     );
@@ -255,9 +270,15 @@ export async function POST(request: Request) {
     const texto = clean(body.texto);
     const driveLink = clean(body.driveLink);
 
-    if (!Number.isInteger(inmuebleId) || inmuebleId <= 0) {
+    if (
+      !Number.isInteger(inmuebleId) ||
+      inmuebleId <= 0
+    ) {
       return NextResponse.json(
-        { ok: false, error: "Inmueble no válido." },
+        {
+          ok: false,
+          error: "Inmueble no válido.",
+        },
         { status: 400 }
       );
     }
@@ -266,7 +287,8 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: "El texto de publicación es obligatorio.",
+          error:
+            "El texto de publicación es obligatorio.",
         },
         { status: 400 }
       );
@@ -291,7 +313,9 @@ export async function POST(request: Request) {
         .limit(1);
 
       if (!property || property.estado !== "activo") {
-        throw new Error("El inmueble no está activo.");
+        throw new Error(
+          "El inmueble no está activo."
+        );
       }
 
       const [tasacion] = await tx
@@ -299,8 +323,14 @@ export async function POST(request: Request) {
         .from(inmTasaciones)
         .where(
           and(
-            eq(inmTasaciones.inmuebleId, inmuebleId),
-            eq(inmTasaciones.situacion, "aprobado")
+            eq(
+              inmTasaciones.inmuebleId,
+              inmuebleId
+            ),
+            eq(
+              inmTasaciones.situacion,
+              "aprobado"
+            )
           )
         )
         .limit(1);
@@ -312,9 +342,16 @@ export async function POST(request: Request) {
       }
 
       const [existingPublication] = await tx
-        .select({ id: inmPublicaciones.id })
+        .select({
+          id: inmPublicaciones.id,
+        })
         .from(inmPublicaciones)
-        .where(eq(inmPublicaciones.inmuebleId, inmuebleId))
+        .where(
+          eq(
+            inmPublicaciones.inmuebleId,
+            inmuebleId
+          )
+        )
         .limit(1);
 
       if (existingPublication) {
@@ -366,7 +403,9 @@ export async function POST(request: Request) {
       },
       {
         status:
-          /no está activo|no tiene|ya tiene/i.test(message)
+          /no está activo|no tiene|ya tiene/i.test(
+            message
+          )
             ? 409
             : 500,
       }
@@ -377,9 +416,25 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
+
     const inmuebleId = Number(body.inmuebleId);
 
-    if (!Number.isInteger(inmuebleId) || inmuebleId <= 0) {
+    const tieneTexto =
+      typeof body.texto !== "undefined";
+
+    const tieneDriveLink =
+      typeof body.driveLink !== "undefined";
+
+    const editarMaterial =
+      tieneTexto || tieneDriveLink;
+
+    const texto = clean(body.texto);
+    const driveLink = clean(body.driveLink);
+
+    if (
+      !Number.isInteger(inmuebleId) ||
+      inmuebleId <= 0
+    ) {
       return NextResponse.json(
         {
           ok: false,
@@ -389,61 +444,144 @@ export async function PUT(request: Request) {
       );
     }
 
-    const result = await db.transaction(async (tx) => {
-      const [property] = await tx
-        .select()
-        .from(inmInmuebles)
-        .where(eq(inmInmuebles.id, inmuebleId))
-        .limit(1);
-
-      if (!property || property.estado !== "activo") {
-        throw new Error("El inmueble no está activo.");
-      }
-
-      const [publication] = await tx
-        .select()
-        .from(inmPublicaciones)
-        .where(eq(inmPublicaciones.inmuebleId, inmuebleId))
-        .limit(1);
-
-      if (!publication) {
-        throw new Error(
-          "El inmueble no tiene una publicación registrada."
+    if (editarMaterial) {
+      if (!texto) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "El texto de publicación es obligatorio.",
+          },
+          { status: 400 }
         );
       }
 
-      if (publication.publicado) {
-        throw new Error(
-          "La publicación ya figura como publicada."
+      if (!/^https?:\/\//i.test(driveLink)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "El enlace de Google Drive debe ser una URL HTTP o HTTPS.",
+          },
+          { status: 400 }
         );
       }
+    }
 
-      const user = await getSystemUser(tx);
-      const ahora = new Date();
+    const result = await db.transaction(
+      async (tx) => {
+        const [property] = await tx
+          .select()
+          .from(inmInmuebles)
+          .where(
+            eq(inmInmuebles.id, inmuebleId)
+          )
+          .limit(1);
 
-      await tx
-        .update(inmPublicaciones)
-        .set({
-          publicado: true,
+        if (
+          !property ||
+          property.estado !== "activo"
+        ) {
+          throw new Error(
+            "El inmueble no está activo."
+          );
+        }
+
+        const [publication] = await tx
+          .select()
+          .from(inmPublicaciones)
+          .where(
+            eq(
+              inmPublicaciones.inmuebleId,
+              inmuebleId
+            )
+          )
+          .limit(1);
+
+        if (!publication) {
+          throw new Error(
+            "El inmueble no tiene una publicación registrada."
+          );
+        }
+
+        if (publication.publicado) {
+          throw new Error(
+            "La publicación ya figura como publicada."
+          );
+        }
+
+        const user = await getSystemUser(tx);
+
+        /*
+         * Si vienen texto y/o Drive, actualizamos
+         * el material existente.
+         *
+         * No se crea otra publicación.
+         */
+        if (editarMaterial) {
+          await tx
+            .update(inmPublicaciones)
+            .set({
+              texto,
+              driveLink,
+            })
+            .where(
+              eq(
+                inmPublicaciones.id,
+                publication.id
+              )
+            );
+
+          await tx.insert(inmTimeline).values({
+            inmuebleId,
+            evento: "publicacion_actualizada",
+            observacion:
+              "Se actualizó el texto y/o enlace de Google Drive de la publicación.",
+            usuarioId: user.id,
+          });
+
+          return {
+            codigo: property.codigo,
+            situacion: "listo_para_publicar",
+          };
+        }
+
+        /*
+         * Si no vienen datos de material,
+         * el PUT mantiene su función original:
+         * marcar la publicación como realizada.
+         */
+        const ahora = new Date();
+
+        await tx
+          .update(inmPublicaciones)
+          .set({
+            publicado: true,
+            fechaPublicacion: ahora,
+            usuarioPublicacionId: user.id,
+          })
+          .where(
+            eq(
+              inmPublicaciones.id,
+              publication.id
+            )
+          );
+
+        await tx.insert(inmTimeline).values({
+          inmuebleId,
+          evento: "publicado",
+          observacion:
+            "La publicación fue marcada como publicada.",
+          usuarioId: user.id,
+        });
+
+        return {
+          codigo: property.codigo,
+          situacion: "publicado",
           fechaPublicacion: ahora,
-          usuarioPublicacionId: user.id,
-        })
-        .where(eq(inmPublicaciones.id, publication.id));
-
-      await tx.insert(inmTimeline).values({
-        inmuebleId,
-        evento: "publicado",
-        observacion:
-          "La publicación fue marcada como publicada.",
-        usuarioId: user.id,
-      });
-
-      return {
-        codigo: property.codigo,
-        situacion: "publicado",
-        fechaPublicacion: ahora,
-      };
-    });
+        };
+      }
+    );
 
     return NextResponse.json({
       ok: true,
@@ -453,7 +591,7 @@ export async function PUT(request: Request) {
     const message =
       error instanceof Error
         ? error.message
-        : "No fue posible marcar la publicación.";
+        : "No fue posible actualizar la publicación.";
 
     return NextResponse.json(
       {
@@ -462,7 +600,9 @@ export async function PUT(request: Request) {
       },
       {
         status:
-          /no está activo|no tiene|ya figura/i.test(message)
+          /no está activo|no tiene|ya figura/i.test(
+            message
+          )
             ? 409
             : 500,
       }
