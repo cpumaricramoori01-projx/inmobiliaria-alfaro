@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -8,7 +9,6 @@ import {
   inmPosiciones,
   inmPropietarios,
   inmTimeline,
-  inmUsuarios,
 } from "@/db/schema";
 
 function clean(value: unknown) {
@@ -22,44 +22,11 @@ const MOTIVOS = new Set([
   "otro",
 ]);
 
-async function getSystemUser(tx: any) {
-  const email = "sistema@inmobiliaria-alfaro.local";
-
-  let [user] = await tx
-    .select()
-    .from(inmUsuarios)
-    .where(eq(inmUsuarios.email, email))
-    .limit(1);
-
-  if (!user) {
-    const [created] = await tx
-      .insert(inmUsuarios)
-      .values({
-        nombre: "Usuario actual",
-        email,
-        rol: "usuario",
-        activo: true,
-      })
-      .$returningId();
-
-    [user] = await tx
-      .select()
-      .from(inmUsuarios)
-      .where(eq(inmUsuarios.id, created.id))
-      .limit(1);
-  }
-
-  if (!user) {
-    throw new Error(
-      "No fue posible registrar el usuario de trazabilidad."
-    );
-  }
-
-  return user;
-}
 
 export async function GET() {
   try {
+    const auth = await authorizeApi();
+    if (auth.response) return auth.response;
     const rows = await db
       .select({
         inmuebleId: inmInmuebles.id,
@@ -153,6 +120,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await authorizeApi(request);
+    if (auth.response) return auth.response;
     const body = await request.json();
 
     const inmuebleId = Number(body.inmuebleId);
@@ -234,7 +203,7 @@ export async function POST(request: Request) {
         );
       }
 
-      const user = await getSystemUser(tx);
+      const user = auth.user;
       const ahora = new Date();
 
       await tx.insert(inmLiberaciones).values({

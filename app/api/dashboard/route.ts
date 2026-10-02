@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -26,6 +27,8 @@ const eventoMap: Record<string, string> = {
 
 export async function GET() {
   try {
+    const auth = await authorizeApi();
+    if (auth.response) return auth.response;
     const [
       inmueblesActivos,
       visitas,

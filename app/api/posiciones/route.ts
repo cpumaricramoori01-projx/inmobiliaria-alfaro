@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -19,6 +20,8 @@ const tipoMap: Record<string, string> = {
 
 export async function GET() {
   try {
+    const auth = await authorizeApi();
+    if (auth.response) return auth.response;
     const rows = await db
       .select({
         numero: inmPosiciones.numero,

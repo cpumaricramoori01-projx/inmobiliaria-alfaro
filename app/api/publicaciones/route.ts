@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -9,47 +10,11 @@ import {
   inmPublicaciones,
   inmTasaciones,
   inmTimeline,
-  inmUsuarios,
 } from "@/db/schema";
 
 const clean = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
 
-async function getSystemUser(tx: any) {
-  const email = "sistema@inmobiliaria-alfaro.local";
-
-  let [user] = await tx
-    .select()
-    .from(inmUsuarios)
-    .where(eq(inmUsuarios.email, email))
-    .limit(1);
-
-  if (!user) {
-    const [created] = await tx
-      .insert(inmUsuarios)
-      .values({
-        nombre: "Usuario actual",
-        email,
-        rol: "usuario",
-        activo: true,
-      })
-      .$returningId();
-
-    [user] = await tx
-      .select()
-      .from(inmUsuarios)
-      .where(eq(inmUsuarios.id, created.id))
-      .limit(1);
-  }
-
-  if (!user) {
-    throw new Error(
-      "No fue posible registrar el usuario de trazabilidad."
-    );
-  }
-
-  return user;
-}
 
 const mapPending = (row: any) => ({
   inmuebleId: row.inmuebleId,
@@ -238,6 +203,8 @@ async function ready() {
 
 export async function GET() {
   try {
+    const auth = await authorizeApi();
+    if (auth.response) return auth.response;
     const rows = await approved();
     const listos = await ready();
     const publicadas = await published();
@@ -264,6 +231,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await authorizeApi(request);
+    if (auth.response) return auth.response;
     const body = await request.json();
 
     const inmuebleId = Number(body.inmuebleId);
@@ -360,7 +329,7 @@ export async function POST(request: Request) {
         );
       }
 
-      const user = await getSystemUser(tx);
+      const user = auth.user;
 
       await tx.insert(inmPublicaciones).values({
         inmuebleId,
@@ -415,6 +384,8 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const auth = await authorizeApi(request);
+    if (auth.response) return auth.response;
     const body = await request.json();
 
     const inmuebleId = Number(body.inmuebleId);
@@ -510,7 +481,7 @@ export async function PUT(request: Request) {
           );
         }
 
-        const user = await getSystemUser(tx);
+        const user = auth.user;
 
         /*
          * Si vienen texto y/o Drive, actualizamos

@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -37,6 +38,8 @@ function esFoto(tipoDocumento: string) {
 
 export async function GET() {
   try {
+    const auth = await authorizeApi();
+    if (auth.response) return auth.response;
     /*
      * 1. Inmuebles
      *

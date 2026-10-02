@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -5,6 +6,8 @@ import { inmPropietarios } from "@/db/schema";
 
 export async function GET(request: Request) {
   try {
+    const auth = await authorizeApi();
+    if (auth.response) return auth.response;
     const dni = new URL(request.url).searchParams.get("dni")?.trim() ?? "";
 
     if (!/^\d{8}$/.test(dni)) {

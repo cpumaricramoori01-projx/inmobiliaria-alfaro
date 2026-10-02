@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -7,7 +8,6 @@ import {
   inmPosiciones,
   inmPropietarios,
   inmTimeline,
-  inmUsuarios,
 } from "@/db/schema";
 
 const TIPOS = new Set([
@@ -25,6 +25,8 @@ function clean(value: unknown) {
 
 export async function POST(request: Request) {
   try {
+    const auth = await authorizeApi(request);
+    if (auth.response) return auth.response;
     const body = await request.json();
 
     const posicion = Number(body.posicion);
@@ -178,38 +180,7 @@ export async function POST(request: Request) {
         activa: true,
       });
 
-      // Usuario de sistema para trazabilidad
-      const systemEmail = "sistema@inmobiliaria-alfaro.local";
-
-      let [user] = await tx
-        .select()
-        .from(inmUsuarios)
-        .where(eq(inmUsuarios.email, systemEmail))
-        .limit(1);
-
-      if (!user) {
-        const [createdUser] = await tx
-          .insert(inmUsuarios)
-          .values({
-            nombre: "Usuario actual",
-            email: systemEmail,
-            rol: "usuario",
-            activo: true,
-          })
-          .$returningId();
-
-        [user] = await tx
-          .select()
-          .from(inmUsuarios)
-          .where(eq(inmUsuarios.id, createdUser.id))
-          .limit(1);
-      }
-
-      if (!user) {
-        throw new Error(
-          "No fue posible registrar el usuario de trazabilidad."
-        );
-      }
+      const user = auth.user;
 
       // Registrar evento en timeline
       await tx.insert(inmTimeline).values({

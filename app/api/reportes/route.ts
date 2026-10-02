@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -94,6 +95,8 @@ function agregarSituaciones(item: {
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await authorizeApi();
+    if (auth.response) return auth.response;
     const sp = request.nextUrl.searchParams;
 
     const reporte = sp.get("reporte") || "Cartera activa";

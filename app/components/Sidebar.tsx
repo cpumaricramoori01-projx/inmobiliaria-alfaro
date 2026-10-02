@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import LogoutButton from "./LogoutButton";
+import { useSessionUser } from "./SessionProvider";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -122,6 +124,7 @@ function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
+  const user = useSessionUser();
 
   return (
     <>
@@ -162,14 +165,15 @@ export default function Sidebar() {
                 <span className="h-2 w-2 rounded-full bg-[#c80000]" />
               </span>
               <div>
-                <div className="text-xs font-bold text-slate-800">Sistema operativo</div>
-                <div className="text-[10px] text-slate-400">Gestión de cartera activa</div>
+                <div className="text-xs font-bold text-slate-800">{user.nombre}</div>
+                <div className="text-[10px] text-slate-400">{user.rol === "administrador" ? "Administrador" : "Operador"}</div>
               </div>
             </div>
             <div className="mt-3 border-t border-slate-200 pt-3 text-[10px] leading-4 text-slate-500">
               Cartera, seguimiento y pendientes en un solo lugar.
             </div>
           </div>
+          <LogoutButton />
         </div>
       </aside>
     </>

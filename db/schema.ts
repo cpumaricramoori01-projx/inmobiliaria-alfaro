@@ -4,6 +4,7 @@ import {
   decimal,
   int,
   mysqlTable,
+  index,
   tinyint,
   timestamp,
   text,
@@ -16,11 +17,25 @@ export const inmUsuarios = mysqlTable("inm_usuarios", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   nombre: varchar("nombre", { length: 120 }).notNull(),
   email: varchar("email", { length: 160 }).notNull(),
+  usuario: varchar("usuario", { length: 60 }),
+  passwordHash: varchar("password_hash", { length: 255 }),
+  intentosFallidos: int("intentos_fallidos").notNull().default(0),
+  bloqueoHasta: timestamp("bloqueo_hasta", { mode: "date" }),
   rol: varchar("rol", { length: 30 }).notNull().default("usuario"),
   activo: boolean("activo").notNull().default(true),
   fechaRegistro: timestamp("fecha_registro", { mode: "date" }).defaultNow().notNull(),
 }, (table) => ({
   emailIdx: uniqueIndex("uq_inm_usuarios_email").on(table.email),
+  usuarioIdx: uniqueIndex("uq_inm_usuarios_usuario").on(table.usuario),
+}));
+
+export const inmSesiones = mysqlTable("inm_sesiones", {
+  tokenHash: varchar("token_hash", { length: 64 }).primaryKey(),
+  usuarioId: bigint("usuario_id", { mode: "number", unsigned: true }).notNull().references(() => inmUsuarios.id),
+  expira: timestamp("expira", { mode: "date" }).notNull(),
+}, (table) => ({
+  usuarioIdx: index("idx_inm_sesiones_usuario").on(table.usuarioId),
+  expiraIdx: index("idx_inm_sesiones_expira").on(table.expira),
 }));
 
 export const inmPropietarios = mysqlTable("inm_propietarios", {

@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -7,11 +8,9 @@ import {
   inmPosiciones,
   inmPropietarios,
   inmTimeline,
-  inmUsuarios,
   inmVisitas,
 } from "@/db/schema";
 
-const SYSTEM_EMAIL = "sistema@inmobiliaria-alfaro.local";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -34,6 +33,8 @@ function isValidHttpUrl(value: string) {
 
 export async function GET() {
   try {
+    const auth = await authorizeApi();
+    if (auth.response) return auth.response;
     const rows = await db
       .select({
         id: inmInmuebles.id,
@@ -132,6 +133,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await authorizeApi(request);
+    if (auth.response) return auth.response;
     const body = await request.json();
 
     const inmuebleId = Number(body.inmuebleId);
@@ -235,35 +238,7 @@ export async function POST(request: Request) {
         throw new Error("Este inmueble ya tiene una visita completada.");
       }
 
-      let [user] = await tx
-        .select()
-        .from(inmUsuarios)
-        .where(eq(inmUsuarios.email, SYSTEM_EMAIL))
-        .limit(1);
-
-      if (!user) {
-        const [createdUser] = await tx
-          .insert(inmUsuarios)
-          .values({
-            nombre: "Usuario actual",
-            email: SYSTEM_EMAIL,
-            rol: "usuario",
-            activo: true,
-          })
-          .$returningId();
-
-        [user] = await tx
-          .select()
-          .from(inmUsuarios)
-          .where(eq(inmUsuarios.id, createdUser.id))
-          .limit(1);
-      }
-
-      if (!user) {
-        throw new Error(
-          "No fue posible registrar el usuario de trazabilidad."
-        );
-      }
+      const user = auth.user;
 
       const ahora = new Date();
 

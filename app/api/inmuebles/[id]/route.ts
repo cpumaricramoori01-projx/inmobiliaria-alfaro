@@ -1,3 +1,4 @@
+import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -95,6 +96,8 @@ async function findProperty(key: string) {
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await authorizeApi();
+    if (auth.response) return auth.response;
     const key = (await context.params).id;
     const row = await findProperty(key);
     if (!row) return NextResponse.json({ error: "Inmueble no encontrado." }, { status: 404 });
@@ -114,6 +117,8 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await authorizeApi(request);
+    if (auth.response) return auth.response;
     const key = (await context.params).id;
     const row = await findProperty(key);
     if (!row) return NextResponse.json({ error: "Inmueble no encontrado." }, { status: 404 });

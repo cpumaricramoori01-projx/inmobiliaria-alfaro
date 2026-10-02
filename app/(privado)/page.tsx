@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSessionUser } from "@/app/components/SessionProvider";
 
 type DashboardData = {
   resumen: {
@@ -49,6 +50,8 @@ function formatDate(value: string | Date | null) {
 }
 
 export default function Home() {
+  const user = useSessionUser();
+  const firstName = user.nombre.split(" ")[0];
   const [data, setData] = useState<DashboardData | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
@@ -185,7 +188,7 @@ export default function Home() {
     const summary = document.getElementById("dashboard-summary");
     const contextIcon = document.getElementById("dashboard-context-icon");
 
-    if (greeting) greeting.textContent = `${saludo}, Alberto.`;
+    if (greeting) greeting.textContent = `${saludo}, ${firstName}.`;
     if (date) date.textContent = fecha;
     if (clock) clock.textContent = horaActual;
     if (summary) summary.textContent = resumen;
@@ -197,7 +200,7 @@ export default function Home() {
     const intervalo = window.setInterval(actualizarCabeceraDashboard, 60000);
 
     return () => window.clearInterval(intervalo);
-  }, [data]);
+  }, [data, firstName]);
 
   return (
     <main className="min-h-screen bg-[#f7f7f5] p-6 lg:p-8">
@@ -218,15 +221,15 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">
               <p className="text-sm font-semibold text-[#171717]">
-                Alberto Alfaro
+                {user.nombre}
               </p>
               <p className="mt-0.5 text-[11px] text-[#777]">
-                Administrador
+                {user.rol === "administrador" ? "Administrador" : "Operador"}
               </p>
             </div>
 
             <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#e7e5e2] bg-white text-[10px] font-bold text-[#c80000]">
-              AA
+              {user.nombre.split(" ").slice(0, 2).map(part => part[0]).join("").toUpperCase()}
             </div>
           </div>
         </div>
@@ -249,7 +252,7 @@ export default function Home() {
 
             <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
               <h2 id="dashboard-greeting" className="text-[28px] font-bold tracking-[-0.025em] text-[#171717] sm:text-[32px]">
-                Buenos días, Alberto.
+                Buenos días, {firstName}.
               </h2>
 
               <span id="dashboard-date" className="rounded-full border border-[#e7e5e2] bg-[#faf9f7] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777]">
