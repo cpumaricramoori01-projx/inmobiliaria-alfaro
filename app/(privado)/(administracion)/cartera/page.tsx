@@ -51,6 +51,7 @@ type Inmueble = {
   direccion: string | null;
   estado: Estado;
   propietario: string;
+  precioVenta: string | null;
   actividades: Actividades;
   visitaPendiente: boolean;
   tasacionPendiente: boolean;
@@ -234,6 +235,26 @@ function EstadoActividad({
       {etiqueta}
     </span>
   );
+}
+
+const cardThemes = {
+  visita: { label: "Visita pendiente", stripe: "bg-amber-400", badge: "bg-amber-50 text-amber-800 ring-amber-200", position: "bg-amber-50 text-amber-800", border: "hover:border-amber-300" },
+  tasacion: { label: "Tasación pendiente", stripe: "bg-blue-400", badge: "bg-blue-50 text-blue-800 ring-blue-200", position: "bg-blue-50 text-blue-800", border: "hover:border-blue-300" },
+  material: { label: "Publicación pendiente", stripe: "bg-violet-400", badge: "bg-violet-50 text-violet-800 ring-violet-200", position: "bg-violet-50 text-violet-800", border: "hover:border-violet-300" },
+  publicado: { label: "Publicado", stripe: "bg-emerald-400", badge: "bg-emerald-50 text-emerald-800 ring-emerald-200", position: "bg-emerald-50 text-emerald-800", border: "hover:border-emerald-300" },
+  seguimiento: { label: "En seguimiento", stripe: "bg-slate-300", badge: "bg-slate-100 text-slate-700 ring-slate-200", position: "bg-slate-100 text-slate-700", border: "hover:border-slate-300" },
+};
+
+function cardTheme(item: Inmueble) {
+  if (item.actividades.publicacion.publicado) return cardThemes.publicado;
+  if (item.visitaPendiente) return cardThemes.visita;
+  if (item.tasacionPendiente) return cardThemes.tasacion;
+  if (item.materialPendiente || item.actividades.tasacion.situacion === "aprobado") return cardThemes.material;
+  return cardThemes.seguimiento;
+}
+
+function salePrice(value: string | null) {
+  return value ? `S/ ${Number(value).toLocaleString("es-PE", { maximumFractionDigits: 2 })}` : "Por definir";
 }
 
 export default function CarteraPage() {
@@ -738,29 +759,16 @@ export default function CarteraPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <i className="h-2 w-2 rounded-full bg-slate-800" />
-              Ocupada
-            </span>
-
-            <span className="flex items-center gap-1.5">
-              <i className="h-2 w-2 rounded-full bg-slate-300" />
-              Disponible
-            </span>
-
-            <span>
-              {cargandoPosiciones
-                ? "Consultando posiciones…"
-                : `${posiciones.length || resumen.capacidad} posiciones administradas`}
-            </span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-slate-600">
+            {[["Visita", "bg-amber-400"], ["Tasación", "bg-blue-400"], ["Publicación", "bg-violet-400"], ["Publicado", "bg-emerald-400"]].map(([label, color]) => <span key={label} className="inline-flex items-center gap-1.5"><span aria-hidden="true" className={`h-2 w-2 rounded-full ${color}`} />{label}</span>)}
+            <span className="text-slate-400">{cargandoPosiciones ? "Consultando posiciones…" : `${posiciones.length || resumen.capacidad} posiciones`}</span>
           </div>
         </div>
 
         {/* POSICIONES */}
         {vista === "posiciones" &&
         estado !== "Histórico" ? (
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9">
+          <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             {cargandoPosiciones ? (
               <div className="col-span-full rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
                 Consultando posiciones reales de la cartera…
@@ -782,98 +790,38 @@ export default function CarteraPage() {
                   return null;
                 }
 
+                const theme = x ? cardTheme(x) : null;
                 return (
                   <button
                     key={pos.numero}
                     type="button"
-                    onClick={() =>
-                      x && setSeleccionado(x)
-                    }
+                    onClick={() => x && setSeleccionado(x)}
                     disabled={!x}
-                    className={`group min-h-[155px] rounded-2xl border p-3 text-left transition ${
-                      x
-                        ? "border-slate-200 bg-white shadow-sm hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
-                        : "border-dashed border-slate-200 bg-slate-50/70"
-                    }`}
+                    className={`group relative flex min-h-[235px] flex-col overflow-hidden rounded-2xl border text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c80000] focus-visible:ring-offset-2 ${x ? `border-slate-200 bg-white shadow-[0_3px_14px_rgba(15,23,42,0.04)] hover:shadow-lg motion-safe:hover:-translate-y-1 ${theme?.border}` : "border-dashed border-slate-200 bg-slate-50/60"}`}
                   >
-                    <div className="flex items-start justify-between">
-                      <span
-                        className={`font-mono text-sm font-bold ${
-                          x
-                            ? "text-slate-800"
-                            : "text-slate-300"
-                        }`}
-                      >
-                        {String(pos.numero).padStart(
-                          2,
-                          "0"
-                        )}
-                      </span>
-
-                      {x ? (
-                        <span className="h-2 w-2 rounded-full bg-slate-800" />
-                      ) : (
-                        <span className="text-lg font-light text-slate-300">
-                          +
-                        </span>
-                      )}
-                    </div>
-
-                    {x ? (
-                      <>
-                        <div className="mt-3 flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                          <Icon name="home" />
-                        </div>
-
-                        <p className="mt-2 line-clamp-2 text-[11px] font-semibold leading-4 text-slate-700">
-                          {x.nombre}
-                        </p>
-
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {x.visitaPendiente && (
-                            <span className="rounded-full bg-[#fff5f5] px-1.5 py-0.5 text-[8px] font-bold text-[#a90000]">
-                              Visita
-                            </span>
-                          )}
-
-                          {x.tasacionPendiente && (
-                            <span className="rounded-full bg-[#fff8f0] px-1.5 py-0.5 text-[8px] font-bold text-[#9a5a00]">
-                              Tasación
-                            </span>
-                          )}
-
-                          {x.materialPendiente && (
-                            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[8px] font-bold text-slate-600">
-                              Material
-                            </span>
-                          )}
-
-                          {x.negociacionEnCurso && (
-                            <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[8px] font-bold text-white">
-                              Negociación
-                            </span>
-                          )}
-                        </div>
-
-                        {!x.visitaPendiente &&
-                          !x.tasacionPendiente &&
-                          !x.materialPendiente &&
-                          !x.negociacionEnCurso && (
-                            <p className="mt-2 text-[9px] font-semibold text-slate-400">
-                              Sin pendientes operativos
-                            </p>
-                          )}
-                      </>
-                    ) : (
-                      <div className="mt-7">
-                        <p className="text-[10px] font-medium text-slate-400">
-                          Disponible
-                        </p>
-                        <p className="mt-1 text-[9px] text-slate-300">
-                          Lista para reutilizar
-                        </p>
+                    <div aria-hidden="true" className={`h-1.5 w-full ${theme?.stripe ?? "bg-slate-100"}`} />
+                    <div className="flex w-full flex-1 flex-col p-3.5 sm:p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-mono text-xl font-bold tracking-tight ${theme?.position ?? "bg-slate-100 text-slate-400"}`}>{String(pos.numero).padStart(2, "0")}</span>
+                        <span className={x ? "text-slate-300" : "text-slate-300 text-2xl font-light"}>{x ? <Icon name="home" /> : "+"}</span>
                       </div>
-                    )}
+                      {x && theme ? <>
+                        <span className={`mt-3 inline-flex self-start rounded-lg px-2 py-1 text-[10px] font-semibold ring-1 ring-inset ${theme.badge}`}>{theme.label}</span>
+                        <h3 className="mt-3 line-clamp-2 text-sm font-bold leading-5 text-slate-900" title={x.nombre}>{x.nombre}</h3>
+                        <p className="mt-1 text-[11px] text-slate-500">{x.tipo}</p>
+                        <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-4 text-slate-500"><span aria-hidden="true" className="shrink-0"><Icon name="map" /></span><span className="line-clamp-2" title={x.ubicacion}>{x.ubicacion}</span></p>
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {x.visitaPendiente && <span className="rounded-md bg-amber-50 px-1.5 py-1 text-[9px] font-semibold text-amber-800">Visita pendiente</span>}
+                          {x.tasacionPendiente && <span className="rounded-md bg-blue-50 px-1.5 py-1 text-[9px] font-semibold text-blue-800">Tasación pendiente</span>}
+                          {x.materialPendiente && <span className="rounded-md bg-violet-50 px-1.5 py-1 text-[9px] font-semibold text-violet-800">Material pendiente</span>}
+                          {x.negociacionEnCurso && <span className="rounded-md bg-slate-100 px-1.5 py-1 text-[9px] font-semibold text-slate-700">En negociación</span>}
+                        </div>
+                        <div className="mt-auto pt-4">
+                          <div className="border-t border-slate-100 pt-3"><p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Precio de venta</p><p className={`mt-1 break-words text-base font-bold tracking-tight ${x.precioVenta ? "text-slate-900" : "text-slate-400"}`}>{salePrice(x.precioVenta)}</p></div>
+                          <p className="mt-3 text-[11px] font-semibold text-[#c80000] group-hover:text-[#a90000]">Ver detalle <span aria-hidden="true">→</span></p>
+                        </div>
+                      </> : <div className="flex flex-1 flex-col items-center justify-center py-6 text-center"><p className="text-xs font-semibold text-slate-400">Disponible</p><p className="mt-1 text-[10px] leading-4 text-slate-400">Lista para un nuevo inmueble</p></div>}
+                    </div>
                   </button>
                 );
               })
@@ -943,6 +891,7 @@ export default function CarteraPage() {
                         <p className="mt-1 text-xs text-slate-400">
                           {x.id} · {x.tipo}
                         </p>
+                        <p className="mt-2 text-xs font-semibold text-slate-700">Venta: {salePrice(x.precioVenta)}</p>
                       </td>
 
                       <td className="px-5 py-4 text-sm text-slate-600">

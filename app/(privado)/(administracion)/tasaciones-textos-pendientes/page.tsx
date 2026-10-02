@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import SalePriceEditor from "@/app/components/SalePriceEditor";
 
 type Item = {
   inmuebleId: number;
@@ -12,6 +13,7 @@ type Item = {
   propietario: string;
   valorReferencia?: string | null;
   precioObjetivo?: string | null;
+  precioVenta?: string | null;
   situacion?: string | null;
   observacion?: string | null;
   fechaTasacion?: string | null;
@@ -29,55 +31,7 @@ type Publicada = {
   driveLink: string | null;
 };
 
-function situacionLabel(value?: string | null) {
-  switch (value) {
-    case "pendiente_aprobacion":
-      return "Pendiente de aprobación";
-    case "en_negociacion":
-      return "En negociación";
-    case "aprobado":
-      return "Aprobado";
-    case "rechazado":
-      return "Rechazado";
-    default:
-      return "Sin situación";
-  }
-}
-
-function situacionClass(value?: string | null) {
-  switch (value) {
-    case "pendiente_aprobacion":
-      return "bg-amber-50 text-amber-700 border-amber-200";
-
-    case "en_negociacion":
-      return "bg-blue-50 text-blue-700 border-blue-200";
-
-    case "aprobado":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-
-    case "rechazado":
-      return "bg-red-50 text-red-700 border-red-200";
-
-    default:
-      return "bg-slate-50 text-slate-600 border-slate-200";
-  }
-}
-
-function money(value?: string | null) {
-  if (!value) return "—";
-
-  const number = Number(value);
-
-  if (!Number.isFinite(number)) return value;
-
-  return `S/ ${number.toLocaleString("es-PE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
 export default function TasacionesTextosPendientesPage() {
-  const [pendientes, setPendientes] = useState<Item[]>([]);
   const [registradas, setRegistradas] = useState<Item[]>([]);
   const [aprobadas, setAprobadas] = useState<Item[]>([]);
 
@@ -92,21 +46,6 @@ export default function TasacionesTextosPendientesPage() {
     Record<number, string>
   >({});
 
-  const [situaciones, setSituaciones] = useState<
-    Record<number, string>
-  >({});
-
-  const [observaciones, setObservaciones] = useState<
-    Record<number, string>
-  >({});
-
-  /*
-   * Controla qué tasaciones están en modo edición.
-   * Si no está aquí, solamente se muestra el estado.
-   */
-  const [editandoSituacion, setEditandoSituacion] =
-    useState<Record<number, boolean>>({});
-
   const [listos, setListos] = useState<Publicada[]>([]);
 
   const [publicadas, setPublicadas] = useState<Publicada[]>(
@@ -118,10 +57,6 @@ export default function TasacionesTextosPendientesPage() {
   const [guardando, setGuardando] = useState<number | null>(
     null
   );
-
-  const [actualizando, setActualizando] = useState<
-    number | null
-  >(null);
 
   const [actualizandoMaterial, setActualizandoMaterial] =
     useState<number | null>(null);
@@ -192,27 +127,10 @@ export default function TasacionesTextosPendientesPage() {
         const publicadasData: Publicada[] =
   publicacionesData.publicadas ?? [];
 
-      setPendientes(tasacionesData.pendientes ?? []);
-      setRegistradas(registradasData);
+      setRegistradas(registradasData.filter(item => item.situacion === "aprobado"));
       setAprobadas(pendientesPublicacion);
       setListos(listosData);
 setPublicadas(publicadasData);
-
-      const nextSituaciones: Record<number, string> = {};
-      const nextObservaciones: Record<number, string> = {};
-
-      for (const item of registradasData) {
-        if (item.situacion) {
-          nextSituaciones[item.inmuebleId] =
-            item.situacion;
-        }
-
-        nextObservaciones[item.inmuebleId] =
-          item.observacion ?? "";
-      }
-
-      setSituaciones(nextSituaciones);
-      setObservaciones(nextObservaciones);
 
       const nextTextosListos: Record<number, string> = {};
       const nextEnlacesListos: Record<number, string> = {};
@@ -241,107 +159,6 @@ setPublicadas(publicadasData);
   useEffect(() => {
     cargar();
   }, []);
-
-  const pendientesAprobacion = registradas.filter(
-    (item) =>
-      item.situacion === "pendiente_aprobacion"
-  );
-
-  const enNegociacion = registradas.filter(
-    (item) =>
-      item.situacion === "en_negociacion"
-  );
-
-  const rechazadas = registradas.filter(
-    (item) => item.situacion === "rechazado"
-  );
-
-  function comenzarEdicionSituacion(item: Item) {
-    setEditandoSituacion((current) => ({
-      ...current,
-      [item.inmuebleId]: true,
-    }));
-
-    setMensaje("");
-    setError("");
-  }
-
-  function cancelarEdicionSituacion(item: Item) {
-    setSituaciones((current) => ({
-      ...current,
-      [item.inmuebleId]:
-        item.situacion ?? "",
-    }));
-
-    setObservaciones((current) => ({
-      ...current,
-      [item.inmuebleId]:
-        item.observacion ?? "",
-    }));
-
-    setEditandoSituacion((current) => ({
-      ...current,
-      [item.inmuebleId]: false,
-    }));
-  }
-
-  async function actualizarSituacion(item: Item) {
-    const situacion =
-      situaciones[item.inmuebleId] ||
-      item.situacion;
-
-    if (!situacion) return;
-
-    try {
-      setActualizando(item.inmuebleId);
-      setMensaje("");
-      setError("");
-
-      const response = await fetch(
-        "/api/tasaciones",
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            inmuebleId: item.inmuebleId,
-            situacion,
-            observacion:
-              observaciones[item.inmuebleId] ?? "",
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok || !data.ok) {
-        throw new Error(
-          data.error ||
-            "No se pudo actualizar la situación."
-        );
-      }
-
-      setEditandoSituacion((current) => ({
-        ...current,
-        [item.inmuebleId]: false,
-      }));
-
-      setMensaje(
-        `${item.codigo} actualizado correctamente.`
-      );
-
-      await cargar();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "No se pudo actualizar la situación."
-      );
-    } finally {
-      setActualizando(null);
-    }
-  }
 
   async function guardarTexto(item: Item) {
     const texto = (
@@ -559,7 +376,7 @@ setPublicadas(publicadasData);
 
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
               Bandeja central para continuar el inmueble
-              después de la visita: tasación, aprobación,
+              después de acordar el precio de venta: tasación negociada,
               texto, material, publicación y seguimiento
               comercial.
             </p>
@@ -605,76 +422,8 @@ setPublicadas(publicadasData);
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="rounded-2xl bg-white/[0.07] p-4">
-              <div className="text-xs text-white/45">
-                Por tasar
-              </div>
-
-              <div className="mt-2 text-2xl font-bold">
-                {pendientes.length}
-              </div>
-
-              <div className="mt-1 text-[11px] text-white/40">
-                Visita realizada
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-white/[0.07] p-4">
-              <div className="text-xs text-white/45">
-                Aprobación
-              </div>
-
-              <div className="mt-2 text-2xl font-bold">
-                {pendientesAprobacion.length}
-              </div>
-
-              <div className="mt-1 text-[11px] text-white/40">
-                Tasación registrada
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-white/[0.07] p-4">
-              <div className="text-xs text-white/45">
-                Texto
-              </div>
-
-              <div className="mt-2 text-2xl font-bold">
-                {aprobadas.length}
-              </div>
-
-              <div className="mt-1 text-[11px] text-white/40">
-                Tasación aprobada
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-white/[0.07] p-4">
-              <div className="text-xs text-white/45">
-                Negociación
-              </div>
-
-              <div className="mt-2 text-2xl font-bold">
-                {enNegociacion.length}
-              </div>
-
-              <div className="mt-1 text-[11px] text-white/40">
-                Seguimiento comercial
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-white/[0.07] p-4">
-              <div className="text-xs text-white/45">
-                Listos
-              </div>
-
-              <div className="mt-2 text-2xl font-bold">
-                {listos.length}
-              </div>
-
-              <div className="mt-1 text-[11px] text-white/40">
-                Para publicar
-              </div>
-            </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[["Tasaciones negociadas", registradas.length], ["Texto pendiente", aprobadas.length], ["Listos para publicar", listos.length], ["Publicados", publicadas.length]].map(([label, count]) => <div key={label} className="rounded-2xl bg-white/[0.07] p-4"><p className="text-xs text-white/45">{label}</p><p className="mt-2 text-2xl font-bold">{count}</p></div>)}
           </div>
         </section>
 
@@ -684,398 +433,38 @@ setPublicadas(publicadasData);
           </div>
         ) : (
           <div className="space-y-7">
-            {/* =====================================================
-                01 · POR REGISTRAR TASACIÓN
-               ===================================================== */}
-
             <section>
               <div className="mb-3 flex items-end justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">
-                    01 · Por registrar tasación
-                  </h2>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    Inmuebles con visita realizada que
-                    todavía no tienen tasación registrada.
-                  </p>
-                </div>
-
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm ring-1 ring-slate-200">
-                  {pendientes.length}
-                </span>
+                <div><h2 className="text-lg font-bold text-slate-900">Tasaciones negociadas</h2><p className="mt-1 text-sm text-slate-500">Precios acordados con el propietario. Puedes actualizar el precio de venta y la observación incluso después de publicar.</p></div>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 ring-1 ring-slate-200">{registradas.length}</span>
               </div>
-
-              {pendientes.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
-                  No hay inmuebles pendientes de registrar
-                  tasación.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {pendientes.map((item) => (
-                    <div
-                      key={item.inmuebleId}
-                      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-                    >
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <div className="mb-2 flex flex-wrap items-center gap-2">
-                            <span className="rounded-lg bg-[#fff1f1] px-2.5 py-1 text-[11px] font-bold text-[#c80000]">
-                              Pos. {item.posicion}
-                            </span>
-
-                            <span className="text-xs font-semibold text-slate-400">
-                              {item.codigo}
-                            </span>
-                          </div>
-
-                          <h3 className="text-base font-bold text-slate-900">
-                            {item.nombre}
-                          </h3>
-
-                          <p className="mt-1 text-sm text-slate-500">
-                            {item.tipo} · {item.ubicacion}
-                          </p>
-
-                          <p className="mt-2 text-xs text-slate-400">
-                            Propietario: {item.propietario}
-                          </p>
-                        </div>
-
-                        <a
-                          href="/registrar-tasaciones"
-                          className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 hover:bg-slate-50"
-                        >
-                          Registrar tasación
-                        </a>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {registradas.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">Todavía no hay tasaciones negociadas.</div> : <div className="space-y-3">{registradas.map(item => <article key={item.inmuebleId} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-[#fff1f1] px-2.5 py-1 text-[11px] font-bold text-[#c80000]">Pos. {item.posicion}</span><span className="text-xs font-semibold text-slate-400">{item.codigo} · Inmueble {item.inmuebleId}</span></div>
+                <h3 className="mt-2 text-base font-bold text-slate-900">{item.nombre}</h3><p className="mt-1 text-sm text-slate-500">{item.tipo} · {item.ubicacion}</p><p className="mt-2 text-xs text-slate-400">Propietario: {item.propietario}</p>
+                <SalePriceEditor item={item} onSaved={cargar} />
+              </article>)}</div>}
             </section>
 
             {/* =====================================================
-                02 · TASACIONES REGISTRADAS
-               ===================================================== */}
-
-            <section>
-              <div className="mb-3 flex items-end justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">
-                    02 · Tasaciones registradas
-                  </h2>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    Aquí se consulta la situación actual de
-                    cada tasación y se modifica solo cuando
-                    sea necesario.
-                  </p>
-                </div>
-
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm ring-1 ring-slate-200">
-                  {registradas.length}
-                </span>
-              </div>
-
-              {registradas.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
-                  Todavía no hay tasaciones registradas.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {registradas.map((item) => {
-                    const estaEditando =
-                      editandoSituacion[
-                        item.inmuebleId
-                      ] === true;
-
-                    const situacionActual =
-                      situaciones[
-                        item.inmuebleId
-                      ] ??
-                      item.situacion ??
-                      "";
-
-                    const observacionActual =
-                      observaciones[
-                        item.inmuebleId
-                      ] ??
-                      item.observacion ??
-                      "";
-
-                    return (
-                      <div
-                        key={item.inmuebleId}
-                        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-                      >
-                        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                          {/* INFORMACIÓN DEL INMUEBLE */}
-
-                          <div className="min-w-0 flex-1">
-                            <div className="mb-2 flex flex-wrap items-center gap-2">
-                              <span className="rounded-lg bg-[#fff1f1] px-2.5 py-1 text-[11px] font-bold text-[#c80000]">
-                                Pos. {item.posicion}
-                              </span>
-
-                              <span className="text-xs font-semibold text-slate-400">
-                                {item.codigo}
-                              </span>
-
-                              <span
-                                className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${situacionClass(
-                                  item.situacion
-                                )}`}
-                              >
-                                {situacionLabel(
-                                  item.situacion
-                                )}
-                              </span>
-                            </div>
-
-                            <h3 className="text-base font-bold text-slate-900">
-                              {item.nombre}
-                            </h3>
-
-                            <p className="mt-1 text-sm text-slate-500">
-                              {item.tipo} · {item.ubicacion}
-                            </p>
-
-                            <p className="mt-2 text-xs text-slate-400">
-                              Propietario: {item.propietario}
-                            </p>
-
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                              <div className="rounded-xl bg-slate-50 p-3">
-                                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                                  Valor de referencia
-                                </div>
-
-                                <div className="mt-1 text-sm font-bold text-slate-800">
-                                  {money(
-                                    item.valorReferencia
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="rounded-xl bg-slate-50 p-3">
-                                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                                  Precio objetivo
-                                </div>
-
-                                <div className="mt-1 text-sm font-bold text-slate-800">
-                                  {money(
-                                    item.precioObjetivo
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* ESTADO / EDICIÓN */}
-
-                          <div className="w-full lg:max-w-sm">
-                            {!estaEditando ? (
-                              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                                  Situación actual
-                                </div>
-
-                                <div className="mt-3 flex items-center justify-between gap-3">
-                                  <span
-                                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${situacionClass(
-                                      item.situacion
-                                    )}`}
-                                  >
-                                    <span
-                                      className={`h-1.5 w-1.5 rounded-full ${
-                                        item.situacion ===
-                                        "aprobado"
-                                          ? "bg-emerald-500"
-                                          : item.situacion ===
-                                            "rechazado"
-                                          ? "bg-red-500"
-                                          : item.situacion ===
-                                            "en_negociacion"
-                                          ? "bg-blue-500"
-                                          : "bg-amber-500"
-                                      }`}
-                                    />
-
-                                    {situacionLabel(
-                                      item.situacion
-                                    )}
-                                  </span>
-
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      comenzarEdicionSituacion(
-                                        item
-                                      )
-                                    }
-                                    className="text-xs font-bold text-slate-600 underline decoration-slate-300 underline-offset-4 transition hover:text-[#c80000]"
-                                  >
-                                    Modificar situación
-                                  </button>
-                                </div>
-
-                                <div className="mt-4">
-                                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                                    Observación
-                                  </div>
-
-                                  <p className="mt-1 text-sm leading-5 text-slate-600">
-                                    {item.observacion?.trim()
-                                      ? item.observacion
-                                      : "Sin observaciones registradas."}
-                                  </p>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="rounded-2xl border border-slate-200 bg-white">
-                                <div className="border-b border-slate-100 px-4 py-3">
-                                  <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                                    Modificar situación
-                                  </div>
-
-                                  <p className="mt-1 text-xs text-slate-500">
-                                    Cambia el estado solo si
-                                    la situación comercial ha
-                                    variado.
-                                  </p>
-                                </div>
-
-                                <div className="p-4">
-                                  <label className="mb-1.5 block text-xs font-bold text-slate-600">
-                                    Situación
-                                  </label>
-
-                                  <select
-                                    value={
-                                      situacionActual
-                                    }
-                                    onChange={(event) =>
-                                      setSituaciones(
-                                        (current) => ({
-                                          ...current,
-                                          [item.inmuebleId]:
-                                            event.target
-                                              .value,
-                                        })
-                                      )
-                                    }
-                                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#c80000]"
-                                  >
-                                    <option value="pendiente_aprobacion">
-                                      Pendiente de aprobación
-                                    </option>
-
-                                    <option value="aprobado">
-                                      Aprobado
-                                    </option>
-
-                                    <option value="en_negociacion">
-                                      En negociación
-                                    </option>
-
-                                    <option value="rechazado">
-                                      Rechazado
-                                    </option>
-                                  </select>
-
-                                  <label className="mt-3 mb-1.5 block text-xs font-bold text-slate-600">
-                                    Observación
-                                  </label>
-
-                                  <textarea
-                                    value={
-                                      observacionActual
-                                    }
-                                    onChange={(event) =>
-                                      setObservaciones(
-                                        (current) => ({
-                                          ...current,
-                                          [item.inmuebleId]:
-                                            event.target
-                                              .value,
-                                        })
-                                      )
-                                    }
-                                    rows={3}
-                                    placeholder="Anota la situación comercial o decisión del propietario..."
-                                    className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-[#c80000]"
-                                  />
-
-                                  <div className="mt-3 flex gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        cancelarEdicionSituacion(
-                                          item
-                                        )
-                                      }
-                                      disabled={
-                                        actualizando ===
-                                        item.inmuebleId
-                                      }
-                                      className="inline-flex h-10 flex-1 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-                                    >
-                                      Cancelar
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        actualizarSituacion(
-                                          item
-                                        )
-                                      }
-                                      disabled={
-                                        actualizando ===
-                                        item.inmuebleId
-                                      }
-                                      className="inline-flex h-10 flex-1 items-center justify-center rounded-xl bg-[#171717] px-3 text-xs font-bold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                      {actualizando ===
-                                      item.inmuebleId
-                                        ? "Guardando..."
-                                        : "Guardar cambios"}
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            {/* =====================================================
-                03 · TEXTO Y MATERIAL
+                02 · TEXTO Y MATERIAL
                ===================================================== */}
 
             <section>
               <div className="mb-3">
                 <h2 className="text-lg font-bold text-slate-900">
-                  03 · Texto y material
+                  02 · Texto y material
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
                   Solo aparecen inmuebles cuya tasación ya
-                  fue aprobada y todavía no tienen una
+                  fue negociada y todavía no tienen una
                   publicación registrada.
                 </p>
               </div>
 
               {aprobadas.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
-                  No hay tasaciones aprobadas pendientes de
+                  No hay tasaciones negociadas pendientes de
                   preparar texto.
                 </div>
               ) : (
@@ -1192,13 +581,13 @@ setPublicadas(publicadasData);
             </section>
 
             {/* =====================================================
-                04 · LISTOS PARA PUBLICAR
+                03 · LISTOS PARA PUBLICAR
                ===================================================== */}
 
             <section>
               <div className="mb-3">
                 <h2 className="text-lg font-bold text-slate-900">
-                  04 · Listos para publicar
+                  03 · Listos para publicar
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
@@ -1367,14 +756,14 @@ setPublicadas(publicadasData);
 
 
 {/* =====================================================
-    05 · PUBLICADOS
+    04 · PUBLICADOS
    ===================================================== */}
 
 <section>
   <div className="mb-3 flex items-end justify-between">
     <div>
       <h2 className="text-lg font-bold text-slate-900">
-        05 · Publicados
+        04 · Publicados
       </h2>
 
       <p className="mt-1 text-sm text-slate-500">
@@ -1512,114 +901,6 @@ setPublicadas(publicadasData);
 
 
 
-            {/* =====================================================
-                06 · EN NEGOCIACIÓN
-               ===================================================== */}
-
-            {enNegociacion.length > 0 && (
-              <section>
-                <div className="mb-3">
-                  <h2 className="text-lg font-bold text-slate-900">
-                    05 · En negociación
-                  </h2>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    Inmuebles que ya pasaron a seguimiento
-                    comercial.
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  {enNegociacion.map((item) => (
-                    <div
-                      key={item.inmuebleId}
-                      className="rounded-2xl border border-blue-200 bg-white p-5 shadow-sm"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
-                              Pos. {item.posicion}
-                            </span>
-
-                            <span className="text-xs font-semibold text-slate-400">
-                              {item.codigo}
-                            </span>
-                          </div>
-
-                          <h3 className="mt-2 text-base font-bold text-slate-900">
-                            {item.nombre}
-                          </h3>
-
-                          <p className="mt-1 text-sm text-slate-500">
-                            {item.tipo} · {item.ubicacion}
-                          </p>
-                        </div>
-
-                        <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
-                          En negociación
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* =====================================================
-                RECHAZADAS
-               ===================================================== */}
-
-            {rechazadas.length > 0 && (
-              <section>
-                <div className="mb-3">
-                  <h2 className="text-lg font-bold text-slate-900">
-                    Tasaciones rechazadas
-                  </h2>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    Se conservan aquí para trazabilidad y
-                    seguimiento.
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  {rechazadas.map((item) => (
-                    <div
-                      key={item.inmuebleId}
-                      className="rounded-2xl border border-red-200 bg-white p-5 shadow-sm"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-lg bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700">
-                              Pos. {item.posicion}
-                            </span>
-
-                            <span className="text-xs font-semibold text-slate-400">
-                              {item.codigo}
-                            </span>
-                          </div>
-
-                          <h3 className="mt-2 text-base font-bold text-slate-900">
-                            {item.nombre}
-                          </h3>
-
-                          <p className="mt-1 text-sm text-slate-500">
-                            {item.observacion ||
-                              "Sin observación registrada."}
-                          </p>
-                        </div>
-
-                        <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700">
-                          Rechazado
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
           </div>
         )}
       </div>

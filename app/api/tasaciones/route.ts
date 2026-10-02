@@ -1,4 +1,5 @@
 import { authorizeApi } from "@/lib/auth";
+import { parsePrice } from "@/lib/prices.mjs";
 import { NextResponse } from "next/server";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -17,21 +18,8 @@ function clean(value: unknown) {
 }
 
 function toMoney(value: unknown) {
-  const raw = clean(value).replace(/,/g, "");
-  if (!raw) return null;
-
-  const n = Number(raw);
-
-  return Number.isFinite(n) && n >= 0 ? raw : null;
+  return parsePrice(value);
 }
-
-const SITUACIONES = new Set([
-  "pendiente_aprobacion",
-  "en_negociacion",
-  "aprobado",
-  "rechazado",
-]);
-
 
 function mapRow(row: any) {
   return {
@@ -60,6 +48,7 @@ function mapRow(row: any) {
     fechaTasacion: row.fechaTasacion ?? null,
     valorReferencia: row.valorReferencia ?? null,
     precioObjetivo: row.precioObjetivo ?? null,
+    precioVenta: row.precioVenta ?? null,
     situacion: row.situacion ?? null,
     observacion: row.observacion ?? null,
   };
@@ -143,6 +132,7 @@ export async function GET() {
         fechaTasacion: inmTasaciones.fechaTasacion,
         valorReferencia: inmTasaciones.valorReferencia,
         precioObjetivo: inmTasaciones.precioObjetivo,
+        precioVenta: inmTasaciones.precioVenta,
         situacion: inmTasaciones.situacion,
         observacion: inmTasaciones.observacion,
       })
@@ -206,10 +196,15 @@ export async function POST(request: Request) {
 
     const inmuebleId = Number(body.inmuebleId);
     const fechaTasacion = clean(body.fechaTasacion);
-    const situacion = clean(body.situacion);
+    const situacion = "aprobado";
     const valorReferencia = toMoney(body.valorReferencia);
     const precioObjetivo = toMoney(body.precioObjetivo);
+    const precioVenta = toMoney(body.precioVenta);
     const observacion = clean(body.observacion);
+
+    if (![valorReferencia, precioObjetivo, precioVenta].every(value => value && Number(value) > 0)) {
+      return NextResponse.json({ ok: false, error: "Ingresa los tres precios, mayores que cero." }, { status: 400 });
+    }
 
     if (!Number.isInteger(inmuebleId) || inmuebleId <= 0) {
       return NextResponse.json(
@@ -235,16 +230,6 @@ export async function POST(request: Request) {
         {
           ok: false,
           error: "La fecha de tasación no puede ser futura.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!SITUACIONES.has(situacion)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "La situación seleccionada no es válida.",
         },
         { status: 400 }
       );
@@ -284,6 +269,7 @@ export async function POST(request: Request) {
         fechaTasacion: fecha,
         valorReferencia,
         precioObjetivo,
+        precioVenta,
         situacion,
         observacion: observacion || null,
         usuarioId: user.id,
@@ -331,90 +317,42 @@ export async function POST(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
+// Price changes do not update the property stage or publication status.
+export async function PATCH(request: Request) {
+  const auth = await authorizeApi(request);
+  if (auth.response) return auth.response;
+  let body;
+  try { body = await request.json(); } catch {
+    return NextResponse.json({ ok: false, error: "Solicitud no válida." }, { status: 400 });
+  }
+  const inmuebleId = Number(body?.inmuebleId);
+  const precioVenta = parsePrice(body?.precioVenta);
+  if (!Number.isSafeInteger(inmuebleId) || inmuebleId <= 0 || !precioVenta ||
+      (body.observacion !== undefined && typeof body.observacion !== "string")) {
+    return NextResponse.json({ ok: false, error: "Ingresa un precio de venta válido, mayor que cero y con hasta dos decimales." }, { status: 400 });
+  }
   try {
-    const auth = await authorizeApi(request);
-    if (auth.response) return auth.response;
-    const body = await request.json();
-
-    const inmuebleId = Number(body.inmuebleId);
-    const situacion = clean(body.situacion);
-    const observacion =
-      body.observacion === undefined
-        ? undefined
-        : clean(body.observacion);
-
-    if (
-      !Number.isInteger(inmuebleId) ||
-      inmuebleId <= 0 ||
-      !SITUACIONES.has(situacion)
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Datos de actualización no válidos.",
-        },
-        { status: 400 }
-      );
-    }
-
     const result = await db.transaction(async (tx) => {
-      const [tasacion] = await tx
-        .select()
-        .from(inmTasaciones)
-        .where(eq(inmTasaciones.inmuebleId, inmuebleId))
-        .limit(1);
-
-      if (!tasacion) {
-        throw new Error(
-          "El inmueble no tiene una tasación registrada."
-        );
-      }
-
-      const user = auth.user;
-
-      await tx
-        .update(inmTasaciones)
-        .set({
-          situacion,
-          ...(observacion !== undefined
-            ? { observacion: observacion || null }
-            : {}),
-        })
-        .where(eq(inmTasaciones.inmuebleId, inmuebleId));
-
+      const [tasacion] = await tx.select().from(inmTasaciones)
+        .where(eq(inmTasaciones.inmuebleId, inmuebleId)).limit(1).for("update");
+      if (!tasacion) throw new Error("El inmueble no tiene una tasación registrada.");
+      const [property] = await tx.select({ estado: inmInmuebles.estado }).from(inmInmuebles)
+        .where(eq(inmInmuebles.id, inmuebleId)).limit(1);
+      if (property?.estado !== "activo") throw new Error("El inmueble ya no está activo.");
+      const observacion = body.observacion === undefined ? tasacion.observacion : body.observacion.trim() || null;
+      if (precioVenta === tasacion.precioVenta && observacion === tasacion.observacion) return { precioVenta };
+      await tx.update(inmTasaciones).set({ precioVenta, observacion })
+        .where(eq(inmTasaciones.id, tasacion.id));
       await tx.insert(inmTimeline).values({
-        inmuebleId,
-        evento: "tasacion_actualizada",
-        observacion: `Situación actualizada a: ${situacion}.${
-          observacion !== undefined && observacion
-            ? ` Observación: ${observacion}`
-            : ""
-        }`,
-        usuarioId: user.id,
+        inmuebleId, evento: "precio_venta_actualizado", usuarioId: auth.user.id,
+        observacion: `Precio de venta: S/ ${tasacion.precioVenta ?? "sin registrar"} → S/ ${precioVenta}. Observación: ${observacion ?? "sin observación"}`,
       });
-
-      return {
-        situacion,
-      };
+      return { precioVenta };
     });
-
-    return NextResponse.json({
-      ok: true,
-      ...result,
-    });
+    return NextResponse.json({ ok: true, ...result });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "No fue posible actualizar la tasación.";
-
-    return NextResponse.json(
-      {
-        ok: false,
-        error: message,
-      },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : "No se pudo actualizar el precio de venta.";
+    return NextResponse.json({ ok: false, error: /no tiene|no está activo/.test(message) ? message : "No se pudo actualizar el precio de venta." },
+      { status: /no tiene|no está activo/.test(message) ? 409 : 500 });
   }
 }

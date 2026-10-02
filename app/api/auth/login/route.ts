@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { inmSesiones, inmUsuarios } from "@/db/schema";
 import { SESSION_COOKIE, SESSION_SECONDS, sameOrigin, sessionCookieOptions } from "@/lib/auth";
 import { createSessionToken, hashSessionToken, verifyPassword } from "@/lib/password.mjs";
+import { homeForUser } from "@/lib/access.mjs";
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return NextResponse.json({ error: "Solicitud no permitida." }, { status: 403 });
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
       await tx.insert(inmSesiones).values({ tokenHash: hashSessionToken(token), usuarioId: user.id, expira: new Date(Date.now() + SESSION_SECONDS * 1000) });
     });
     store.set(SESSION_COOKIE, token, { ...sessionCookieOptions, maxAge: SESSION_SECONDS });
-    return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ok: true, redirectTo: homeForUser(user) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Error al iniciar sesión:", error);
     return NextResponse.json({ error: "No se pudo iniciar sesión. Inténtalo nuevamente." }, { status: 500 });

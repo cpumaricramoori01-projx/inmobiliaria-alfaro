@@ -71,6 +71,7 @@ async function findProperty(key: string) {
       fechaTasacion: inmTasaciones.fechaTasacion,
       valorReferencia: inmTasaciones.valorReferencia,
       precioObjetivo: inmTasaciones.precioObjetivo,
+      precioVenta: inmTasaciones.precioVenta,
       situacionTasacion: inmTasaciones.situacion,
       observacionTasacion: inmTasaciones.observacion,
       publicacionId: inmPublicaciones.id,
@@ -96,17 +97,17 @@ async function findProperty(key: string) {
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await authorizeApi();
+    const auth = await authorizeApi(undefined, "informacion");
     if (auth.response) return auth.response;
     const key = (await context.params).id;
     const row = await findProperty(key);
     if (!row) return NextResponse.json({ error: "Inmueble no encontrado." }, { status: 404 });
 
-    const { tasacionId, fechaTasacion, valorReferencia, precioObjetivo, situacionTasacion, observacionTasacion, publicacionId, textoPublicacion, enlacePublicacion, publicado, fechaPublicacion, ...inmueble } = row;
+    const { tasacionId, fechaTasacion, valorReferencia, precioObjetivo, precioVenta, situacionTasacion, observacionTasacion, publicacionId, textoPublicacion, enlacePublicacion, publicado, fechaPublicacion, ...inmueble } = row;
 
     return NextResponse.json({
       inmueble,
-      tasacion: tasacionId ? { id: tasacionId, fechaTasacion, valorReferencia, precioObjetivo, situacion: situacionTasacion, observacion: observacionTasacion } : null,
+      tasacion: tasacionId ? { id: tasacionId, fechaTasacion, valorReferencia, precioObjetivo, precioVenta, situacion: situacionTasacion, observacion: observacionTasacion } : null,
       publicacion: publicacionId ? { id: publicacionId, texto: textoPublicacion, enlace: enlacePublicacion, publicado, fechaPublicacion } : null,
     });
   } catch (error) {
@@ -117,7 +118,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await authorizeApi(request);
+    const auth = await authorizeApi(request, "informacion");
     if (auth.response) return auth.response;
     const key = (await context.params).id;
     const row = await findProperty(key);

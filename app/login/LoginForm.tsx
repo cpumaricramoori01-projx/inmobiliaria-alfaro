@@ -21,7 +21,7 @@ export default function LoginForm() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "No se pudo iniciar sesión.");
-      window.location.replace("/");
+      window.location.replace(data.redirectTo || "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo conectar. Inténtalo nuevamente.");
       setPending(false);

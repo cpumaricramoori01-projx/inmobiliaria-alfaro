@@ -104,6 +104,7 @@ CREATE TABLE inm_tasaciones (
   fecha_tasacion DATE NOT NULL,
   valor_referencia DECIMAL(15,2) NULL,
   precio_objetivo DECIMAL(15,2) NULL,
+  precio_venta DECIMAL(15,2) NULL,
   situacion VARCHAR(30) NOT NULL DEFAULT 'pendiente_aprobacion',
   observacion TEXT NULL,
   usuario_id BIGINT UNSIGNED NOT NULL,

@@ -1,12 +1,14 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { homeForUser } from "@/lib/access.mjs";
 import LoginForm from "./LoginForm";
 
 export const metadata = { title: "Iniciar sesión | Inmobiliaria Alberto Alfaro" };
 
 export default async function LoginPage() {
-  if (await getSession()) redirect("/");
+  const user = await getSession();
+  if (user) redirect(homeForUser(user));
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f7f7f5] px-5 py-10">
       <section className="w-full max-w-[440px] overflow-hidden rounded-3xl border border-[#e7e5e2] bg-white shadow-[0_20px_70px_rgba(23,23,23,0.07)]">

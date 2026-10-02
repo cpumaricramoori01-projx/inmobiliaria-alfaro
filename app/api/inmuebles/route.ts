@@ -1,6 +1,6 @@
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   inmAsignacionesPosicion,
@@ -21,6 +21,41 @@ const TIPOS = new Set([
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+// Minimal selector for the property information module, independent of cartera.
+export async function GET() {
+  try {
+    const auth = await authorizeApi(undefined, "informacion");
+    if (auth.response) return auth.response;
+    const rows = await db.select({
+      id: inmInmuebles.codigo,
+      nombre: inmInmuebles.referencia,
+      tipo: inmInmuebles.tipo,
+      distrito: inmInmuebles.distrito,
+      provincia: inmInmuebles.provincia,
+      departamento: inmInmuebles.departamento,
+      estado: inmInmuebles.estado,
+      propietarioNombres: inmPropietarios.nombres,
+      propietarioApellidos: inmPropietarios.apellidos,
+      posicion: inmPosiciones.numero,
+    }).from(inmInmuebles)
+      .leftJoin(inmPropietarios, eq(inmPropietarios.id, inmInmuebles.propietarioId))
+      .leftJoin(inmAsignacionesPosicion, and(
+        eq(inmAsignacionesPosicion.inmuebleId, inmInmuebles.id),
+        eq(inmAsignacionesPosicion.activa, true),
+      ))
+      .leftJoin(inmPosiciones, eq(inmPosiciones.id, inmAsignacionesPosicion.posicionId))
+      .orderBy(sql`CASE WHEN ${inmInmuebles.estado} = 'activo' THEN 0 ELSE 1 END`, sql`${inmPosiciones.numero} IS NULL`, asc(inmPosiciones.numero), asc(inmInmuebles.referencia));
+    return NextResponse.json({ inmuebles: rows.map(({ distrito, provincia, departamento, propietarioNombres, propietarioApellidos, ...row }) => ({
+      ...row,
+      estado: row.estado === "activo" ? "activo" : "historico",
+      ubicacion: [distrito, provincia, departamento].filter(Boolean).join(", ") || "Ubicación por completar",
+      propietario: [propietarioNombres, propietarioApellidos].filter(Boolean).join(" ") || "Sin propietario",
+    })) });
+  } catch {
+    return NextResponse.json({ error: "No se pudieron cargar los inmuebles." }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {

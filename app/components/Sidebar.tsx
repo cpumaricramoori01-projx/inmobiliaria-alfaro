@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { isAdministrator } from "@/lib/access.mjs";
 import LogoutButton from "./LogoutButton";
 import { useSessionUser } from "./SessionProvider";
 import Link from "next/link";
@@ -62,8 +63,10 @@ function MenuLink({ item, onNavigate }: { item: { href: string; label: string; i
 }
 
 function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
+  const user = useSessionUser();
   return (
     <>
+      {isAdministrator(user) && <>
       <div className="rounded-2xl border border-[#e7e5e2] bg-[#faf9f7] p-2">
         <MenuLink item={{ href: "/", label: "Dashboard", icon: "dashboard" }} onNavigate={onNavigate}/>
       </div>
@@ -109,9 +112,9 @@ function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
     />
   ))}
 </div>
+      </>}
       <div className="mb-2 mt-7 flex items-center justify-between px-3">
-        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Próxima fase</span>
-        <span className="rounded-full bg-[#fff1f1] px-2 py-0.5 text-[9px] font-semibold text-[#c80000]">FASE 2</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Información de inmuebles</span>
       </div>
       <div className="space-y-1">
         {fase2.map(item => (

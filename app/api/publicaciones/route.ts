@@ -39,7 +39,8 @@ const mapPending = (row: any) => ({
       .join(" ") || "Sin propietario",
   valorReferencia: row.valorReferencia,
   precioObjetivo: row.precioObjetivo,
-  situacion: row.situacion,
+  precioVenta: row.precioVenta,
+  observacion: row.observacion,
 });
 
 async function approved() {
@@ -58,6 +59,8 @@ async function approved() {
       posicion: inmPosiciones.numero,
       valorReferencia: inmTasaciones.valorReferencia,
       precioObjetivo: inmTasaciones.precioObjetivo,
+      precioVenta: inmTasaciones.precioVenta,
+      observacion: inmTasaciones.observacion,
       situacion: inmTasaciones.situacion,
     })
     .from(inmTasaciones)

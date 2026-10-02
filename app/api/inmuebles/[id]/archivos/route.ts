@@ -15,7 +15,7 @@ async function findInmueble(key: string) {
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await authorizeApi();
+    const auth = await authorizeApi(undefined, "informacion");
     if (auth.response) return auth.response;
     const inmueble = await findInmueble((await context.params).id);
     if (!inmueble) return NextResponse.json({ error:"Inmueble no encontrado." }, {status:404});
@@ -26,7 +26,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await authorizeApi(request);
+    const auth = await authorizeApi(request, "informacion");
     if (auth.response) return auth.response;
     const inmueble = await findInmueble((await context.params).id);
     if (!inmueble) return NextResponse.json({error:"Inmueble no encontrado."},{status:404});
@@ -44,7 +44,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await authorizeApi(request);
+    const auth = await authorizeApi(request, "informacion");
     if (auth.response) return auth.response;
     const inmueble=await findInmueble((await context.params).id);
     if(!inmueble) return NextResponse.json({error:"Inmueble no encontrado."},{status:404});

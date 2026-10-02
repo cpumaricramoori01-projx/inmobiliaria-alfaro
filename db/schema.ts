@@ -112,6 +112,7 @@ export const inmTasaciones = mysqlTable("inm_tasaciones", {
   fechaTasacion: date("fecha_tasacion").notNull(),
   valorReferencia: decimal("valor_referencia", { precision: 15, scale: 2 }),
   precioObjetivo: decimal("precio_objetivo", { precision: 15, scale: 2 }),
+  precioVenta: decimal("precio_venta", { precision: 15, scale: 2 }),
   situacion: varchar("situacion", { length: 30 }).notNull().default("pendiente_aprobacion"),
   observacion: text("observacion"),
   usuarioId: bigint("usuario_id", { mode: "number", unsigned: true }).notNull().references(() => inmUsuarios.id),

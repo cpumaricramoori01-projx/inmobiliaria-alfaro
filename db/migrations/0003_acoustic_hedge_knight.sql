@@ -1,0 +1,1 @@
+ALTER TABLE `inm_tasaciones` ADD `precio_venta` decimal(15,2);

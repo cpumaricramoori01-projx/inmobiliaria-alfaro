@@ -1,6 +1,6 @@
 # Acceso al sistema
 
-La entrada `/` requiere una sesión y redirige a `/login` cuando no la hay. Las cuentas se validan en `inm_usuarios` mediante `usuario` y `password_hash`. El sistema admite varias cuentas. Los roles `administrador` y `operador` tienen acceso a los módulos actuales; no se han añadido restricciones por rol.
+La entrada `/` requiere una sesión y redirige a `/login` cuando no la hay. Las cuentas se validan en `inm_usuarios` mediante `usuario` y `password_hash`. El sistema admite varias cuentas. El rol `administrador` accede a todos los módulos. Los demás usuarios, incluyendo `operador` y el rol anterior `usuario`, solo acceden a Información de inmuebles (`/datos-inmuebles`), donde pueden consultar y completar la ficha, datos del propietario y documentación. Inician sesión directamente en ese módulo. El menú oculta los demás apartados; sus páginas redirigen a Información de inmuebles y sus APIs rechazan el acceso con HTTP 403. Los permisos se verifican en el servidor para cada solicitud.
 
 ## Preparar una base existente
 
@@ -33,4 +33,4 @@ npm run build
 
 En entornos con restricciones de Turbopack, usar `npm run build -- --webpack`. La prueba de integración se ejecuta de forma explícita con `node tests/auth.integration.mjs`: levanta un servidor en el puerto 3107, crea dos cuentas temporales en la base configurada y las elimina al terminar. No debe ejecutarse mientras se está compilando.
 
-Comprobar con ambas cuentas: inicio de sesión, dashboard, cierre de sesión y rechazo de acceso directo a páginas y APIs sin sesión. Para restablecer una cuenta bloqueada, ejecutar `auth:user` o restablecer `intentos_fallidos` y `bloqueo_hasta` desde la administración de la base.
+Comprobar con ambas cuentas: inicio de sesión, cierre de sesión y rechazo de acceso anónimo. El administrador puede entrar a todos los módulos; el operador solo a Información de inmuebles, incluyendo sus APIs de ficha y documentación. Para restablecer una cuenta bloqueada, ejecutar `auth:user` o restablecer `intentos_fallidos` y `bloqueo_hasta` desde la administración de la base.

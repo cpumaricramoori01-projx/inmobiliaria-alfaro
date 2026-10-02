@@ -125,6 +125,7 @@ export async function GET() {
         inmuebleId: inmTasaciones.inmuebleId,
         situacion: inmTasaciones.situacion,
         fechaTasacion: inmTasaciones.fechaTasacion,
+        precioVenta: inmTasaciones.precioVenta,
       })
       .from(inmTasaciones)
       .where(inArray(inmTasaciones.inmuebleId, inmuebleIds))
@@ -204,6 +205,7 @@ export async function GET() {
         existe: boolean;
         situacion: string | null;
         fechaTasacion: Date | string | null;
+        precioVenta: string | null;
       }
     >();
 
@@ -213,6 +215,7 @@ export async function GET() {
           existe: true,
           situacion: tasacion.situacion,
           fechaTasacion: tasacion.fechaTasacion,
+          precioVenta: tasacion.precioVenta,
         });
       }
     }
@@ -313,6 +316,7 @@ const materialPendiente =
             .join(", ") || "Sin ubicación registrada",
 
         direccion: row.direccion ?? null,
+        precioVenta: tasacion?.precioVenta ?? null,
 
         estado:
           estadoNormalizado === "activo"

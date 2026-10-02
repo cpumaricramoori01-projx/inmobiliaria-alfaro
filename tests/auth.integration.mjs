@@ -12,6 +12,7 @@ const origin = "http://127.0.0.1:3107";
 const connection = await mysql.createConnection(process.env.DATABASE_URL);
 const ids = [];
 let server;
+let testPropertyId;
 let output = "";
 const request = (path, options = {}) => fetch(origin + path, { redirect: "manual", ...options });
 const post = (path, data, cookie, source = origin) => request(path, {
@@ -24,12 +25,14 @@ try {
   const password = randomBytes(24).toString("hex");
   const suffix = randomBytes(8).toString("hex");
   const accounts = [];
-  for (const rol of ["administrador", "operador"]) {
+  for (const rol of ["administrador", "operador", "usuario"]) {
     const usuario = `test_${rol}_${suffix}`;
     const [created] = await connection.execute("INSERT INTO inm_usuarios (nombre, email, usuario, password_hash, rol, activo) VALUES (?, ?, ?, ?, ?, 1)", ["Prueba " + rol, usuario + "@example.invalid", usuario, await hashPassword(password), rol]);
     ids.push(created.insertId);
     accounts.push({ id: created.insertId, usuario, password });
   }
+  const [testProperty] = await connection.execute("INSERT INTO inm_inmuebles (codigo, tipo, referencia, estado, etapa) VALUES (?, 'casa', 'Ficha temporal permisos', 'activo', 'visita_pendiente')", ["TEST-ACCESS-" + suffix]);
+  testPropertyId = testProperty.insertId;
   server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3107", "-H", "127.0.0.1"], { env: { ...process.env, NODE_ENV: "production" }, stdio: ["ignore", "pipe", "pipe"] });
   server.stdout.on("data", chunk => { output += chunk; });
   server.stderr.on("data", chunk => { output += chunk; });
@@ -54,7 +57,7 @@ try {
     assert.equal(response.status, 307, path);
     assert.equal(new URL(response.headers.get("location"), origin).pathname, "/login");
   }
-  const apis = ["/api/cartera", "/api/dashboard", "/api/posiciones", "/api/propietarios?dni=00000000", "/api/visitas", "/api/tasaciones", "/api/publicaciones", "/api/liberaciones", "/api/reportes", "/api/inmuebles/1", "/api/inmuebles/1/archivos"];
+  const apis = ["/api/cartera", "/api/dashboard", "/api/posiciones", "/api/propietarios?dni=00000000", "/api/visitas", "/api/tasaciones", "/api/publicaciones", "/api/liberaciones", "/api/reportes", "/api/inmuebles", "/api/inmuebles/1", "/api/inmuebles/1/archivos"];
   for (const path of apis) assert.equal((await request(path)).status, 401, path);
   for (const cookie of ["aa_session=falso", "aa_session=" + "a".repeat(64)]) {
     assert.equal((await request("/cartera", { headers: { Cookie: cookie } })).status, 307);
@@ -72,6 +75,7 @@ try {
   assert.match(login.headers.get("set-cookie"), /HttpOnly/i);
   assert.match(login.headers.get("set-cookie"), /Secure/i);
   assert.match(login.headers.get("set-cookie"), /SameSite=lax/i);
+  assert.equal((await login.json()).redirectTo, "/");
   const adminCookie = cookieFrom(login);
   const [sessions] = await connection.execute("SELECT token_hash, expira FROM inm_sesiones WHERE usuario_id = ?", [accounts[0].id]);
   assert.equal(sessions[0].token_hash, hashSessionToken(adminCookie.split("=")[1]));
@@ -80,6 +84,9 @@ try {
   const dashboard = await request("/", { headers: { Cookie: adminCookie } });
   assert.equal(dashboard.status, 200);
   assert.match(await dashboard.text(), /Prueba administrador/);
+  for (const path of pages.filter(path => path !== "/")) {
+    assert.equal((await request(path, { headers: { Cookie: adminCookie } })).status, 200, `administrator page ${path}`);
+  }
   assert.equal((await post("/api/inmuebles", {}, adminCookie, "https://example.invalid")).status, 403);
   console.log("PASS: administrador autenticado, cookie segura, sesión en MySQL y protección de origen");
 
@@ -97,10 +104,52 @@ try {
   const operatorLogin = await post("/api/auth/login", accounts[1]);
   assert.equal(operatorLogin.status, 200);
   const operatorCookie = cookieFrom(operatorLogin);
-  const operatorDashboard = await request("/", { headers: { Cookie: operatorCookie } });
-  assert.equal(operatorDashboard.status, 200);
-  assert.match(await operatorDashboard.text(), /Prueba operador/);
-  console.log("PASS: operador, bloqueo tras cinco intentos y recuperación al expirar el bloqueo");
+  assert.equal((await operatorLogin.json()).redirectTo, "/datos-inmuebles");
+  for (const account of [accounts[1], accounts[2]]) {
+    const cookie = account === accounts[1] ? operatorCookie : cookieFrom(await post("/api/auth/login", account));
+    for (const path of pages.filter(path => path !== "/datos-inmuebles")) {
+      const response = await request(path, { headers: { Cookie: cookie } });
+      assert.equal(response.status, 307, `restricted page ${path}`);
+      assert.equal(new URL(response.headers.get("location"), origin).pathname, "/datos-inmuebles");
+    }
+    const info = await request("/datos-inmuebles", { headers: { Cookie: cookie } });
+    assert.equal(info.status, 200);
+    const markup = await info.text();
+    assert.match(markup, /Información de inmuebles/);
+    assert.equal(markup.includes('href="/cartera"'), false);
+    assert.equal(markup.includes('href="/reportes"'), false);
+    assert.equal(markup.includes('href="/registrar-tasaciones"'), false);
+    assert.equal(markup.includes('href="/"'), false);
+    for (const path of apis.filter(path => !path.startsWith("/api/inmuebles"))) {
+      assert.equal((await request(path, { headers: { Cookie: cookie } })).status, 403, `restricted API ${path}`);
+    }
+    const selector = await request("/api/inmuebles", { headers: { Cookie: cookie } });
+    assert.equal(selector.status, 200);
+    assert.equal((await selector.json()).inmuebles.some(row => row.id === "TEST-ACCESS-" + suffix), true);
+    assert.equal((await request(`/api/inmuebles/${testPropertyId}`, { headers: { Cookie: cookie } })).status, 200);
+    const update = await request(`/api/inmuebles/${testPropertyId}`, { method: "PUT", headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ referencia: "Ficha completada", direccion: "Dirección de prueba", estado: "historico", etapa: "publicado" }) });
+    assert.equal(update.status, 200);
+    const [[property]] = await connection.execute("SELECT referencia, direccion, estado, etapa FROM inm_inmuebles WHERE id = ?", [testPropertyId]);
+    assert.equal(property.referencia, "Ficha completada");
+    assert.equal(property.estado, "activo");
+    assert.equal(property.etapa, "visita_pendiente");
+    const file = await post(`/api/inmuebles/${testPropertyId}/archivos`, { tipoDocumento: "OTRO", nombre: "Documento prueba permisos", enlace: "https://drive.google.com/test" }, cookie);
+    assert.equal(file.status, 201);
+    const fileId = (await file.json()).id;
+    const files = await request(`/api/inmuebles/${testPropertyId}/archivos`, { headers: { Cookie: cookie } });
+    assert.equal(files.status, 200);
+    assert.equal((await files.json()).archivos.some(file => file.id === fileId), true);
+    const remove = await request(`/api/inmuebles/${testPropertyId}/archivos?archivoId=${fileId}`, { method: "DELETE", headers: { Cookie: cookie, Origin: origin } });
+    assert.equal(remove.status, 200);
+    assert.equal((await post("/api/inmuebles", {}, cookie)).status, 403);
+    for (const path of ["/api/visitas", "/api/tasaciones", "/api/publicaciones", "/api/liberaciones"]) {
+      assert.equal((await post(path, {}, cookie)).status, 403, `restricted POST ${path}`);
+    }
+    const patch = await request("/api/tasaciones", { method: "PATCH", headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ inmuebleId: 11, precioVenta: "1" }) });
+    assert.equal(patch.status, 403);
+    assert.equal((await request("/login", { headers: { Cookie: cookie } })).headers.get("location")?.endsWith("/datos-inmuebles"), true);
+  }
+  console.log("PASS: operador y rol usuario solo acceden a Información de inmuebles; otras páginas y APIs bloqueadas");
 
   assert.equal((await post("/api/auth/logout", {}, adminCookie, "https://example.invalid")).status, 403);
   assert.equal((await post("/api/auth/logout", {}, adminCookie)).status, 200);
@@ -119,6 +168,10 @@ try {
   process.exitCode = 1;
 } finally {
   server?.kill("SIGTERM");
+  if (testPropertyId) {
+    await connection.execute("DELETE FROM inm_archivos WHERE inmueble_id = ?", [testPropertyId]);
+    await connection.execute("DELETE FROM inm_inmuebles WHERE id = ?", [testPropertyId]);
+  }
   for (const id of ids) {
     await connection.execute("DELETE FROM inm_sesiones WHERE usuario_id = ?", [id]);
     await connection.execute("DELETE FROM inm_usuarios WHERE id = ?", [id]);
