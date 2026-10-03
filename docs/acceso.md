@@ -4,6 +4,12 @@ La entrada `/` requiere una sesión y redirige a `/login` cuando no la hay. Las 
 
 ## Preparar una base existente
 
+El administrador puede gestionar las cuentas desde **Administración → Usuarios y accesos** (`/usuarios`): crear usuarios, editar nombre, usuario y correo, asignar el rol Administrador u Operador, cambiar contraseñas de al menos 8 caracteres, desbloquear intentos y activar o desactivar accesos. Los operadores no ven este módulo y sus solicitudes a `/api/usuarios` se rechazan en el servidor.
+
+Al editar, dejar los campos de contraseña vacíos conserva la actual. Las contraseñas nunca se muestran ni se devuelven en la API. Cambiar contraseña, usuario, rol o estado invalida las sesiones de esa cuenta. Si el administrador cambia su propia contraseña o usuario, debe ingresar nuevamente. No puede desactivar su propia cuenta ni quitarse el rol de administrador; tampoco se puede dejar el sistema sin un administrador activo. La desactivación conserva sus registros de trabajo.
+
+La gestión verifica los permisos dentro de una transacción para proteger cambios simultáneos. El inicio de sesión vuelve a comprobar el estado y la contraseña antes de guardar la sesión, incluso si se modifican mientras se está iniciando sesión.
+
 Ejecutar en la terminal del proyecto, con `DATABASE_URL` configurada en `.env.local`:
 
 ```bash
@@ -33,7 +39,7 @@ npm run build
 
 En entornos con restricciones de Turbopack, usar `npm run build -- --webpack`. La prueba de integración se ejecuta de forma explícita con `node tests/auth.integration.mjs`: levanta un servidor en el puerto 3107, crea dos cuentas temporales en la base configurada y las elimina al terminar. No debe ejecutarse mientras se está compilando.
 
-Comprobar con ambas cuentas: inicio de sesión, cierre de sesión y rechazo de acceso anónimo. El administrador puede entrar a todos los módulos; el operador solo a Información de inmuebles, incluyendo sus APIs de ficha y documentación. Para restablecer una cuenta bloqueada, ejecutar `auth:user` o restablecer `intentos_fallidos` y `bloqueo_hasta` desde la administración de la base.
+Comprobar con ambas cuentas: inicio de sesión, cierre de sesión y rechazo de acceso anónimo. El administrador puede entrar a todos los módulos; el operador solo a Información de inmuebles, incluyendo sus APIs de ficha y documentación. Para restablecer una cuenta bloqueada, el administrador puede editarla en Usuarios y accesos y marcar Desbloquear los intentos de acceso. La integración de gestión se ejecuta con `node tests/users.integration.mjs`; usa cuentas temporales, comprueba permisos, sesiones y cambios simultáneos, y limpia sus datos al terminar.
 
 ## Cambiar solo la contraseña
 

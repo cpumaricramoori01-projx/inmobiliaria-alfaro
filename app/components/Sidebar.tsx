@@ -40,6 +40,7 @@ function Icon({ name }: { name: string }) {
     clipboard: <><rect x="5" y="5" width="14" height="15" rx="2"/><path d="M9 5V4h6v1M8 10h8M8 14h6"/></>,
     report: <><path d="M5 20V10M12 20V4M19 20v-7"/><path d="M3 20h18"/></>,
     database: <><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5"/><path d="M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7"/></>,
+    users: <><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 5a3 3 0 0 1 0 6M21 20v-2a6 6 0 0 0-4-5"/></>,
     menu: <><path d="M4 7h16M4 12h16M4 17h16"/></>,
     close: <><path d="M6 6l12 12M18 6 6 18"/></>,
   };
@@ -114,6 +115,8 @@ function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
     />
   ))}
 </div>
+      <div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Administración</div>
+      <MenuLink item={{ href: "/usuarios", label: "Usuarios y accesos", icon: "users" }} onNavigate={onNavigate}/>
       </>}
       <div className="mb-2 mt-7 flex items-center justify-between px-3">
         <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Información de inmuebles</span>

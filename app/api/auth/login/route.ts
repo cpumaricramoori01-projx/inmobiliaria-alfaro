@@ -7,6 +7,8 @@ import { SESSION_COOKIE, SESSION_SECONDS, sameOrigin, sessionCookieOptions } fro
 import { createSessionToken, hashSessionToken, verifyPassword } from "@/lib/password.mjs";
 import { homeForUser } from "@/lib/access.mjs";
 
+class LoginChangedError extends Error {}
+
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return NextResponse.json({ error: "Solicitud no permitida." }, { status: 403 });
   try {
@@ -41,15 +43,19 @@ export async function POST(request: Request) {
     const token = createSessionToken();
     const store = await cookies();
     const previous = store.get(SESSION_COOKIE)?.value;
-    await db.transaction(async (tx) => {
+    const authenticatedUser = await db.transaction(async (tx) => {
+      const [current] = await tx.select().from(inmUsuarios).where(eq(inmUsuarios.id, user.id)).limit(1).for("update");
+      if (!current?.activo || current.passwordHash !== user.passwordHash || current.usuario?.toLowerCase() !== usuario) throw new LoginChangedError();
       await tx.delete(inmSesiones).where(lt(inmSesiones.expira, new Date()));
       if (previous) await tx.delete(inmSesiones).where(eq(inmSesiones.tokenHash, hashSessionToken(previous)));
       await tx.update(inmUsuarios).set({ intentosFallidos: 0, bloqueoHasta: null }).where(eq(inmUsuarios.id, user.id));
       await tx.insert(inmSesiones).values({ tokenHash: hashSessionToken(token), usuarioId: user.id, expira: new Date(Date.now() + SESSION_SECONDS * 1000) });
+      return { rol: current.rol };
     });
     store.set(SESSION_COOKIE, token, { ...sessionCookieOptions, maxAge: SESSION_SECONDS });
-    return NextResponse.json({ ok: true, redirectTo: homeForUser(user) }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ok: true, redirectTo: homeForUser(authenticatedUser) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    if (error instanceof LoginChangedError) return NextResponse.json({ error: "Usuario o contraseña incorrectos." }, { status: 401 });
     console.error("Error al iniciar sesión:", error);
     return NextResponse.json({ error: "No se pudo iniciar sesión. Inténtalo nuevamente." }, { status: 500 });
   }
