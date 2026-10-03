@@ -165,6 +165,8 @@ export const inmLiberaciones = mysqlTable("inm_liberaciones", {
 export const inmArchivos = mysqlTable("inm_archivos", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   inmuebleId: bigint("inmueble_id", { mode: "number", unsigned: true }).notNull().references(() => inmInmuebles.id),
+  visitaId: bigint("visita_id", { mode: "number", unsigned: true }).references(() => inmVisitas.id),
+  esPortada: boolean("es_portada").notNull().default(false),
   tipoDocumento: varchar("tipo_documento", { length: 80 }).notNull(),
   nombre: varchar("nombre", { length: 255 }).notNull(),
   enlace: varchar("enlace", { length: 1000 }).notNull(),

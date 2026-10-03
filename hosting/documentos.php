@@ -13,8 +13,8 @@ $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
 if (strlen($token) < 32 || !hash_equals('Bearer ' . $token, $auth)) fail_request(401);
 $path = $_GET['path'] ?? '';
 // Accept both the new code/position folders and the previous layout.
-$legacyPattern = '#^inmuebles/(posicion-[1-9][0-9]*|sin-posicion)/inmueble-[1-9][0-9]*/[a-z-]+/[a-zA-Z0-9._-]+\.(pdf|doc|docx|xls|xlsx)$#D';
-$currentPattern = '#^inmuebles/[a-zA-Z0-9_-]+-(posicion-[1-9][0-9]*|sin-posicion)/[a-z-]+/[a-zA-Z0-9._-]+\.(pdf|doc|docx|xls|xlsx)$#D';
+$legacyPattern = '#^inmuebles/(posicion-[1-9][0-9]*|sin-posicion)/inmueble-[1-9][0-9]*/[a-z-]+/[a-zA-Z0-9._-]+\.(pdf|doc|docx|xls|xlsx|jpg|jpeg|png|webp)$#D';
+$currentPattern = '#^inmuebles/[a-zA-Z0-9_-]+-(posicion-[1-9][0-9]*|sin-posicion)/[a-z-]+/[a-zA-Z0-9._-]+\.(pdf|doc|docx|xls|xlsx|jpg|jpeg|png|webp)$#D';
 if (!is_string($path) || strlen($path) > 1000 || (!preg_match($legacyPattern, $path) && !preg_match($currentPattern, $path))) fail_request(400);
 $root = $config['directory'] ?? '';
 if (!$root || !is_dir($root) || is_link($root)) fail_request(503);
@@ -33,6 +33,11 @@ if ($method === 'PUT') {
     if ($extension === 'pdf' && substr($bytes, 0, 5) !== '%PDF-') fail_request(400);
     if (in_array($extension, ['doc', 'xls'], true) && substr($bytes, 0, 8) !== hex2bin('d0cf11e0a1b11ae1')) fail_request(400);
     if (in_array($extension, ['docx', 'xlsx'], true) && substr($bytes, 0, 2) !== 'PK') fail_request(400);
+    if (in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+        $image = @getimagesizefromstring($bytes);
+        $mimes = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'];
+        if (!$image || ($image['mime'] ?? '') !== $mimes[$extension] || $image[0] * $image[1] > 40000000) fail_request(400);
+    }
     $directory = dirname($file);
     if (!is_dir($directory) && !mkdir($directory, 0700, true)) fail_request(500);
     $output = @fopen($file, 'xb');

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { and, asc, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { hostingRequest } from '@/lib/document-hosting';
+import { IMAGE_EXTENSIONS, prepareImage } from '@/lib/image-files.mjs';
 import { db } from '@/lib/db';
 import { inmArchivos, inmInmuebles, inmAsignacionesPosicion, inmPosiciones } from '@/db/schema';
 import { DOCUMENT_TYPES, MAX_DOCUMENT_BYTES, documentPath, storageConfigured, storeDocument, validateDocument } from '@/lib/document-files.mjs';
@@ -51,6 +52,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     // Compatibility for previously registered external links and existing API clients.
     if (!multipart) {
       const enlace = String(body.enlace ?? '').trim();
+      if (tipoDocumento === 'FOTO_INMUEBLE') return NextResponse.json({ error: 'Sube una imagen directamente; no se admiten enlaces para fotos.' }, { status: 400 });
       if (!/^https?:\/\//i.test(enlace) || enlace.length > 1000) return NextResponse.json({ error: 'Enlace no válido.' }, { status: 400 });
       const [created] = await db.insert(inmArchivos).values({ inmuebleId: inmueble.id, tipoDocumento, nombre, enlace, observacion: observacion || null, usuarioId }).$returningId();
       return NextResponse.json({ ok: true, id: created.id }, { status: 201 });
@@ -58,13 +60,22 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (!file) return NextResponse.json({ error: 'Selecciona un archivo.' }, { status: 400 });
     if (file.size > MAX_DOCUMENT_BYTES) return NextResponse.json({ error: 'El archivo debe pesar como máximo 4 MB.' }, { status: 413 });
     if (file.name.length > 255) return NextResponse.json({ error: 'El nombre del archivo es demasiado largo.' }, { status: 400 });
-    const bytes = Buffer.from(await file.arrayBuffer());
+    let bytes = Buffer.from(await file.arrayBuffer());
+    let storedName = file.name;
     let contentType: string;
-    try { contentType = validateDocument(file.name, bytes).contentType; }
+    try {
+      if (IMAGE_EXTENSIONS.has(file.name.split('.').pop()?.toLowerCase() || '')) {
+        const prepared = await prepareImage(file.name, bytes);
+        bytes = prepared.bytes; storedName = prepared.name; contentType = prepared.contentType;
+      } else {
+        if (tipoDocumento === 'FOTO_INMUEBLE') throw new Error('Las fotos del inmueble deben ser imágenes JPG, PNG o WebP.');
+        contentType = validateDocument(file.name, bytes).contentType;
+      }
+    }
     catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Archivo no válido.' }, { status: 400 }); }
     if (!storageConfigured()) return NextResponse.json({ error: 'Falta configurar el almacenamiento de documentos.' }, { status: 503 });
     const [position] = await db.select({ numero: inmPosiciones.numero }).from(inmAsignacionesPosicion).innerJoin(inmPosiciones, eq(inmPosiciones.id, inmAsignacionesPosicion.posicionId)).where(and(eq(inmAsignacionesPosicion.inmuebleId, inmueble.id), eq(inmAsignacionesPosicion.activa, true))).limit(1);
-    const pathname = documentPath({ position: position?.numero ?? null, propertyId: inmueble.id, propertyCode: inmueble.codigo, type: tipoDocumento, name: file.name, uniqueId: randomUUID() });
+    const pathname = documentPath({ position: position?.numero ?? null, propertyId: inmueble.id, propertyCode: inmueble.codigo, type: tipoDocumento, name: storedName, uniqueId: randomUUID() });
     const originalName = file.name;
     const created = await storeDocument({ pathname, bytes,
       upload: async (path: string, data: Uint8Array) => { await hostingRequest('PUT', path, data); },
@@ -94,4 +105,31 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     await db.delete(inmArchivos).where(condition);
     return NextResponse.json({ ok: true });
   } catch { return NextResponse.json({ error: 'No se pudo eliminar el documento. Puedes intentarlo de nuevo.' }, { status: 500 }); }
+}
+
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    const auth = await authorizeApi(request, 'informacion');
+    if (auth.response) return auth.response;
+    const inmueble = await findInmueble((await context.params).id);
+    if (!inmueble) return NextResponse.json({ error: 'Inmueble no encontrado.' }, { status: 404 });
+    let body;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: 'Datos no válidos.' }, { status: 400 }); }
+    const archivoId = Number(body.archivoId);
+    const nombre = String(body.nombre ?? '').trim();
+    const observacion = String(body.observacion ?? '').trim();
+    if (!Number.isSafeInteger(archivoId) || archivoId < 1 || !nombre || nombre.length > 255 || observacion.length > 500 || (body.esPortada !== undefined && typeof body.esPortada !== 'boolean')) return NextResponse.json({ error: 'Revisa el nombre y la descripción de la foto.' }, { status: 400 });
+    const found = await db.transaction(async tx => {
+      // Lock the property so simultaneous cover changes keep a single cover.
+      await tx.select({ id: inmInmuebles.id }).from(inmInmuebles).where(eq(inmInmuebles.id, inmueble.id)).for('update');
+      const condition = and(eq(inmArchivos.id, archivoId), eq(inmArchivos.inmuebleId, inmueble.id), eq(inmArchivos.tipoDocumento, 'FOTO_INMUEBLE'), eq(inmArchivos.almacenamiento, 'hosting'));
+      const [file] = await tx.select().from(inmArchivos).where(condition).limit(1);
+      if (!file?.tipoMime?.startsWith('image/')) return false;
+      if (body.esPortada === true) await tx.update(inmArchivos).set({ esPortada: false }).where(and(eq(inmArchivos.inmuebleId, inmueble.id), eq(inmArchivos.tipoDocumento, 'FOTO_INMUEBLE')));
+      await tx.update(inmArchivos).set({ nombre, observacion: observacion || null, ...(typeof body.esPortada === 'boolean' ? { esPortada: body.esPortada } : {}) }).where(condition);
+      return true;
+    });
+    if (!found) return NextResponse.json({ error: 'Foto no encontrada.' }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch { return NextResponse.json({ error: 'No se pudo actualizar la foto.' }, { status: 500 }); }
 }

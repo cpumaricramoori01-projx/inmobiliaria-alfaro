@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import PhotoUploader, { type UploadedPhoto } from "@/app/components/PhotoUploader";
 import { useEffect, useState } from "react";
 
 type Visita = {
@@ -19,7 +20,8 @@ export default function Page() {
   const [items, setItems] = useState<Visita[]>([]);
   const [fechas, setFechas] = useState<Record<number, string>>({});
   const [observaciones, setObservaciones] = useState<Record<number, string>>({});
-  const [enlacesDrive, setEnlacesDrive] = useState<Record<number, string>>({});
+  const [fotos, setFotos] = useState<Record<number, UploadedPhoto[]>>({});
+  const [subiendoFotos, setSubiendoFotos] = useState<Record<number, boolean>>({});
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState<number | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -67,10 +69,14 @@ export default function Page() {
   }
 
   useEffect(() => {
-    cargar();
+    const timer = window.setTimeout(() => { void cargar(); }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   async function marcarRealizada(item: Visita) {
+    if (procesando !== null || subiendoFotos[item.id]) return;
+    if (!fechas[item.id]) { setError('Indica la fecha de la visita.'); return; }
+    if (!fotos[item.id]?.length) { setError('Debes subir al menos una foto para registrar la visita.'); return; }
     setProcesando(item.id);
     setMensaje(null);
     setError(null);
@@ -85,7 +91,7 @@ export default function Page() {
           inmuebleId: item.id,
           fechaVisita: fechas[item.id],
           observaciones: observaciones[item.id] ?? "",
-          driveLink: enlacesDrive[item.id] ?? "",
+          fotoIds: (fotos[item.id] || []).map(foto => foto.id),
         }),
       });
 
@@ -310,7 +316,7 @@ export default function Page() {
               </h2>
               <p className="mt-1 text-sm text-slate-500">
                 Registra la fecha real de la visita y, si corresponde, agrega
-                observaciones o el enlace de fotografías.
+                observaciones y las fotografías de la visita.
               </p>
             </div>
 
@@ -417,30 +423,12 @@ export default function Page() {
                       </div>
 
                       <div>
-                        <label
-                          htmlFor={`drive-${item.id}`}
-                          className="text-xs font-bold text-slate-700"
-                        >
-                          Fotografías / evidencia en Google Drive
-                        </label>
-
-                        <p className="mt-1 text-[11px] text-slate-400">
-                          Opcional. Se guarda únicamente el enlace.
-                        </p>
-
-                        <input
-                          id={`drive-${item.id}`}
-                          type="url"
-                          value={enlacesDrive[item.id] ?? ""}
-                          onChange={(e) =>
-                            setEnlacesDrive((actuales) => ({
-                              ...actuales,
-                              [item.id]: e.target.value,
-                            }))
-                          }
-                          placeholder="https://drive.google.com/..."
-                          className="mt-2 w-full rounded-xl border border-slate-200 bg-[#fafafa] px-3 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#c80000] focus:bg-white focus:ring-2 focus:ring-red-100"
-                        />
+                        <p className="text-xs font-bold text-slate-700">Fotografías de la visita *</p>
+                        <p className="mb-3 mt-1 text-[11px] text-slate-400">Sube al menos una foto. También aparecerá en la ficha y en la galería del inmueble.</p>
+                        <PhotoUploader propertyId={item.id} photos={fotos[item.id] || []}
+                          disabled={procesando !== null}
+                          onUploaded={photo => setFotos(current => ({ ...current, [item.id]: [...(current[item.id] || []), photo] }))}
+                          onBusyChange={busy => setSubiendoFotos(current => ({ ...current, [item.id]: busy }))} />
                       </div>
                     </div>
 
@@ -486,7 +474,7 @@ export default function Page() {
 
                       <button
                         type="button"
-                        disabled={procesando === item.id}
+                        disabled={procesando !== null || subiendoFotos[item.id] || !fotos[item.id]?.length || !fechas[item.id]}
                         onClick={() => marcarRealizada(item)}
                         className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#c80000] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#a90000] disabled:cursor-not-allowed disabled:opacity-60"
                       >

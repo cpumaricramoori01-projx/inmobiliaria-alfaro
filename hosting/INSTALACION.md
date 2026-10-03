@@ -25,3 +25,9 @@ Si la autenticación falla aun con el secreto correcto, revisa con el proveedor 
 Reemplaza únicamente `/home5/inmobi16/public_html/documentos.php` por la versión nueva. Conserva `documentos-config.php` y su clave actual. El PHP actualizado admite las rutas anteriores y las nuevas: `inmuebles/INM-001-posicion-1/dni-propietario/identificador-dni.pdf`. Sin reemplazarlo, las nuevas subidas serán rechazadas.
 
 Las nuevas carpetas usan el código real del inmueble y su posición al subir el documento. Si cambia de posición, los documentos previos conservan su ruta. Los archivos existentes siguen funcionando; no se mueven automáticamente. Las direcciones de apertura siguen pasando por la aplicación para comprobar la sesión.
+
+## Fotos de visitas y galería
+
+Reemplaza `public_html/documentos.php` por la versión que acepta imágenes JPG, PNG y WebP. Conserva tu clave y configuración. Ejecuta `node scripts/install-documents.mjs` antes de desplegar para agregar `visita_id`, `es_portada` y la referencia a visitas de forma idempotente. La migración Drizzle 0005 representa esos mismos cambios: usa el instalador o la migración, sin aplicarlos dos veces.
+
+Para registrar una visita se requieren entre 1 y 20 fotos recién adjuntadas por el usuario. Las mismas fotos se consultan en la ficha y en la galería de cartera. El sistema permite agregar fotos, editar nombre/descripción, elegir portada y eliminar fotos. Las imágenes de otras categorías, como un DNI, no se muestran en la galería del inmueble. Las imágenes se validan y se guardan como WebP con un máximo de 1920 píxeles de lado.

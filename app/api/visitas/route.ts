@@ -1,8 +1,9 @@
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
+  inmArchivos,
   inmAsignacionesPosicion,
   inmInmuebles,
   inmPosiciones,
@@ -12,23 +13,16 @@ import {
 } from "@/db/schema";
 
 
+import { visitPhotoIds } from '@/lib/visit-photos.mjs';
+
+class VisitInputError extends Error {}
+
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
 function isValidDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function isValidHttpUrl(value: string) {
-  if (!value) return true;
-
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
 }
 
 export async function GET() {
@@ -126,7 +120,7 @@ export async function GET() {
 
     return NextResponse.json(
       { error: "No fue posible obtener las visitas pendientes." },
-      { status: 500 }
+      { status: error instanceof VisitInputError ? 409 : 500 }
     );
   }
 }
@@ -135,12 +129,15 @@ export async function POST(request: Request) {
   try {
     const auth = await authorizeApi(request);
     if (auth.response) return auth.response;
-    const body = await request.json();
+    let body;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: 'Solicitud no válida.' }, { status: 400 }); }
+    let photoIds: number[];
+    try { photoIds = visitPhotoIds(body.fotoIds); }
+    catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Adjunta fotos de la visita.' }, { status: 400 }); }
 
     const inmuebleId = Number(body.inmuebleId);
     const fechaVisita = clean(body.fechaVisita);
     const observaciones = clean(body.observaciones);
-    const driveLink = clean(body.driveLink);
 
     if (!Number.isInteger(inmuebleId) || inmuebleId <= 0) {
       return NextResponse.json(
@@ -175,13 +172,6 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!isValidHttpUrl(driveLink)) {
-      return NextResponse.json(
-        { error: "El enlace de Google Drive no es válido." },
-        { status: 400 }
-      );
-    }
-
     const result = await db.transaction(async (tx) => {
       const [property] = await tx
         .select({
@@ -192,14 +182,14 @@ export async function POST(request: Request) {
         })
         .from(inmInmuebles)
         .where(eq(inmInmuebles.id, inmuebleId))
-        .limit(1);
+        .limit(1).for("update");
 
       if (!property) {
-        throw new Error("El inmueble seleccionado no existe.");
+        throw new VisitInputError("El inmueble seleccionado no existe.");
       }
 
       if (property.estado !== "activo") {
-        throw new Error(
+        throw new VisitInputError(
           "El inmueble ya no se encuentra activo en cartera. Actualiza la pantalla."
         );
       }
@@ -218,7 +208,7 @@ export async function POST(request: Request) {
         .limit(1);
 
       if (!activePosition) {
-        throw new Error(
+        throw new VisitInputError(
           "El inmueble no tiene una posición activa en cartera."
         );
       }
@@ -235,22 +225,30 @@ export async function POST(request: Request) {
         .limit(1);
 
       if (existingVisit) {
-        throw new Error("Este inmueble ya tiene una visita completada.");
+        throw new VisitInputError("Este inmueble ya tiene una visita completada.");
       }
 
       const user = auth.user;
 
+      const photos = await tx.select({ id: inmArchivos.id, tipoMime: inmArchivos.tipoMime }).from(inmArchivos).where(and(
+        inArray(inmArchivos.id, photoIds), eq(inmArchivos.inmuebleId, inmuebleId),
+        eq(inmArchivos.tipoDocumento, 'FOTO_INMUEBLE'), eq(inmArchivos.almacenamiento, 'hosting'),
+        eq(inmArchivos.usuarioId, user.id), isNull(inmArchivos.visitaId),
+      )).for('update');
+      if (photos.length !== photoIds.length || photos.some(photo => !photo.tipoMime?.startsWith('image/'))) {
+        throw new VisitInputError('Las fotos deben pertenecer a este inmueble y estar subidas por ti para esta visita.');
+      }
       const ahora = new Date();
 
-      await tx.insert(inmVisitas).values({
+      const [visit] = await tx.insert(inmVisitas).values({
         inmuebleId,
         fechaVisita: fechaVisitaObj,
         completada: true,
         fechaCompletada: ahora,
         observaciones: observaciones || null,
-        driveLink: driveLink || null,
         usuarioId: user.id,
-      });
+      }).$returningId();
+      await tx.update(inmArchivos).set({ visitaId: visit.id }).where(inArray(inmArchivos.id, photoIds));
 
       await tx.insert(inmTimeline).values({
         inmuebleId,
@@ -274,6 +272,7 @@ export async function POST(request: Request) {
         ok: true,
         message: "Visita registrada correctamente.",
         ...result,
+        fotos: photoIds.length,
       },
       { status: 201 }
     );
@@ -283,11 +282,11 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
+          error instanceof VisitInputError
             ? error.message
             : "No fue posible registrar la visita.",
       },
-      { status: 500 }
+      { status: error instanceof VisitInputError ? 409 : 500 }
     );
   }
 }

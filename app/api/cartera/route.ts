@@ -23,19 +23,6 @@ const tipoMap: Record<string, string> = {
   otros: "Otros",
 };
 
-function esFoto(tipoDocumento: string) {
-  const tipo = tipoDocumento.toLowerCase().trim();
-
-  return (
-    tipo.includes("foto") ||
-    tipo.includes("fotografía") ||
-    tipo.includes("fotografia") ||
-    tipo.includes("imagen") ||
-    tipo.includes("image") ||
-    tipo.includes("photo")
-  );
-}
-
 export async function GET() {
   try {
     const auth = await authorizeApi();
@@ -152,6 +139,8 @@ export async function GET() {
       .select({
         inmuebleId: inmArchivos.inmuebleId,
         tipoDocumento: inmArchivos.tipoDocumento,
+        tipoMime: inmArchivos.tipoMime,
+        almacenamiento: inmArchivos.almacenamiento,
       })
       .from(inmArchivos)
       .where(inArray(inmArchivos.inmuebleId, inmuebleIds));
@@ -248,7 +237,7 @@ export async function GET() {
     const fotosPorInmueble = new Set<number>();
 
     for (const archivo of archivos) {
-      if (esFoto(archivo.tipoDocumento)) {
+      if (archivo.tipoDocumento === 'FOTO_INMUEBLE' && archivo.almacenamiento === 'hosting' && archivo.tipoMime?.startsWith('image/')) {
         fotosPorInmueble.add(archivo.inmuebleId);
       }
     }

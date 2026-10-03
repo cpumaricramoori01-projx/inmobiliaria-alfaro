@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRef } from "react";
+import PhotoGallery from "@/app/components/PhotoGallery";
 
 type Estado = "Activo" | "Histórico";
 type FiltroActividad =
@@ -268,6 +270,13 @@ export default function CarteraPage() {
 
   const [seleccionado, setSeleccionado] =
     useState<Inmueble | null>(null);
+  const [galeria, setGaleria] = useState<Inmueble | null>(null);
+  const galleryDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = galleryDialog.current;
+    if (galeria) dialog?.showModal(); else dialog?.close();
+    return () => dialog?.close();
+  }, [galeria]);
   const [inmuebles, setInmuebles] = useState<Inmueble[]>([]);
   const [posiciones, setPosiciones] = useState<Posicion[]>([]);
   const [resumen, setResumen] = useState<Resumen>({
@@ -338,14 +347,14 @@ export default function CarteraPage() {
   }
 
   useEffect(() => {
-    cargarDatos();
+    const inicial = window.setTimeout(() => { void cargarDatos(); }, 0);
 
     const intervalo = window.setInterval(
       cargarDatos,
       30000
     );
 
-    return () => window.clearInterval(intervalo);
+    return () => { window.clearTimeout(inicial); window.clearInterval(intervalo); };
   }, []);
 
   const activos = useMemo(
@@ -792,12 +801,12 @@ export default function CarteraPage() {
 
                 const theme = x ? cardTheme(x) : null;
                 return (
+                  <div key={pos.numero} className="relative">
                   <button
-                    key={pos.numero}
                     type="button"
                     onClick={() => x && setSeleccionado(x)}
                     disabled={!x}
-                    className={`group relative flex min-h-[235px] flex-col overflow-hidden rounded-2xl border text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c80000] focus-visible:ring-offset-2 ${x ? `border-slate-200 bg-white shadow-[0_3px_14px_rgba(15,23,42,0.04)] hover:shadow-lg motion-safe:hover:-translate-y-1 ${theme?.border}` : "border-dashed border-slate-200 bg-slate-50/60"}`}
+                    className={`group relative flex min-h-[275px] w-full flex-col overflow-hidden rounded-2xl border text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c80000] focus-visible:ring-offset-2 ${x ? `border-slate-200 bg-white shadow-[0_3px_14px_rgba(15,23,42,0.04)] hover:shadow-lg motion-safe:hover:-translate-y-1 ${theme?.border}` : "border-dashed border-slate-200 bg-slate-50/60"}`}
                   >
                     <div aria-hidden="true" className={`h-1.5 w-full ${theme?.stripe ?? "bg-slate-100"}`} />
                     <div className="flex w-full flex-1 flex-col p-3.5 sm:p-4">
@@ -816,13 +825,15 @@ export default function CarteraPage() {
                           {x.materialPendiente && <span className="rounded-md bg-violet-50 px-1.5 py-1 text-[9px] font-semibold text-violet-800">Material pendiente</span>}
                           {x.negociacionEnCurso && <span className="rounded-md bg-slate-100 px-1.5 py-1 text-[9px] font-semibold text-slate-700">En negociación</span>}
                         </div>
-                        <div className="mt-auto pt-4">
+                        <div className="mt-auto pb-9 pt-4">
                           <div className="border-t border-slate-100 pt-3"><p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Precio de venta</p><p className={`mt-1 break-words text-base font-bold tracking-tight ${x.precioVenta ? "text-slate-900" : "text-slate-400"}`}>{salePrice(x.precioVenta)}</p></div>
                           <p className="mt-3 text-[11px] font-semibold text-[#c80000] group-hover:text-[#a90000]">Ver detalle <span aria-hidden="true">→</span></p>
                         </div>
                       </> : <div className="flex flex-1 flex-col items-center justify-center py-6 text-center"><p className="text-xs font-semibold text-slate-400">Disponible</p><p className="mt-1 text-[10px] leading-4 text-slate-400">Lista para un nuevo inmueble</p></div>}
                     </div>
                   </button>
+                  {x && <button type="button" onClick={() => setGaleria(x)} className="absolute bottom-3 left-3.5 right-3.5 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[11px] font-semibold text-[#c80000] hover:bg-red-100">Ver fotos</button>}
+                  </div>
                 );
               })
             ) : (
@@ -892,6 +903,7 @@ export default function CarteraPage() {
                           {x.id} · {x.tipo}
                         </p>
                         <p className="mt-2 text-xs font-semibold text-slate-700">Venta: {salePrice(x.precioVenta)}</p>
+                        <button type="button" onClick={() => setGaleria(x)} className="mt-2 text-xs font-semibold text-[#c80000]">Ver fotos</button>
                       </td>
 
                       <td className="px-5 py-4 text-sm text-slate-600">
@@ -1057,6 +1069,9 @@ export default function CarteraPage() {
           </Link>
         </div>
 
+        <dialog ref={galleryDialog} onCancel={event => { event.preventDefault(); setGaleria(null); }} aria-labelledby="property-gallery-title" className="fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-4xl overflow-auto rounded-3xl bg-white p-5 shadow-2xl backdrop:bg-slate-950/50 sm:p-6">
+          {galeria && <><div className="mb-5 flex items-start justify-between gap-3"><div><h2 id="property-gallery-title" className="text-lg font-bold text-slate-900">{galeria.nombre}</h2><p className="mt-1 text-xs text-slate-500">{galeria.id} · {galeria.posicion ? `Posición ${galeria.posicion}` : 'Sin posición'}</p></div><button type="button" autoFocus onClick={() => setGaleria(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold">Cerrar</button></div><PhotoGallery key={galeria.inmuebleId} propertyId={galeria.inmuebleId} /></>}
+        </dialog>
         {/* MODAL */}
         {seleccionado && (
           <div
@@ -1252,6 +1267,7 @@ export default function CarteraPage() {
                 </p>
               </div>
 
+              <button type="button" onClick={() => setGaleria(seleccionado)} className="mt-5 w-full rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-semibold text-[#c80000]">Ver fotos del inmueble</button>
               <div className="mt-5 grid grid-cols-2 gap-2">
                 <Link
                   href={

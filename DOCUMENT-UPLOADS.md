@@ -1,6 +1,6 @@
 # Documentos privados en el hosting cPanel
 
-Información de inmuebles → Documentación guarda PDF, DOC, DOCX, XLS y XLSX de hasta 4 MiB en el hosting. La instalación del servicio PHP y sus variables se describen en [hosting/INSTALACION.md](hosting/INSTALACION.md).
+Información de inmuebles → Documentación guarda PDF, DOC, DOCX, XLS, XLSX y fotografías JPG, PNG y WebP de hasta 4 MiB en el hosting. La instalación del servicio PHP y sus variables se describen en [hosting/INSTALACION.md](hosting/INSTALACION.md).
 
 La aplicación usa únicamente `DOCUMENT_HOSTING_URL` y `DOCUMENT_HOSTING_TOKEN`, tanto en Vercel como en Codespaces. `DOCUMENT_STORAGE=hosting` puede conservarse por compatibilidad, pero ya no selecciona otro proveedor. Las claves son privadas y no deben publicarse ni usar el prefijo `NEXT_PUBLIC_`.
 
@@ -13,3 +13,9 @@ La base de datos usa los campos instalados por `node scripts/install-documents.m
 ## Verificación
 
 `node --test tests/document-files.test.mjs` comprueba formatos, límites, rutas, configuración y limpieza ante fallos. `node tests/auth.integration.mjs` comprueba permisos y validaciones de las APIs contra un entorno de prueba configurado.
+
+## Fotos compartidas
+
+Registrar visitas exige entre 1 y 20 fotos del mismo inmueble, subidas por quien registra la visita y todavía no vinculadas a otra visita. Se sube cada foto por separado, se comprime a WebP y se vinculan todas a la visita en una transacción. Si una subida parcial falla, las fotos ya guardadas permanecen en la ficha y se puede reintentar sin volver a subirlas. La galería solo incluye imágenes con tipo `FOTO_INMUEBLE`; las imágenes de DNI u otros documentos conservan su categoría. Ya no se usan enlaces de Google Drive para las visitas ni para las fotos de la ficha.
+
+Antes de desplegar, instala los campos de fotos con `node scripts/install-documents.mjs` y actualiza el PHP.

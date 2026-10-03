@@ -160,6 +160,8 @@ CREATE TABLE inm_liberaciones (
 );
 
 CREATE TABLE inm_archivos (
+  visita_id BIGINT UNSIGNED NULL,
+  es_portada BOOLEAN NOT NULL DEFAULT FALSE,
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   inmueble_id BIGINT UNSIGNED NOT NULL,
   tipo_documento VARCHAR(80) NOT NULL,
@@ -177,7 +179,8 @@ CREATE TABLE inm_archivos (
   CONSTRAINT fk_inm_archivos_inmueble
     FOREIGN KEY (inmueble_id) REFERENCES inm_inmuebles(id),
   CONSTRAINT fk_inm_archivos_usuario
-    FOREIGN KEY (usuario_id) REFERENCES inm_usuarios(id)
+    FOREIGN KEY (usuario_id) REFERENCES inm_usuarios(id),
+  CONSTRAINT fk_inm_archivos_visita FOREIGN KEY (visita_id) REFERENCES inm_visitas(id)
 );
 
 -- Línea de tiempo de hitos importantes. No es auditoría campo-por-campo.
