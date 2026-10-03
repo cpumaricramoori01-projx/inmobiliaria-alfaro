@@ -33,3 +33,9 @@ Compilación de producción, TypeScript, ESLint sin advertencias y nueve archivo
 El selector acepta clics aunque todavía no exista un marcador. La posibilidad de seleccionar depende del estado editable de la ficha, sin consultar el manejador de arrastre de un marcador aún no añadido. Al quitar una ubicación se puede volver a marcar con un clic o toque. El marcador conserva el bloqueo durante operaciones pendientes y se vuelve a habilitar al terminar.
 
 Prueba de regresión: `tests/location.integration.mjs`, con Playwright instalado en el entorno de pruebas. `PLAYWRIGHT_MODULE_PATH` permite indicar una instalación externa. Requiere la compilación de producción y la BD configurada; crea y elimina sus propios registros temporales. Verifica primer clic, arrastre con cambio de coordenadas, toque en celular después de retirar el punto y el resto del flujo de ubicación.
+
+## Identificación de solicitudes del mapa
+
+Las imágenes de OpenStreetMap incluyen explícitamente `referrerPolicy: strict-origin-when-cross-origin`. Esto envía el origen real de la aplicación aun si el documento hereda una política restrictiva, sin revelar la ruta de la ficha. No se utilizan proxies, identidades falsas ni otros servidores para eludir bloqueos. Ante errores de carga se muestra un aviso y un botón manual de reintento; los enlaces de Google Maps y los datos guardados siguen disponibles.
+
+La prueba de navegador simula un documento con `Referrer-Policy: no-referrer`, verifica el origen enviado y los estados HTTP de las imágenes. También simula respuestas 403 para comprobar el aviso y la recuperación con «Reintentar mapa». Un navegador o extensión que elimine los encabezados incluso cuando se solicitan explícitamente, o una restricción del proveedor por otro motivo, puede necesitar revisión adicional.

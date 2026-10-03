@@ -31,7 +31,18 @@ try {
   browser = await chromium.launch({headless:true,args:['--no-sandbox']});
   const context = await browser.newContext({ viewport:{width:1440,height:1000},geolocation:{latitude:-9.074,longitude:-78.589,accuracy:12},permissions:['geolocation'] });
   await context.addCookies([{name:'aa_session',value:token,url:origin,httpOnly:true,sameSite:'Lax'}]);
-  const page=await context.newPage(); const pageErrors=[]; page.on('pageerror',error=>pageErrors.push(error.message));
+  const page=await context.newPage();
+  // Simulate a restrictive document policy: tile images must explicitly send
+  // the real application origin without disclosing the property page path.
+  await page.route('**/datos-inmuebles?*', async route => {
+    const response = await route.fetch();
+    await route.fulfill({ response, headers: { ...response.headers(), 'referrer-policy': 'no-referrer' } });
+  });
+  const tileReferrers = [];
+  const tileResponses = [];
+  page.on('request', req => { if (req.url().startsWith('https://tile.openstreetmap.org/')) tileReferrers.push(req.allHeaders().then(headers => headers.referer)); });
+  page.on('response', res => { if (res.url().startsWith('https://tile.openstreetmap.org/')) tileResponses.push(res.status()); });
+ const pageErrors=[]; page.on('pageerror',error=>pageErrors.push(error.message));
   await page.route('**/api/inmuebles',route=>route.fulfill({json:{inmuebles:[{id:code,posicion:1,nombre:'Casa de ejemplo · ubicación de demostración',tipo:'Casa',ubicacion:'Chimbote, Santa, Áncash',propietario:'Sin propietario',estado:'activo'}]}}));
   await page.goto(`${origin}/datos-inmuebles?codigo=${code}`,{waitUntil:'networkidle'});
   await page.getByText('Todavía no se ha marcado este inmueble').waitFor();
@@ -70,6 +81,10 @@ try {
   await page.getByText('Cambios guardados correctamente.').waitFor();
   const mapSection=page.locator('section[aria-label="Ubicación en el mapa"]');
   await page.locator('.leaflet-tile-loaded').first().waitFor({timeout:20000});
+  const referrers = await Promise.all(tileReferrers);
+  assert.ok(referrers.length > 0, 'Map imagery requests observed');
+  assert.ok(referrers.every(value => value === origin + '/'), 'Tiles identify the actual application origin despite restrictive document policy');
+  assert.ok(tileResponses.length > 0 && tileResponses.every(status => status === 200 || status === 304), 'Map imagery succeeds without HTTP 403');
   await mapSection.screenshot({path:'output/location/editor-escritorio.png'});
   for(const width of [320,390,768,1024,1280,1536]) {
     await page.setViewportSize({width,height:900}); await page.waitForTimeout(350);
@@ -82,6 +97,19 @@ try {
   await page.locator('.leaflet-tile-loaded').first().waitFor();
   await mapSection.screenshot({path:'output/location/mapa-guardado.png'});
   const directions=page.getByRole('link',{name:'Cómo llegar ↗',exact:true});assert.match(await directions.getAttribute('href'),/destination=-9.074%2C-78.589/);
+  const blockedContext=await browser.newContext({viewport:{width:1440,height:1000}});
+  await blockedContext.addCookies([{name:'aa_session',value:token,url:origin,httpOnly:true,sameSite:'Lax'}]);
+  const blockedPage=await blockedContext.newPage();
+  await blockedPage.route('**/api/inmuebles',route=>route.fulfill({json:{inmuebles:[]}}));
+  await blockedPage.route('https://tile.openstreetmap.org/**', route => route.fulfill({status:403,contentType:'text/plain',body:'Forbidden'}));
+  await blockedPage.goto(`${origin}/datos-inmuebles?codigo=${code}`,{waitUntil:'networkidle'});
+  await blockedPage.getByRole('button',{name:'Inmueble',exact:true}).click();
+  await blockedPage.getByText('No se pudieron cargar las imágenes del mapa. Reintenta o utiliza el enlace de Google Maps.',{exact:true}).waitFor();
+  await blockedPage.unroute('https://tile.openstreetmap.org/**');
+  await blockedPage.getByRole('button',{name:'Reintentar mapa',exact:true}).click();
+  await blockedPage.locator('.leaflet-tile-loaded').first().waitFor({timeout:20000});
+  await blockedPage.getByRole('button',{name:'Reintentar mapa',exact:true}).waitFor({state:'hidden'});
+  await blockedContext.close();
   const mobile=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   await mobile.addCookies([{name:'aa_session',value:token,url:origin,httpOnly:true,sameSite:'Lax'}]);
   const mobilePage=await mobile.newPage();
