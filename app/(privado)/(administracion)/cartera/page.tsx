@@ -363,12 +363,6 @@ export default function CarteraPage() {
     [inmuebles]
   );
 
-  const historicos = useMemo(
-    () =>
-      inmuebles.filter((x) => x.estado === "Histórico"),
-    [inmuebles]
-  );
-
   const filtrados = useMemo(() => {
     const texto = busqueda.toLowerCase().trim();
 
@@ -404,12 +398,6 @@ export default function CarteraPage() {
     actividad,
     busqueda,
   ]);
-
-  const posicionesOcupadas = useMemo(
-    () =>
-      posiciones.filter((x) => !x.disponible).length,
-    [posiciones]
-  );
 
   const porcentajeOcupacion =
     resumen.capacidad > 0

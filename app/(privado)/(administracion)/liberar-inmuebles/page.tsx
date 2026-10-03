@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { requestJson } from "@/lib/client-request";
+
+import ConfirmDialog from "@/app/components/ConfirmDialog";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Item = {
   inmuebleId: number;
@@ -28,6 +31,7 @@ const motivos = [
 ];
 
 export default function Page() {
+  const [confirmation, setConfirmation] = useState<Item | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [selecciones, setSelecciones] = useState<Record<number, string>>({});
@@ -37,38 +41,22 @@ export default function Page() {
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
 
-  const cargar = async () => {
-    try {
-      setCargando(true);
-      setError("");
-
-      const response = await fetch("/api/liberaciones", {
-        cache: "no-store",
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.ok) {
-        throw new Error(
-          data.error || "No se pudieron cargar los inmuebles."
-        );
-      }
-
+  const cargar = useCallback((signal?: AbortSignal) => {
+    return requestJson<{ items: Item[] }>("/api/liberaciones", { signal }).then(data => {
+      if (signal?.aborted) return;
       setItems(data.items ?? []);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "No se pudieron cargar los inmuebles."
-      );
-    } finally {
-      setCargando(false);
-    }
-  };
+    }).catch(error => {
+      if (!signal?.aborted) setError(error instanceof Error ? error.message : "No se pudieron cargar los inmuebles.");
+    }).finally(() => {
+      if (!signal?.aborted) setCargando(false);
+    });
+  }, []);
 
   useEffect(() => {
-    cargar();
-  }, []);
+    const controller = new AbortController();
+    void cargar(controller.signal);
+    return () => controller.abort();
+  }, [cargar]);
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -90,7 +78,8 @@ export default function Page() {
     );
   }, [items, busqueda]);
 
-  const liberar = async (item: Item) => {
+  const liberar = async (item: Item, confirmed = false) => {
+    if (guardando !== null) return;
     setError("");
     setMensaje("");
 
@@ -109,13 +98,7 @@ export default function Page() {
       return;
     }
 
-    if (
-      !window.confirm(
-        `¿Confirmar la liberación de “${item.nombre}” (posición ${item.posicion})?\n\nEl inmueble saldrá de la cartera activa, la posición quedará disponible y su registro histórico se conservará.`
-      )
-    ) {
-      return;
-    }
+    if (!confirmed) { setConfirmation(item); return; }
 
     try {
       setGuardando(item.inmuebleId);
@@ -144,6 +127,8 @@ export default function Page() {
         `“${item.nombre}” fue liberado correctamente. La posición ${item.posicion} queda disponible.`
       );
 
+      setConfirmation(null);
+      setCargando(true);
       await cargar();
     } catch (err) {
       setError(
@@ -158,6 +143,11 @@ export default function Page() {
 
   return (
     <main className="min-h-screen bg-[#f7f7f5] p-4 sm:p-6 lg:p-8">
+      {confirmation && <ConfirmDialog title="Confirmar liberación" confirmLabel="Liberar inmueble" busy={guardando !== null} onCancel={() => setConfirmation(null)} onConfirm={() => { void liberar(confirmation, true); }}>
+        <p className="break-words font-semibold">{confirmation.nombre} · Posición {confirmation.posicion}</p>
+        <p>El inmueble saldrá de la cartera activa y su posición quedará disponible. Su ficha, archivos e historial se conservarán.</p>
+        {error && <p role="alert" className="text-red-700">{error}</p>}
+      </ConfirmDialog>}
       <div className="mx-auto max-w-[1380px]">
         {/* ENCABEZADO */}
         <header className="mb-6">
@@ -520,7 +510,7 @@ export default function Page() {
                           </div>
 
                           <button
-                            disabled={guardando === item.inmuebleId}
+                            disabled={guardando !== null}
                             onClick={() => liberar(item)}
                             className="shrink-0 rounded-xl bg-[#c80000] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#ad0000] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
                           >

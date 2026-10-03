@@ -44,7 +44,7 @@ export async function GET() {
         fechaRegistro: inmInmuebles.fechaRegistro,
       })
       .from(inmInmuebles)
-      .innerJoin(
+      .leftJoin(
         inmPropietarios,
         eq(
           inmPropietarios.id,
@@ -122,7 +122,9 @@ export async function POST(request: Request) {
   try {
     const auth = await authorizeApi(request);
     if (auth.response) return auth.response;
-    const body = await request.json();
+    let body;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 }); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 });
 
     const inmuebleId = Number(body.inmuebleId);
     const motivo = clean(body.motivo);
@@ -152,6 +154,8 @@ export async function POST(request: Request) {
       );
     }
 
+    if (detalleOtro.length > 500) return NextResponse.json({ error: "El detalle admite hasta 500 caracteres." }, { status: 400 });
+
     if (motivo === "otro" && !detalleOtro) {
       return NextResponse.json(
         {
@@ -168,7 +172,7 @@ export async function POST(request: Request) {
         .select()
         .from(inmInmuebles)
         .where(eq(inmInmuebles.id, inmuebleId))
-        .limit(1);
+        .limit(1).for("update");
 
       if (!property) {
         throw new Error("El inmueble no existe.");

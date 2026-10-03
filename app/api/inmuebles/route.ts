@@ -1,3 +1,4 @@
+import { propertyInput, ownerInput, PropertyInputError } from "@/lib/property-input.mjs";
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, asc, eq, sql } from "drizzle-orm";
@@ -62,7 +63,9 @@ export async function POST(request: Request) {
   try {
     const auth = await authorizeApi(request);
     if (auth.response) return auth.response;
-    const body = await request.json();
+    let body;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 }); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 });
 
     const posicion = Number(body.posicion);
     const tipo = clean(body.tipo);
@@ -105,6 +108,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    propertyInput({ tipo, referencia, direccion });
+    if (hasOwnerData) ownerInput({ dni, nombres, apellidos, telefono });
 
     const result = await db.transaction(async (tx) => {
       // Buscar y bloquear la posición seleccionada
@@ -155,36 +161,11 @@ export async function POST(request: Request) {
       let propietarioId: number | null = null;
 
       if (hasOwnerData) {
-        let [owner] = await tx
-          .select()
-          .from(inmPropietarios)
-          .where(eq(inmPropietarios.dni, dni))
-          .limit(1);
-
-        if (owner) {
-          await tx
-            .update(inmPropietarios)
-            .set({
-              nombres,
-              apellidos,
-              telefono: telefono || null,
-            })
-            .where(eq(inmPropietarios.id, owner.id));
-
-          propietarioId = owner.id;
-        } else {
-          const [createdOwner] = await tx
-            .insert(inmPropietarios)
-            .values({
-              dni,
-              nombres,
-              apellidos,
-              telefono: telefono || null,
-            })
-            .$returningId();
-
-          propietarioId = createdOwner.id;
-        }
+        await tx.insert(inmPropietarios).values({ dni, nombres, apellidos, telefono: telefono || null })
+          .onDuplicateKeyUpdate({ set: { nombres, apellidos, telefono: telefono || null } });
+        const [owner] = await tx.select({ id: inmPropietarios.id }).from(inmPropietarios)
+          .where(eq(inmPropietarios.dni, dni)).limit(1);
+        propietarioId = owner.id;
       }
 
       // Generar código del inmueble
@@ -248,8 +229,8 @@ export async function POST(request: Request) {
         : "No fue posible registrar el inmueble.";
 
     return NextResponse.json(
-      { error: message },
-      { status: 500 }
+      { error: error instanceof PropertyInputError || /posición seleccionada/.test(message) ? message : "No fue posible registrar el inmueble." },
+      { status: error instanceof PropertyInputError ? 400 : /posición seleccionada/.test(message) ? 409 : 500 }
     );
   }
 }

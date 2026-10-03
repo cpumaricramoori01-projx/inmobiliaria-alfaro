@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { isAdministrator } from "@/lib/access.mjs";
 import LogoutButton from "./LogoutButton";
@@ -21,7 +22,7 @@ const fase1 = [
 const fase2 = [
   {
     href: "/datos-inmuebles",
-    label: "Ingresar datos de inmuebles",
+    label: "Ficha, documentos y fotos",
     icon: "database",
   },
 ];
@@ -52,6 +53,7 @@ function MenuLink({ item, onNavigate }: { item: { href: string; label: string; i
     <Link
       href={item.href}
       onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
       className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition ${active ? "bg-[#171717] text-white shadow-[0_8px_22px_rgba(23,23,23,0.12)]" : "text-slate-600 hover:bg-[#f5f4f2] hover:text-[#171717]"}`}
     >
       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-white/10 text-white" : "bg-[#f2f1ef] text-[#66615c]"}`}>
@@ -68,7 +70,7 @@ function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
     <>
       {isAdministrator(user) && <>
       <div className="rounded-2xl border border-[#e7e5e2] bg-[#faf9f7] p-2">
-        <MenuLink item={{ href: "/", label: "Dashboard", icon: "dashboard" }} onNavigate={onNavigate}/>
+        <MenuLink item={{ href: "/", label: "Panel de control", icon: "dashboard" }} onNavigate={onNavigate}/>
       </div>
 
     <div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#96928c]">
@@ -147,7 +149,9 @@ export default function Sidebar() {
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,18rem)] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 lg:top-0 lg:w-72 lg:translate-x-0 lg:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex h-[104px] shrink-0 flex-col items-center justify-center border-b border-slate-100 px-5">
           <div className="flex h-[54px] w-[170px] items-center justify-center overflow-hidden">
-            <img
+            <Image
+              width={170}
+              height={54}
               src="/branding/logo.png"
               alt="Inmobiliaria Alberto Alfaro"
               className="h-auto max-h-full w-full object-contain"

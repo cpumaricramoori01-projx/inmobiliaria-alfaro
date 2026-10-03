@@ -1,6 +1,6 @@
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   inmAsignacionesPosicion,
@@ -19,6 +19,8 @@ const eventoMap: Record<string, string> = {
   tasacion_realizada: "Tasación realizada",
   tasacion_actualizada: "Tasación actualizada",
   publicacion_registrada: "Texto registrado",
+  publicacion_actualizada: "Publicación actualizada",
+  precio_venta_actualizado: "Precio de venta actualizado",
   listo_para_publicar: "Listo para publicar",
   publicado: "Publicado",
   liberacion_registrada: "Liberación registrada",
@@ -41,6 +43,7 @@ export async function GET() {
       db
         .select({
           id: inmInmuebles.id,
+          hasPosition: sql<number>`EXISTS (SELECT 1 FROM inm_asignaciones_posicion ap WHERE ap.inmueble_id = ${inmInmuebles.id} AND ap.activa = 1)`,
         })
         .from(inmInmuebles)
         .where(eq(inmInmuebles.estado, "activo")),
@@ -52,6 +55,7 @@ export async function GET() {
           fechaRegistro: inmVisitas.fechaRegistro,
         })
         .from(inmVisitas)
+        .where(eq(inmVisitas.completada, true))
         .orderBy(desc(inmVisitas.fechaRegistro)),
 
       db
@@ -91,10 +95,7 @@ export async function GET() {
         )
         .leftJoin(
           inmAsignacionesPosicion,
-          eq(
-            inmAsignacionesPosicion.inmuebleId,
-            inmInmuebles.id
-          )
+          and(eq(inmAsignacionesPosicion.inmuebleId, inmInmuebles.id), eq(inmAsignacionesPosicion.activa, true))
         )
         .leftJoin(
           inmPosiciones,
@@ -114,10 +115,7 @@ export async function GET() {
         .from(inmPosiciones)
         .leftJoin(
           inmAsignacionesPosicion,
-          eq(
-            inmAsignacionesPosicion.posicionId,
-            inmPosiciones.id
-          )
+          and(eq(inmAsignacionesPosicion.posicionId, inmPosiciones.id), eq(inmAsignacionesPosicion.activa, true))
         )
         .where(eq(inmPosiciones.activo, true))
         .then((rows) =>
@@ -125,6 +123,7 @@ export async function GET() {
         ),
     ]);
 
+    const positioned = new Set(inmueblesActivos.filter(item => Boolean(item.hasPosition)).map(item => item.id));
     const activos = new Set(inmueblesActivos.map((item) => item.id));
 
     const ultimaVisita = new Map<
@@ -199,11 +198,11 @@ export async function GET() {
       const negociacion = negociacionPorInmueble.get(inmuebleId);
       const publicacion = publicacionPorInmueble.get(inmuebleId);
 
-      if (!visita || !visita.completada) {
+      if (positioned.has(inmuebleId) && (!visita || !visita.completada)) {
         visitasPendientes++;
       }
 
-      if (visita?.completada && !tasacion) {
+      if (positioned.has(inmuebleId) && visita?.completada && !tasacion) {
         tasacionesPendientes++;
       }
 

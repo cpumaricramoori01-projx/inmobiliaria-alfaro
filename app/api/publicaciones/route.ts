@@ -1,8 +1,9 @@
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
+  inmArchivos,
   inmAsignacionesPosicion,
   inmInmuebles,
   inmPosiciones,
@@ -16,7 +17,7 @@ const clean = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
 
 
-const mapPending = (row: any) => ({
+const mapPending = (row: Awaited<ReturnType<typeof approved>>[number]) => ({
   inmuebleId: row.inmuebleId,
   codigo: row.codigo,
   posicion: row.posicion
@@ -123,7 +124,6 @@ async function published() {
       fechaPublicacion:
         inmPublicaciones.fechaPublicacion,
       texto: inmPublicaciones.texto,
-      driveLink: inmPublicaciones.driveLink,
     })
     .from(inmPublicaciones)
     .innerJoin(
@@ -169,7 +169,6 @@ async function ready() {
       publicado: inmPublicaciones.publicado,
       fechaRegistro: inmPublicaciones.fechaRegistro,
       texto: inmPublicaciones.texto,
-      driveLink: inmPublicaciones.driveLink,
     })
     .from(inmPublicaciones)
     .innerJoin(
@@ -236,11 +235,13 @@ export async function POST(request: Request) {
   try {
     const auth = await authorizeApi(request);
     if (auth.response) return auth.response;
-    const body = await request.json();
+    let body;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 }); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 });
 
     const inmuebleId = Number(body.inmuebleId);
     const texto = clean(body.texto);
-    const driveLink = clean(body.driveLink);
+
 
     if (
       !Number.isInteger(inmuebleId) ||
@@ -266,23 +267,12 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!/^https?:\/\//i.test(driveLink)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "El enlace de Google Drive debe ser una URL HTTP o HTTPS.",
-        },
-        { status: 400 }
-      );
-    }
-
     const result = await db.transaction(async (tx) => {
       const [property] = await tx
         .select()
         .from(inmInmuebles)
         .where(eq(inmInmuebles.id, inmuebleId))
-        .limit(1);
+        .limit(1).for("update");
 
       if (!property || property.estado !== "activo") {
         throw new Error(
@@ -313,6 +303,12 @@ export async function POST(request: Request) {
         );
       }
 
+      const [photo] = await tx.select({ id: inmArchivos.id }).from(inmArchivos).where(and(
+        eq(inmArchivos.inmuebleId, inmuebleId), eq(inmArchivos.tipoDocumento, "FOTO_INMUEBLE"),
+        eq(inmArchivos.almacenamiento, "hosting"), sql`${inmArchivos.tipoMime} LIKE 'image/%'`,
+      )).limit(1);
+      if (!photo) throw new Error("El inmueble no tiene fotos en su galería. Agrega al menos una foto antes de preparar la publicación.");
+
       const [existingPublication] = await tx
         .select({
           id: inmPublicaciones.id,
@@ -337,7 +333,7 @@ export async function POST(request: Request) {
       await tx.insert(inmPublicaciones).values({
         inmuebleId,
         texto,
-        driveLink,
+        driveLink: "",
         usuarioRegistroId: user.id,
         publicado: false,
       });
@@ -346,7 +342,7 @@ export async function POST(request: Request) {
         inmuebleId,
         evento: "publicacion_registrada",
         observacion:
-          "Texto y enlace de Google Drive registrados. Inmueble listo para publicar.",
+          "Texto registrado con las fotos de la galería. Inmueble listo para publicar.",
         usuarioId: user.id,
       });
 
@@ -389,21 +385,14 @@ export async function PUT(request: Request) {
   try {
     const auth = await authorizeApi(request);
     if (auth.response) return auth.response;
-    const body = await request.json();
+    let body;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 }); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 });
 
     const inmuebleId = Number(body.inmuebleId);
 
-    const tieneTexto =
-      typeof body.texto !== "undefined";
-
-    const tieneDriveLink =
-      typeof body.driveLink !== "undefined";
-
-    const editarMaterial =
-      tieneTexto || tieneDriveLink;
-
+    const editarMaterial = body.texto !== undefined;
     const texto = clean(body.texto);
-    const driveLink = clean(body.driveLink);
 
     if (
       !Number.isInteger(inmuebleId) ||
@@ -430,16 +419,6 @@ export async function PUT(request: Request) {
         );
       }
 
-      if (!/^https?:\/\//i.test(driveLink)) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error:
-              "El enlace de Google Drive debe ser una URL HTTP o HTTPS.",
-          },
-          { status: 400 }
-        );
-      }
     }
 
     const result = await db.transaction(
@@ -450,7 +429,7 @@ export async function PUT(request: Request) {
           .where(
             eq(inmInmuebles.id, inmuebleId)
           )
-          .limit(1);
+          .limit(1).for("update");
 
         if (
           !property ||
@@ -487,7 +466,7 @@ export async function PUT(request: Request) {
         const user = auth.user;
 
         /*
-         * Si vienen texto y/o Drive, actualizamos
+         * Si viene texto, actualizamos
          * el material existente.
          *
          * No se crea otra publicación.
@@ -497,7 +476,7 @@ export async function PUT(request: Request) {
             .update(inmPublicaciones)
             .set({
               texto,
-              driveLink,
+
             })
             .where(
               eq(
@@ -510,7 +489,7 @@ export async function PUT(request: Request) {
             inmuebleId,
             evento: "publicacion_actualizada",
             observacion:
-              "Se actualizó el texto y/o enlace de Google Drive de la publicación.",
+              "Se actualizó el texto de la publicación.",
             usuarioId: user.id,
           });
 
@@ -521,10 +500,16 @@ export async function PUT(request: Request) {
         }
 
         /*
-         * Si no vienen datos de material,
+         * Si no viene texto,
          * el PUT mantiene su función original:
          * marcar la publicación como realizada.
          */
+        const [photo] = await tx.select({ id: inmArchivos.id }).from(inmArchivos).where(and(
+          eq(inmArchivos.inmuebleId, inmuebleId), eq(inmArchivos.tipoDocumento, "FOTO_INMUEBLE"),
+          eq(inmArchivos.almacenamiento, "hosting"), sql`${inmArchivos.tipoMime} LIKE 'image/%'`,
+        )).limit(1);
+        if (!photo || !publication.texto.trim()) throw new Error("El inmueble no tiene texto y fotos completos para publicar.");
+
         const ahora = new Date();
 
         await tx

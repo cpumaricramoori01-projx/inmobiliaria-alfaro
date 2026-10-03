@@ -1,7 +1,9 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { requestJson } from "@/lib/client-request";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Tipo =
@@ -18,7 +20,7 @@ type Posicion = {
 };
 
 export default function RegistrarInmueblePage() {
-  const [posicion, setPosicion] = useState("");
+  const [seleccionPosicion, setPosicion] = useState("");
   const [posicionSolicitada, setPosicionSolicitada] = useState<string | null>(
     null
   );
@@ -37,39 +39,23 @@ export default function RegistrarInmueblePage() {
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setPosicionSolicitada(params.get("posicion"));
-    cargarPosiciones();
+  const cargarPosiciones = useCallback((signal?: AbortSignal) => {
+    return requestJson<{ posiciones: Posicion[] }>("/api/posiciones", { signal }).then(data => {
+      if (signal?.aborted) return;
+      setPosicionSolicitada(new URLSearchParams(window.location.search).get("posicion"));
+      setPosiciones(data.posiciones ?? []);
+    }).catch(error => {
+      if (!signal?.aborted) setError(error instanceof Error ? error.message : "No fue posible consultar las posiciones.");
+    }).finally(() => {
+      if (!signal?.aborted) setCargandoPosiciones(false);
+    });
   }, []);
 
-  async function cargarPosiciones() {
-    setCargandoPosiciones(true);
-
-    try {
-      const response = await fetch("/api/posiciones", {
-        cache: "no-store",
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "No fue posible consultar las posiciones."
-        );
-      }
-
-      setPosiciones(data.posiciones ?? []);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "No fue posible consultar las posiciones."
-      );
-    } finally {
-      setCargandoPosiciones(false);
-    }
-  }
+  useEffect(() => {
+    const controller = new AbortController();
+    void cargarPosiciones(controller.signal);
+    return () => controller.abort();
+  }, [cargarPosiciones]);
 
   async function buscarPropietario() {
     setError("");
@@ -162,6 +148,7 @@ export default function RegistrarInmueblePage() {
       setTelefono("");
       setPropietarioEncontrado(false);
 
+      setCargandoPosiciones(true);
       await cargarPosiciones();
     } catch (err) {
       setError(
@@ -170,6 +157,7 @@ export default function RegistrarInmueblePage() {
           : "No fue posible registrar el inmueble."
       );
 
+      setCargandoPosiciones(true);
       await cargarPosiciones();
     } finally {
       setGuardando(false);
@@ -181,34 +169,11 @@ export default function RegistrarInmueblePage() {
     [posiciones]
   );
 
-  useEffect(() => {
-    if (disponibles.length === 0) {
-      setPosicion("");
-      return;
-    }
-
-    setPosicion((actual) => {
-      const sigueDisponible = disponibles.some(
-        (p) => String(p.numero) === actual
-      );
-
-      if (sigueDisponible) {
-        return actual;
-      }
-
-      const solicitadaDisponible = posicionSolicitada
-        ? disponibles.some(
-            (p) => String(p.numero) === posicionSolicitada
-          )
-        : false;
-
-      if (solicitadaDisponible) {
-        return posicionSolicitada ?? String(disponibles[0].numero);
-      }
-
-      return String(disponibles[0].numero);
-    });
-  }, [disponibles, posicionSolicitada]);
+  const posicion = disponibles.some(p => String(p.numero) === seleccionPosicion)
+    ? seleccionPosicion
+    : disponibles.some(p => String(p.numero) === posicionSolicitada)
+      ? posicionSolicitada ?? ""
+      : String(disponibles[0]?.numero ?? "");
 
   const dniValido = /^\d{8}$/.test(dni);
   const propietarioCompleto =

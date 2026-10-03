@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
+import ConfirmDialog from "./ConfirmDialog";
 import PhotoGallery from "./PhotoGallery";
 import { compressImage, isImageFile } from "@/lib/client-images";
 import { useSessionUser } from "./SessionProvider";
@@ -87,7 +88,7 @@ function DeleteDocumentDialog({ document, busy, onCancel, onConfirm }: {
 
   return <dialog ref={dialog} aria-labelledby="delete-document-title" aria-describedby="delete-document-description"
     onCancel={event => { event.preventDefault(); if (!busy) onCancel(); }}
-    className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-3xl border border-slate-200 bg-white p-6 text-slate-800 shadow-2xl backdrop:bg-slate-950/40 backdrop:backdrop-blur-sm">
+    className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-md rounded-3xl border border-slate-200 bg-white p-6 text-slate-800 shadow-2xl backdrop:bg-slate-950/40 backdrop:backdrop-blur-sm">
     <span className="mb-4 inline-flex rounded-2xl bg-red-50 p-3 text-[#c80000]"><Icon name="document" className="h-6 w-6" /></span>
     <h2 id="delete-document-title" className="text-lg font-bold text-slate-900">{hosted ? "Eliminar documento" : "Quitar enlace"}</h2>
     <p className="mt-3 break-words rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold">{document.nombre}</p>
@@ -99,13 +100,14 @@ function DeleteDocumentDialog({ document, busy, onCancel, onConfirm }: {
   </dialog>;
 }
 
-export default function PropertyInformation({ initialCode = "" }: { initialCode?: string }) {
+export default function PropertyInformation({ initialCode = "", initialTab = "Resumen" }: { initialCode?: string; initialTab?: Tab }) {
   const admin = isAdministrator(useSessionUser());
+  const [pendingProperty, setPendingProperty] = useState<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState(initialCode ? "todos" : "activo");
   const [code, setCode] = useState(initialCode);
-  const [tab, setTab] = useState<Tab>("Resumen");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [details, setDetails] = useState<Details | null>(null);
   const [form, setForm] = useState<Property | null>(null);
   const [owner, setOwner] = useState<Owner>(emptyOwner);
@@ -160,9 +162,10 @@ export default function PropertyInformation({ initialCode = "" }: { initialCode?
     return () => controller.abort();
   }, [code, load]);
 
-  function selectProperty(key: string) {
+  function selectProperty(key: string, discard = false) {
     if (busy || key === code) return;
-    if ((dirty || documentForm.nombre || documentFile || documentForm.observacion) && !window.confirm("Tienes cambios sin guardar. ¿Quieres cambiar de inmueble y descartarlos?")) return;
+    if (!discard && (dirty || documentForm.nombre || documentFile || documentForm.observacion)) { setPendingProperty(key); return; }
+    setPendingProperty(null);
     ++loadRequest.current;
     setCode(key); setTab("Resumen"); setError(""); setMessage(""); setDocumentForm(emptyDocument); setDocumentFile(null);
     setDetails(null); setForm(null); setOwner(emptyOwner); setDocuments([]); setLoading(Boolean(key));
@@ -219,6 +222,7 @@ export default function PropertyInformation({ initialCode = "" }: { initialCode?
   }
 
   return <main className="min-h-screen bg-[#f7f7f5] p-4 pt-20 sm:p-6 sm:pt-20 lg:p-8">
+    {pendingProperty !== null && <ConfirmDialog title="Cambios sin guardar" confirmLabel="Descartar cambios" onCancel={() => setPendingProperty(null)} onConfirm={() => selectProperty(pendingProperty, true)}><p>Tienes cambios pendientes en esta ficha. Si cambias de inmueble, se descartarán.</p></ConfirmDialog>}
     <div className="mx-auto max-w-[1500px]">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#c80000]">Archivo inmobiliario</p><h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Información de inmuebles</h1><p className="mt-2 text-sm text-slate-500">Encuentra un inmueble y completa su ficha, paso a paso.</p></div>
@@ -268,7 +272,8 @@ export default function PropertyInformation({ initialCode = "" }: { initialCode?
                 <div className="grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => setTab("Inmueble")} className="flex items-center justify-between rounded-2xl border border-slate-200 p-4 text-left transition hover:border-red-200 hover:bg-[#fffafa]"><span><span className="block text-xs font-bold text-slate-800">Completar datos del inmueble</span><span className="mt-1 block text-[11px] text-slate-400">Ubicación y características</span></span><Icon name="arrow" /></button><button type="button" onClick={() => setTab("Documentación")} className="flex items-center justify-between rounded-2xl border border-slate-200 p-4 text-left transition hover:border-red-200 hover:bg-[#fffafa]"><span><span className="block text-xs font-bold text-slate-800">Organizar documentación</span><span className="mt-1 block text-[11px] text-slate-400">Archivos y documentos</span></span><Icon name="arrow" /></button></div>
               </div>}
 
-              {tab === "Propietario" && (details.inmueble.propietarioId == null ? <div className="rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">Este inmueble todavía no tiene un propietario vinculado.</div> : <form onSubmit={save} className="space-y-7">
+              {tab === "Propietario" && (<form onSubmit={save} className="space-y-7">
+                {details.inmueble.propietarioId == null && <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Completa DNI, nombres y apellidos para vincular al propietario.</p>}
                 <Block title="Datos personales" description="Identifica al propietario del inmueble."><div className="grid gap-4 sm:grid-cols-2">{ownerField("DNI", "dni")}{ownerField("Nombres", "nombres")}{ownerField("Apellidos", "apellidos")}</div></Block>
                 <div className="border-t border-slate-100" />
                 <Block title="Contacto" description="Mantén a mano los datos para comunicarte con el propietario."><div className="grid gap-4 sm:grid-cols-2">{ownerField("Teléfono", "telefono", "tel")}{ownerField("Correo electrónico", "email", "email")}</div><div className="mt-4">{ownerField("Referencia de contacto", "referenciaContacto")}</div></Block>
@@ -298,7 +303,7 @@ export default function PropertyInformation({ initialCode = "" }: { initialCode?
 
               {tab === "Tasación" && (details.tasacion ? <div className="space-y-6"><Block title="Tasación registrada" description={`Fecha de tasación: ${formatDate(details.tasacion.fechaTasacion)}`}><div className="grid gap-3 sm:grid-cols-3"><Stat label="Precio de tasación" value={money(details.tasacion.valorReferencia)} icon="chart" /><Stat label="Precio objetivo" value={money(details.tasacion.precioObjetivo)} icon="chart" /><Stat label="Precio de venta" value={money(details.tasacion.precioVenta)} icon="chart" /></div></Block><Block title="Observación"><p className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">{details.tasacion.observacion || "Sin observaciones registradas."}</p></Block>{admin && <Link href="/tasaciones-textos-pendientes" className="inline-flex items-center gap-2 text-xs font-semibold text-[#c80000]">Gestionar precio de venta <Icon name="arrow" /></Link>}</div> : <div className="rounded-2xl bg-slate-50 p-6"><p className="text-sm text-slate-500">Todavía no hay una tasación registrada.</p>{admin && <Link href="/registrar-tasaciones" className="mt-3 inline-flex text-xs font-semibold text-[#c80000]">Registrar tasación →</Link>}</div>)}
 
-              {tab === "Publicación" && (details.publicacion ? <div className="space-y-5"><Block title="Publicación del inmueble" description={details.publicacion.publicado ? `Publicada el ${formatDate(details.publicacion.fechaPublicacion)}` : "Texto y material listos para publicar."}><p className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-5 text-sm leading-7 text-slate-700">{details.publicacion.texto}</p></Block>{details.publicacion.enlace && <a href={details.publicacion.enlace} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-xs font-semibold text-slate-700"><Icon name="link" />Abrir material de referencia ↗</a>}</div> : <div className="rounded-2xl bg-slate-50 p-6"><p className="text-sm text-slate-500">Todavía no hay una publicación registrada.</p>{admin && <Link href="/tasaciones-textos-pendientes" className="mt-3 inline-flex text-xs font-semibold text-[#c80000]">Preparar texto y material →</Link>}</div>)}
+              {tab === "Publicación" && (details.publicacion ? <div className="space-y-5"><Block title="Publicación del inmueble" description={details.publicacion.publicado ? `Publicada el ${formatDate(details.publicacion.fechaPublicacion)}` : "Texto y material listos para publicar."}><p className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-5 text-sm leading-7 text-slate-700">{details.publicacion.texto}</p></Block><button type="button" onClick={() => setTab("Fotos")} className="rounded-xl border border-slate-200 px-4 py-3 text-xs font-semibold text-red-700">Ver fotos de la publicación →</button></div> : <div className="rounded-2xl bg-slate-50 p-6"><p className="text-sm text-slate-500">Todavía no hay una publicación registrada.</p>{admin && <Link href="/tasaciones-textos-pendientes" className="mt-3 inline-flex text-xs font-semibold text-[#c80000]">Preparar texto y material →</Link>}</div>)}
             </section>
           </>}
         </div>

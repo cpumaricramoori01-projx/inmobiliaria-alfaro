@@ -1,8 +1,10 @@
+import type { ReportRow } from "@/lib/report-types";
 import { authorizeApi } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
+  inmArchivos,
   inmAsignacionesPosicion,
   inmInmuebles,
   inmLiberaciones,
@@ -146,10 +148,21 @@ export async function GET(request: NextRequest) {
         asc(inmAsignacionesPosicion.fechaInicio),
       );
 
+    const positionAvailability = await db.select({ numero: inmPosiciones.numero, assigned: inmAsignacionesPosicion.id })
+      .from(inmPosiciones).leftJoin(inmAsignacionesPosicion, and(
+        eq(inmAsignacionesPosicion.posicionId, inmPosiciones.id), eq(inmAsignacionesPosicion.activa, true),
+      )).where(eq(inmPosiciones.activo, true));
+    const availablePositions = positionAvailability.filter(position => position.assigned == null).map(position => position.numero);
+
     const visitas = await db
       .select()
       .from(inmVisitas)
+      .where(eq(inmVisitas.completada, true))
       .orderBy(desc(inmVisitas.fechaRegistro));
+
+    const photos = await db.select({ inmuebleId: inmArchivos.inmuebleId }).from(inmArchivos)
+      .where(and(eq(inmArchivos.tipoDocumento, "FOTO_INMUEBLE"), eq(inmArchivos.almacenamiento, "hosting")));
+    const propertiesWithPhotos = new Set(photos.map(photo => photo.inmuebleId));
 
     const tasaciones = await db
       .select()
@@ -286,10 +299,11 @@ export async function GET(request: NextRequest) {
       );
 
       const visitaPendiente =
-        activo && !visitaRealizada;
+        activo && Boolean(activePosition) && !visitaRealizada;
 
       const tasacionPendiente =
         activo &&
+        Boolean(activePosition) &&
         visitaRealizada &&
         !tasacion;
 
@@ -304,7 +318,7 @@ export async function GET(request: NextRequest) {
       const materialPendiente =
         activo &&
         esTasacionAprobada(tasacion?.situacion) &&
-        !publicacion;
+        (!publicacion?.texto?.trim() || !propertiesWithPhotos.has(x.id));
 
       const negociacionEnCurso =
         activo &&
@@ -481,34 +495,15 @@ export async function GET(request: NextRequest) {
       (x) => x.estado === "Activo",
     );
 
-    let rows: any[] = filtered;
+    let rows: ReportRow[] = filtered;
 
     if (reporte === "Posiciones disponibles") {
-      const occupied = new Set(
-        base
-          .filter(
-            (x) =>
-              x.estado === "Activo" &&
-              x.posicion !== null,
-          )
-          .map((x) => x.posicion),
-      );
-
       const posicionSolicitada =
         posicionFiltro
           ? Number(posicionFiltro)
           : null;
 
-      rows = Array.from(
-        { length: 90 },
-        (_, i) => i + 1,
-      )
-        .filter(
-          (numero) =>
-            !occupied.has(numero) &&
-            (!posicionSolicitada ||
-              numero === posicionSolicitada),
-        )
+      rows = availablePositions.filter(numero => !posicionSolicitada || numero === posicionSolicitada)
         .map((numero) => ({
           posicion: numero,
           estado: "Disponible",
@@ -649,7 +644,7 @@ export async function GET(request: NextRequest) {
               position.activa,
           };
         })
-        .filter(Boolean);
+        .filter((row): row is NonNullable<typeof row> => row !== null);
     } else if (reporte.includes("→")) {
       const events = timelineByInmueble;
 
@@ -719,7 +714,7 @@ export async function GET(request: NextRequest) {
           };
         })
         .filter(
-          (x: any) =>
+          (x) =>
             x.fechaInicioFlujo,
         );
     } else if (
@@ -746,13 +741,7 @@ export async function GET(request: NextRequest) {
       (x) => x.estado === "Activo",
     );
 
-    const disponibles = Math.max(
-      0,
-      90 -
-        activosBase.filter(
-          (x) => x.posicion !== null,
-        ).length,
-    );
+    const disponibles = availablePositions.length;
 
     const resumen = {
       total: rows.length,

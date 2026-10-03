@@ -1,7 +1,10 @@
 "use client";
 
+import { requestJson } from "@/lib/client-request";
+
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { todayInPeru } from "@/lib/calendar.mjs";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Tasacion = {
   id: number;
@@ -34,25 +37,25 @@ export default function Page() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState<number | null>(null);
 
-  const hoy = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const hoy = useMemo(() => todayInPeru(), []);
 
-  const cargar = async () => {
-    try {
-      setCargando(true);
-      setError("");
-      const response = await fetch("/api/tasaciones", { cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "No se pudieron cargar las tasaciones.");
+  const cargar = useCallback((signal?: AbortSignal) => {
+    return requestJson<{ pendientes: Tasacion[]; aprobadas: Tasacion[] }>("/api/tasaciones", { signal }).then(data => {
+      if (signal?.aborted) return;
       setItems(data.pendientes ?? []);
       setAprobadas(data.aprobadas ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudieron cargar las tasaciones.");
-    } finally {
-      setCargando(false);
-    }
-  };
+    }).catch(error => {
+      if (!signal?.aborted) setError(error instanceof Error ? error.message : "No se pudieron cargar las tasaciones.");
+    }).finally(() => {
+      if (!signal?.aborted) setCargando(false);
+    });
+  }, []);
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    void cargar(controller.signal);
+    return () => controller.abort();
+  }, [cargar]);
 
   const registrar = async (item: Tasacion) => {
     setError("");
@@ -78,6 +81,7 @@ export default function Page() {
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || "No fue posible registrar la tasación.");
       setMensaje(`Tasación de “${item.nombre}” registrada correctamente.`);
+      setCargando(true);
       await cargar();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No fue posible registrar la tasación.");

@@ -132,7 +132,8 @@ export default function Home() {
       ]
     : [];
 
-  const actualizarCabeceraDashboard = () => {
+  useEffect(() => {
+    const actualizarCabeceraDashboard = () => {
     const ahora = new Date();
     const hora = ahora.getHours();
 
@@ -195,7 +196,6 @@ export default function Home() {
     if (contextIcon) contextIcon.textContent = icono;
   };
 
-  useEffect(() => {
     actualizarCabeceraDashboard();
     const intervalo = window.setInterval(actualizarCabeceraDashboard, 60000);
 

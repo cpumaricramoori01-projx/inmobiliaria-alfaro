@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { requestJson } from "@/lib/client-request";
+
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import SalePriceEditor from "@/app/components/SalePriceEditor";
 
 type Item = {
@@ -28,7 +31,6 @@ type Publicada = {
   publicado: boolean;
   fechaPublicacion: string | null;
   texto: string | null;
-  driveLink: string | null;
 };
 
 export default function TasacionesTextosPendientesPage() {
@@ -36,13 +38,8 @@ export default function TasacionesTextosPendientesPage() {
   const [aprobadas, setAprobadas] = useState<Item[]>([]);
 
   const [textos, setTextos] = useState<Record<number, string>>({});
-  const [enlaces, setEnlaces] = useState<Record<number, string>>({});
 
   const [textosListos, setTextosListos] = useState<
-    Record<number, string>
-  >({});
-
-  const [enlacesListos, setEnlacesListos] = useState<
     Record<number, string>
   >({});
 
@@ -74,111 +71,39 @@ export default function TasacionesTextosPendientesPage() {
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
 
-  async function cargar() {
-    try {
-      setCargando(true);
-      setError("");
-
-      const [
-        tasacionesResponse,
-        publicacionesResponse,
-      ] = await Promise.all([
-        fetch("/api/tasaciones", {
-          cache: "no-store",
-        }),
-
-        fetch("/api/publicaciones", {
-          cache: "no-store",
-        }),
-      ]);
-
-      const tasacionesData =
-        await tasacionesResponse.json();
-
-      const publicacionesData =
-        await publicacionesResponse.json();
-
-      if (!tasacionesResponse.ok || !tasacionesData.ok) {
-        throw new Error(
-          tasacionesData.error ||
-            "No se pudieron cargar las tasaciones."
-        );
-      }
-
-      if (
-        !publicacionesResponse.ok ||
-        !publicacionesData.ok
-      ) {
-        throw new Error(
-          publicacionesData.error ||
-            "No se pudieron cargar las publicaciones."
-        );
-      }
-
-      const registradasData: Item[] =
-        tasacionesData.registradas ?? [];
-
-      const pendientesPublicacion: Item[] =
-        publicacionesData.pendientes ?? [];
-
-      const listosData: Publicada[] =
-        publicacionesData.listos ?? [];
-
-        const publicadasData: Publicada[] =
-  publicacionesData.publicadas ?? [];
-
-      setRegistradas(registradasData.filter(item => item.situacion === "aprobado"));
-      setAprobadas(pendientesPublicacion);
-      setListos(listosData);
-setPublicadas(publicadasData);
-
-      const nextTextosListos: Record<number, string> = {};
-      const nextEnlacesListos: Record<number, string> = {};
-
-      for (const item of listosData) {
-        nextTextosListos[item.inmuebleId] =
-          item.texto ?? "";
-
-        nextEnlacesListos[item.inmuebleId] =
-          item.driveLink ?? "";
-      }
-
-      setTextosListos(nextTextosListos);
-      setEnlacesListos(nextEnlacesListos);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "No se pudo cargar la bandeja."
-      );
-    } finally {
-      setCargando(false);
-    }
-  }
+  const cargar = useCallback((signal?: AbortSignal) => {
+    return Promise.all([
+      requestJson<{ registradas: Item[] }>("/api/tasaciones", { signal }),
+      requestJson<{ pendientes: Item[]; listos: Publicada[]; publicadas: Publicada[] }>("/api/publicaciones", { signal }),
+    ]).then(data => {
+      if (signal?.aborted) return;
+      const [tasaciones, publicaciones] = data;
+      setRegistradas((tasaciones.registradas ?? []).filter(item => item.situacion === "aprobado"));
+      setAprobadas(publicaciones.pendientes ?? []);
+      setListos(publicaciones.listos ?? []);
+      setPublicadas(publicaciones.publicadas ?? []);
+      setTextosListos(Object.fromEntries((publicaciones.listos ?? []).map(item => [item.inmuebleId, item.texto ?? ""])));
+    }).catch(error => {
+      if (!signal?.aborted) setError(error instanceof Error ? error.message : "No se pudo cargar la bandeja.");
+    }).finally(() => {
+      if (!signal?.aborted) setCargando(false);
+    });
+  }, []);
 
   useEffect(() => {
-    cargar();
-  }, []);
+    const controller = new AbortController();
+    void cargar(controller.signal);
+    return () => controller.abort();
+  }, [cargar]);
 
   async function guardarTexto(item: Item) {
     const texto = (
       textos[item.inmuebleId] || ""
     ).trim();
 
-    const driveLink = (
-      enlaces[item.inmuebleId] || ""
-    ).trim();
-
     if (!texto) {
       setError(
         "Ingresa el texto de publicación."
-      );
-      return;
-    }
-
-    if (!/^https?:\/\//i.test(driveLink)) {
-      setError(
-        "El enlace de Google Drive debe ser una URL HTTP o HTTPS."
       );
       return;
     }
@@ -198,7 +123,6 @@ setPublicadas(publicadasData);
           body: JSON.stringify({
             inmuebleId: item.inmuebleId,
             texto,
-            driveLink,
           }),
         }
       );
@@ -216,6 +140,7 @@ setPublicadas(publicadasData);
         `${item.codigo} quedó listo para publicar.`
       );
 
+      setCargando(true);
       await cargar();
     } catch (err) {
       setError(
@@ -235,22 +160,9 @@ setPublicadas(publicadasData);
       ""
     ).trim();
 
-    const driveLink = (
-      enlacesListos[item.inmuebleId] ??
-      item.driveLink ??
-      ""
-    ).trim();
-
     if (!texto) {
       setError(
         "El texto de publicación es obligatorio."
-      );
-      return;
-    }
-
-    if (!/^https?:\/\//i.test(driveLink)) {
-      setError(
-        "El enlace de Google Drive debe ser una URL HTTP o HTTPS."
       );
       return;
     }
@@ -273,7 +185,6 @@ setPublicadas(publicadasData);
           body: JSON.stringify({
             inmuebleId: item.inmuebleId,
             texto,
-            driveLink,
           }),
         }
       );
@@ -291,6 +202,7 @@ setPublicadas(publicadasData);
         `${item.codigo} fue actualizado correctamente.`
       );
 
+      setCargando(true);
       await cargar();
     } catch (err) {
       setError(
@@ -347,6 +259,7 @@ setPublicadas(publicadasData);
         `${item.codigo} fue marcado como publicado.`
       );
 
+      setCargando(true);
       await cargar();
     } catch (err) {
       setError(
@@ -526,36 +439,9 @@ setPublicadas(publicadasData);
                         </div>
 
                         <div>
-                          <label className="mb-1.5 block text-xs font-bold text-slate-600">
-                            Material / Google Drive
-                          </label>
-
-                          <input
-                            type="url"
-                            value={
-                              enlaces[
-                                item.inmuebleId
-                              ] ?? ""
-                            }
-                            onChange={(event) =>
-                              setEnlaces(
-                                (current) => ({
-                                  ...current,
-                                  [item.inmuebleId]:
-                                    event.target.value,
-                                })
-                              )
-                            }
-                            placeholder="https://drive.google.com/..."
-                            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-[#c80000]"
-                          />
-
-                          <div className="mt-3 rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-500">
-                            Coloca aquí el enlace donde se
-                            encuentra el material preparado
-                            para la publicación.
-                          </div>
-
+                          <p className="text-xs font-semibold text-slate-600">Fotos de la publicación</p>
+                          <p className="mt-2 text-xs leading-5 text-slate-500">Usa las fotos de las visitas y de la ficha. Puedes revisarlas y actualizarlas en la galería.</p>
+                          <Link href={`/datos-inmuebles?codigo=${encodeURIComponent(item.codigo)}&pestana=fotos`} className="mt-3 inline-flex rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-red-700">Ver y editar fotos →</Link>
                           <button
                             type="button"
                             onClick={() =>
@@ -607,11 +493,6 @@ setPublicadas(publicadasData);
                     const textoActual =
                       textosListos[item.inmuebleId] ??
                       item.texto ??
-                      "";
-
-                    const enlaceActual =
-                      enlacesListos[item.inmuebleId] ??
-                      item.driveLink ??
                       "";
 
                     return (
@@ -673,40 +554,9 @@ setPublicadas(publicadasData);
                           </div>
 
                           <div>
-                            <label className="mb-1.5 block text-xs font-bold text-slate-600">
-                              Material / Google Drive
-                            </label>
-
-                            <input
-                              type="url"
-                              value={enlaceActual}
-                              onChange={(event) =>
-                                setEnlacesListos(
-                                  (current) => ({
-                                    ...current,
-                                    [item.inmuebleId]:
-                                      event.target.value,
-                                  })
-                                )
-                              }
-                              placeholder="https://drive.google.com/..."
-                              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-[#c80000]"
-                            />
-
-                            {enlaceActual &&
-                              /^https?:\/\//i.test(
-                                enlaceActual
-                              ) && (
-                                <a
-                                  href={enlaceActual}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="mt-2 inline-flex text-xs font-semibold text-blue-600 hover:underline"
-                                >
-                                  Abrir material en Google Drive ↗
-                                </a>
-                              )}
-
+                            <p className="text-xs font-semibold text-slate-600">Fotos de la publicación</p>
+                          <p className="mt-2 text-xs leading-5 text-slate-500">Usa las fotos de las visitas y de la ficha. Puedes revisarlas y actualizarlas en la galería.</p>
+                          <Link href={`/datos-inmuebles?codigo=${encodeURIComponent(item.codigo)}&pestana=fotos`} className="mt-3 inline-flex rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-red-700">Ver y editar fotos →</Link>
                             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                               <button
                                 type="button"
@@ -859,20 +709,10 @@ setPublicadas(publicadasData);
                     Material publicado
                   </div>
 
-                  {item.driveLink ? (
-                    <a
-                      href={item.driveLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-xl bg-white px-4 text-xs font-bold text-blue-600 ring-1 ring-slate-200 transition hover:bg-blue-50"
-                    >
-                      Abrir material en Google Drive ↗
-                    </a>
-                  ) : (
-                    <div className="mt-3 text-xs text-slate-400">
-                      No hay enlace de material registrado.
-                    </div>
-                  )}
+                  <p className="text-xs font-semibold text-slate-600">Fotos de la publicación</p>
+                          <p className="mt-2 text-xs leading-5 text-slate-500">Usa las fotos de las visitas y de la ficha. Puedes revisarlas y actualizarlas en la galería.</p>
+                          <Link href={`/datos-inmuebles?codigo=${encodeURIComponent(item.codigo)}&pestana=fotos`} className="mt-3 inline-flex rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-red-700">Ver y editar fotos →</Link>
+
                 </div>
               </div>
             </div>

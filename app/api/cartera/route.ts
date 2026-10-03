@@ -70,17 +70,24 @@ export async function GET() {
       )
       .orderBy(desc(inmInmuebles.fechaRegistro));
 
+    const positionAvailability = await db.select({ numero: inmPosiciones.numero, assigned: inmAsignacionesPosicion.id })
+      .from(inmPosiciones).leftJoin(inmAsignacionesPosicion, and(
+        eq(inmAsignacionesPosicion.posicionId, inmPosiciones.id), eq(inmAsignacionesPosicion.activa, true),
+      )).where(eq(inmPosiciones.activo, true));
+    const capacidad = new Set(positionAvailability.map(position => position.numero)).size;
+    const disponibles = positionAvailability.filter(position => position.assigned == null).length;
+
     if (inmuebles.length === 0) {
       return NextResponse.json({
         inmuebles: [],
         resumen: {
           enCartera: 0,
-          disponibles: 0,
+          disponibles,
           visitasPendientes: 0,
           tasacionesPendientes: 0,
           materialPendiente: 0,
           negociaciones: 0,
-          capacidad: 90,
+          capacidad,
         },
       });
     }
@@ -101,7 +108,7 @@ export async function GET() {
         fechaCompletada: inmVisitas.fechaCompletada,
       })
       .from(inmVisitas)
-      .where(inArray(inmVisitas.inmuebleId, inmuebleIds))
+      .where(and(inArray(inmVisitas.inmuebleId, inmuebleIds), eq(inmVisitas.completada, true)))
       .orderBy(desc(inmVisitas.fechaRegistro));
 
     /*
@@ -268,11 +275,11 @@ export async function GET() {
       const negociacion = negociacionPorInmueble.get(row.id);
       const publicacion = publicacionPorInmueble.get(row.id);
 
- const visitaPendiente = visita?.pendiente ?? true;
+ const visitaPendiente = row.posicion != null && (visita?.pendiente ?? true);
 const visitaRealizada =
-  !visitaPendiente && (visita?.realizada ?? false);
+  visita?.realizada ?? false;
 
-const tasacionPendiente = visitaRealizada && !tasacion?.existe;
+const tasacionPendiente = row.posicion != null && visitaRealizada && !tasacion?.existe;
 
 const materialHabilitado = tasacion?.situacion === "aprobado";
 
@@ -382,18 +389,6 @@ const materialPendiente =
      * datos que se entregan a la cartera.
      */
     const activos = resultado.filter((x) => x.estado === "Activo");
-
-    const posicionesActivas = new Set(
-      activos
-        .map((x) => x.posicion)
-        .filter((x): x is number => typeof x === "number")
-    );
-
-    const capacidad = 90;
-    const disponibles = Math.max(
-      0,
-      capacidad - posicionesActivas.size
-    );
 
     return NextResponse.json({
       inmuebles: resultado,

@@ -13,16 +13,13 @@ import {
 } from "@/db/schema";
 
 
+import { parseBusinessDate } from "@/lib/calendar.mjs";
 import { visitPhotoIds } from '@/lib/visit-photos.mjs';
 
 class VisitInputError extends Error {}
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function isValidDate(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 export async function GET() {
@@ -86,6 +83,13 @@ export async function GET() {
       )
       .orderBy(asc(inmInmuebles.fechaRegistro));
 
+    const drafts = rows.length ? await db.select({
+      id: inmArchivos.id, inmuebleId: inmArchivos.inmuebleId, nombre: inmArchivos.nombre,
+    }).from(inmArchivos).where(and(
+      inArray(inmArchivos.inmuebleId, rows.map(row => row.id)), eq(inmArchivos.usuarioId, auth.user.id),
+      eq(inmArchivos.tipoDocumento, "FOTO_INMUEBLE"), eq(inmArchivos.almacenamiento, "hosting"), isNull(inmArchivos.visitaId),
+    )) : [];
+
     const ahora = Date.now();
 
     const items = rows.map((row) => {
@@ -108,6 +112,9 @@ export async function GET() {
         dni: row.dni || "",
         posicion: String(row.posicion),
         dias,
+        fotos: drafts.filter(photo => photo.inmuebleId === row.id).map(photo => ({
+          id: photo.id, nombre: photo.nombre, enlace: `/api/inmuebles/${row.id}/archivos/${photo.id}`,
+        })),
       };
     });
 
@@ -131,6 +138,7 @@ export async function POST(request: Request) {
     if (auth.response) return auth.response;
     let body;
     try { body = await request.json(); } catch { return NextResponse.json({ error: 'Solicitud no válida.' }, { status: 400 }); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 });
     let photoIds: number[];
     try { photoIds = visitPhotoIds(body.fotoIds); }
     catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Adjunta fotos de la visita.' }, { status: 400 }); }
@@ -146,31 +154,8 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!isValidDate(fechaVisita)) {
-      return NextResponse.json(
-        { error: "La fecha de visita no es válida." },
-        { status: 400 }
-      );
-    }
-
-    const fechaVisitaObj = new Date(`${fechaVisita}T00:00:00`);
-
-    if (Number.isNaN(fechaVisitaObj.getTime())) {
-      return NextResponse.json(
-        { error: "La fecha de visita no es válida." },
-        { status: 400 }
-      );
-    }
-
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    if (fechaVisitaObj > hoy) {
-      return NextResponse.json(
-        { error: "La fecha de visita no puede ser futura." },
-        { status: 400 }
-      );
-    }
+    const fechaVisitaObj = parseBusinessDate(fechaVisita);
+    if (!fechaVisitaObj) return NextResponse.json({ error: "Indica una fecha de visita válida que no sea futura." }, { status: 400 });
 
     const result = await db.transaction(async (tx) => {
       const [property] = await tx

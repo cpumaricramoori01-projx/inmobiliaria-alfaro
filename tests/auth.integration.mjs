@@ -85,7 +85,10 @@ try {
   assert.equal(dashboard.status, 200);
   assert.match(await dashboard.text(), /Prueba administrador/);
   for (const path of pages.filter(path => path !== "/")) {
-    assert.equal((await request(path, { headers: { Cookie: adminCookie } })).status, 200, `administrator page ${path}`);
+    const response = await request(path, { headers: { Cookie: adminCookie } });
+    const aliases = { '/nuevos': '/visitas-pendientes', '/tasaciones-pendientes': '/registrar-tasaciones' };
+    assert.equal(response.status, aliases[path] ? 307 : 200, `administrator page ${path}`);
+    if (aliases[path]) assert.equal(new URL(response.headers.get('location'), origin).pathname, aliases[path]);
   }
   assert.equal((await post("/api/inmuebles", {}, adminCookie, "https://example.invalid")).status, 403);
   console.log("PASS: administrador autenticado, cookie segura, sesión en MySQL y protección de origen");

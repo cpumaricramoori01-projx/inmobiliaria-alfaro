@@ -1,3 +1,4 @@
+import { propertyInput, ownerInput, PropertyInputError } from "@/lib/property-input.mjs";
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, eq, sql } from "drizzle-orm";
@@ -10,32 +11,6 @@ import {
   inmTasaciones,
   inmPublicaciones,
 } from "@/db/schema";
-
-function clean(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function nullable(value: unknown) {
-  const v = clean(value);
-  return v || null;
-}
-
-function numOrNull(value: unknown) {
-  if (value === "" || value === null || value === undefined) return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
-function decimalOrNull(value: unknown) {
-  if (value === "" || value === null || value === undefined) return sql`NULL`;
-  const n = Number(value);
-  return Number.isFinite(n) ? String(n) : sql`NULL`;
-}
-
-function nullableSql(value: unknown) {
-  const v = clean(value);
-  return v || sql`NULL`;
-}
 
 async function findProperty(key: string) {
   const [row] = await db
@@ -124,37 +99,34 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     const row = await findProperty(key);
     if (!row) return NextResponse.json({ error: "Inmueble no encontrado." }, { status: 404 });
 
-    const body = await request.json();
-    const propertyValues = {
-      tipo: nullable(body.tipo) ?? row.tipo,
-      referencia: nullable(body.referencia) ?? row.referencia,
-      direccion: nullable(body.direccion),
-      distrito: nullable(body.distrito),
-      provincia: nullable(body.provincia),
-      departamento: nullable(body.departamento),
-      areaTerreno: decimalOrNull(body.areaTerreno),
-      areaConstruida: decimalOrNull(body.areaConstruida),
-      habitaciones: numOrNull(body.habitaciones),
-      banos: numOrNull(body.banos),
-      caracteristicas: nullable(body.caracteristicas),
-      observaciones: nullable(body.observaciones),
-    };
-
-    await db.update(inmInmuebles).set(propertyValues).where(eq(inmInmuebles.id, row.id));
-
-    if (body.propietario && row.propietarioId !== null) {
-      await db.update(inmPropietarios).set({
-        dni: clean(body.propietario.dni) || row.propietarioDni || "",
-        nombres: clean(body.propietario.nombres) || row.propietarioNombres || "",
-        apellidos: clean(body.propietario.apellidos) || row.propietarioApellidos || "",
-        telefono: nullableSql(body.propietario.telefono),
-        email: nullableSql(body.propietario.email),
-        referenciaContacto: nullableSql(body.propietario.referenciaContacto),
-      }).where(eq(inmPropietarios.id, row.propietarioId));
-    }
+    let body;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: "Datos no válidos." }, { status: 400 }); }
+    const propertyValues = propertyInput(body);
+    const ownerValues = body.propietario === undefined ? undefined : ownerInput(body.propietario);
+    await db.transaction(async tx => {
+      const [current] = await tx.select({ propietarioId: inmInmuebles.propietarioId }).from(inmInmuebles)
+        .where(eq(inmInmuebles.id, row.id)).limit(1).for("update");
+      if (!current) throw new PropertyInputError("Inmueble no encontrado.");
+      if (Object.keys(propertyValues).length) await tx.update(inmInmuebles).set(propertyValues).where(eq(inmInmuebles.id, row.id));
+      if (ownerValues) {
+        let ownerId = current.propietarioId;
+        if (ownerId == null) {
+          await tx.insert(inmPropietarios).values(ownerValues).onDuplicateKeyUpdate({ set: { dni: sql`dni` } });
+          const [owner] = await tx.select({ id: inmPropietarios.id }).from(inmPropietarios)
+            .where(eq(inmPropietarios.dni, ownerValues.dni)).limit(1).for("update");
+          ownerId = owner.id;
+          await tx.update(inmInmuebles).set({ propietarioId: ownerId }).where(eq(inmInmuebles.id, row.id));
+        }
+        await tx.update(inmPropietarios).set(ownerValues).where(eq(inmPropietarios.id, ownerId));
+      } else if (ownerValues === null && current.propietarioId != null) {
+        throw new PropertyInputError("Completa los datos del propietario vinculado.");
+      }
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof PropertyInputError) return NextResponse.json({ error: error.message }, { status: 400 });
+    if ((error as { cause?: { code?: string } }).cause?.code === "ER_DUP_ENTRY") return NextResponse.json({ error: "Ese DNI ya pertenece a otro propietario. Revisa la identificación." }, { status: 409 });
     console.error("Error al actualizar ficha:", error);
     return NextResponse.json({ error: "No se pudieron guardar los datos del inmueble." }, { status: 500 });
   }

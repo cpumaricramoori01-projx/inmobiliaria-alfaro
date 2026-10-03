@@ -96,13 +96,18 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     const fileId = Number(new URL(request.url).searchParams.get('archivoId'));
     if (!Number.isSafeInteger(fileId) || fileId < 1) return NextResponse.json({ error: 'Archivo no válido.' }, { status: 400 });
     const condition = and(eq(inmArchivos.id, fileId), eq(inmArchivos.inmuebleId, inmueble.id));
-    const [file] = await db.select().from(inmArchivos).where(condition).limit(1);
-    if (!file) return NextResponse.json({ error: 'Documento no encontrado.' }, { status: 404 });
-    if (file.almacenamiento === 'hosting') {
-      if (!file.rutaAlmacenamiento) throw new Error('Ruta no disponible.');
-      await hostingRequest('DELETE', file.rutaAlmacenamiento);
-    }
-    await db.delete(inmArchivos).where(condition);
+    const found = await db.transaction(async tx => {
+      await tx.select({ id: inmInmuebles.id }).from(inmInmuebles).where(eq(inmInmuebles.id, inmueble.id)).for('update');
+      const [file] = await tx.select().from(inmArchivos).where(condition).limit(1).for('update');
+      if (!file) return false;
+      if (file.almacenamiento === 'hosting') {
+        if (!file.rutaAlmacenamiento) throw new Error('Ruta no disponible.');
+        await hostingRequest('DELETE', file.rutaAlmacenamiento);
+      }
+      await tx.delete(inmArchivos).where(condition);
+      return true;
+    });
+    if (!found) return NextResponse.json({ error: 'Documento no encontrado.' }, { status: 404 });
     return NextResponse.json({ ok: true });
   } catch { return NextResponse.json({ error: 'No se pudo eliminar el documento. Puedes intentarlo de nuevo.' }, { status: 500 }); }
 }
@@ -115,6 +120,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (!inmueble) return NextResponse.json({ error: 'Inmueble no encontrado.' }, { status: 404 });
     let body;
     try { body = await request.json(); } catch { return NextResponse.json({ error: 'Datos no válidos.' }, { status: 400 }); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Datos no válidos." }, { status: 400 });
     const archivoId = Number(body.archivoId);
     const nombre = String(body.nombre ?? '').trim();
     const observacion = String(body.observacion ?? '').trim();

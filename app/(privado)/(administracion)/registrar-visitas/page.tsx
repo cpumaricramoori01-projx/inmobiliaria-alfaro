@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { todayInPeru } from "@/lib/calendar.mjs";
 import PhotoUploader, { type UploadedPhoto } from "@/app/components/PhotoUploader";
 import { useEffect, useState } from "react";
 
@@ -14,6 +15,7 @@ type Visita = {
   propietario: string;
   dni: string;
   dias: number;
+  fotos: UploadedPhoto[];
 };
 
 export default function Page() {
@@ -27,7 +29,7 @@ export default function Page() {
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = todayInPeru();
 
   async function cargar() {
     setCargando(true);
@@ -46,7 +48,8 @@ export default function Page() {
         );
       }
 
-      const todos = body.items ?? [];
+      const todos: Visita[] = body.items ?? [];
+      setFotos(previous => Object.fromEntries(todos.map(item => [item.id, previous[item.id] ?? (item.fotos ?? []).slice(0, 20)])));
 
       const params = new URLSearchParams(window.location.search);
       const inmuebleParam = params.get("inmueble");
@@ -76,6 +79,7 @@ export default function Page() {
   async function marcarRealizada(item: Visita) {
     if (procesando !== null || subiendoFotos[item.id]) return;
     if (!fechas[item.id]) { setError('Indica la fecha de la visita.'); return; }
+    if ((fotos[item.id]?.length ?? 0) > 20) { setError("Selecciona hasta 20 fotos para esta visita."); return; }
     if (!fotos[item.id]?.length) { setError('Debes subir al menos una foto para registrar la visita.'); return; }
     setProcesando(item.id);
     setMensaje(null);
@@ -427,8 +431,19 @@ export default function Page() {
                         <p className="mb-3 mt-1 text-[11px] text-slate-400">Sube al menos una foto. También aparecerá en la ficha y en la galería del inmueble.</p>
                         <PhotoUploader propertyId={item.id} photos={fotos[item.id] || []}
                           disabled={procesando !== null}
-                          onUploaded={photo => setFotos(current => ({ ...current, [item.id]: [...(current[item.id] || []), photo] }))}
+                          onUploaded={photo => {
+                            setFotos(current => ({ ...current, [item.id]: [...(current[item.id] || []), photo] }));
+                            setItems(current => current.map(property => property.id === item.id ? { ...property, fotos: [...(property.fotos || []), photo] } : property));
+                          }}
                           onBusyChange={busy => setSubiendoFotos(current => ({ ...current, [item.id]: busy }))} />
+                        {item.fotos?.length > 0 && <fieldset disabled={procesando !== null || subiendoFotos[item.id]} className="mt-3 space-y-2 rounded-xl bg-slate-50 p-3">
+                          <legend className="text-xs font-semibold text-slate-600">Fotos seleccionadas: {fotos[item.id]?.length || 0} / 20</legend>
+                          <p className="text-[11px] text-slate-500">Puedes usar tus fotos ya guardadas y elegir cuáles corresponden a esta visita.</p>
+                          <div className="max-h-40 space-y-2 overflow-auto">{item.fotos.map(photo => {
+                            const checked = (fotos[item.id] || []).some(selected => selected.id === photo.id);
+                            return <label key={photo.id} className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={checked} disabled={!checked && (fotos[item.id]?.length || 0) >= 20} onChange={event => setFotos(current => ({ ...current, [item.id]: event.target.checked ? [...(current[item.id] || []), photo] : (current[item.id] || []).filter(selected => selected.id !== photo.id) }))} /><span className="truncate">{photo.nombre}</span></label>;
+                          })}</div>
+                        </fieldset>}
                       </div>
                     </div>
 

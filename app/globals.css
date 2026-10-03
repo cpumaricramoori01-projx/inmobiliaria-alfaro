@@ -35,4 +35,4 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .aa-red-bg{background:var(--aa-red)}
 .aa-red-border{border-color:rgb(200 0 0 / .22)}
 
-@media (max-width: 1023px) { .mobile-page-shell > main > header > div:first-child { padding-left: 4.5rem; } }
+@media (max-width: 1023px) { .mobile-page-shell > main { padding-top: 5rem; } }

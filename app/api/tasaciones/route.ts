@@ -1,4 +1,5 @@
 import { authorizeApi } from "@/lib/auth";
+import { parseBusinessDate } from "@/lib/calendar.mjs";
 import { parsePrice } from "@/lib/prices.mjs";
 import { NextResponse } from "next/server";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
@@ -21,7 +22,15 @@ function toMoney(value: unknown) {
   return parsePrice(value);
 }
 
-function mapRow(row: any) {
+type TasacionRow = {
+  inmuebleId: number; codigo: string; posicion: number | null; referencia: string; tipo: string;
+  distrito: string | null; provincia: string | null; departamento: string | null; direccion: string | null;
+  propietarioNombres: string | null; propietarioApellidos: string | null; dni: string | null;
+  tasacionId?: number; fechaTasacion?: Date | string | null; valorReferencia?: string | null;
+  precioObjetivo?: string | null; precioVenta?: string | null; situacion?: string | null; observacion?: string | null;
+};
+
+function mapRow(row: TasacionRow) {
   return {
     id: row.tasacionId ?? null,
     inmuebleId: row.inmuebleId,
@@ -192,7 +201,9 @@ export async function POST(request: Request) {
   try {
     const auth = await authorizeApi(request);
     if (auth.response) return auth.response;
-    const body = await request.json();
+    let body;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 }); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 });
 
     const inmuebleId = Number(body.inmuebleId);
     const fechaTasacion = clean(body.fechaTasacion);
@@ -213,34 +224,15 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaTasacion)) {
-      return NextResponse.json(
-        { ok: false, error: "La fecha de tasación no es válida." },
-        { status: 400 }
-      );
-    }
-
-    const fecha = new Date(`${fechaTasacion}T00:00:00`);
-
-    if (
-      Number.isNaN(fecha.getTime()) ||
-      fecha.getTime() > new Date().setHours(23, 59, 59, 999)
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "La fecha de tasación no puede ser futura.",
-        },
-        { status: 400 }
-      );
-    }
+    const fecha = parseBusinessDate(fechaTasacion);
+    if (!fecha) return NextResponse.json({ ok: false, error: "Indica una fecha de tasación válida que no sea futura." }, { status: 400 });
 
     const result = await db.transaction(async (tx) => {
       const [property] = await tx
         .select()
         .from(inmInmuebles)
         .where(eq(inmInmuebles.id, inmuebleId))
-        .limit(1);
+        .limit(1).for("update");
 
       if (!property) {
         throw new Error("El inmueble no existe.");
@@ -249,6 +241,12 @@ export async function POST(request: Request) {
       if (property.estado !== "activo") {
         throw new Error("El inmueble ya no está activo.");
       }
+
+      const [position] = await tx.select({ id: inmAsignacionesPosicion.id }).from(inmAsignacionesPosicion)
+        .where(and(eq(inmAsignacionesPosicion.inmuebleId, inmuebleId), eq(inmAsignacionesPosicion.activa, true))).limit(1);
+      const [visit] = await tx.select({ id: inmVisitas.id }).from(inmVisitas)
+        .where(and(eq(inmVisitas.inmuebleId, inmuebleId), eq(inmVisitas.completada, true))).limit(1);
+      if (!position || !visit) throw new Error("El inmueble no tiene una posición activa y una visita completada. Actualiza la pantalla.");
 
       const [existing] = await tx
         .select({ id: inmTasaciones.id })
@@ -309,7 +307,7 @@ export async function POST(request: Request) {
       },
       {
         status:
-          /no existe|ya no está|ya tiene/i.test(message)
+          /no existe|ya no está|ya tiene|no tiene/i.test(message)
             ? 409
             : 500,
       }
@@ -333,12 +331,12 @@ export async function PATCH(request: Request) {
   }
   try {
     const result = await db.transaction(async (tx) => {
+      const [property] = await tx.select({ estado: inmInmuebles.estado }).from(inmInmuebles)
+        .where(eq(inmInmuebles.id, inmuebleId)).limit(1).for("update");
+      if (property?.estado !== "activo") throw new Error("El inmueble ya no está activo.");
       const [tasacion] = await tx.select().from(inmTasaciones)
         .where(eq(inmTasaciones.inmuebleId, inmuebleId)).limit(1).for("update");
       if (!tasacion) throw new Error("El inmueble no tiene una tasación registrada.");
-      const [property] = await tx.select({ estado: inmInmuebles.estado }).from(inmInmuebles)
-        .where(eq(inmInmuebles.id, inmuebleId)).limit(1);
-      if (property?.estado !== "activo") throw new Error("El inmueble ya no está activo.");
       const observacion = body.observacion === undefined ? tasacion.observacion : body.observacion.trim() || null;
       if (precioVenta === tasacion.precioVenta && observacion === tasacion.observacion) return { precioVenta };
       await tx.update(inmTasaciones).set({ precioVenta, observacion })

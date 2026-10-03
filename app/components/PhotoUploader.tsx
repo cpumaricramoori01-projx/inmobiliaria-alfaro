@@ -41,7 +41,7 @@ export default function PhotoUploader({ propertyId, photos, onUploaded, onBusyCh
   return <div className="space-y-3">
     <label className="block rounded-2xl border border-dashed border-red-200 bg-red-50/30 p-4 text-sm font-semibold text-slate-700">
       Agregar fotografías
-      <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">JPG, PNG o WebP. Se comprimen automáticamente y se guardan en tu hosting.</span>
+      <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">JPG, PNG o WebP. Hasta 25 MB por imagen original y 20 fotos por carga. Se comprimen automáticamente.</span>
       <input ref={input} type="file" multiple accept={IMAGE_ACCEPT} disabled={busy || disabled} onChange={event => { void upload(Array.from(event.target.files || [])); }} className="mt-3 block w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:font-semibold file:text-red-700 disabled:opacity-50" />
     </label>
     {progress && <p role="status" className="text-xs text-emerald-700">{progress}</p>}

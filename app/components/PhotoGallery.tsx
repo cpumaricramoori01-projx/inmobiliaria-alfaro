@@ -15,16 +15,18 @@ export default function PhotoGallery({ propertyId, editable = false, onChanged, 
   const [selected, setSelected] = useState<number | null>(null);
   const [editing, setEditing] = useState<PropertyPhoto | null>(null);
   const [deleting, setDeleting] = useState<PropertyPhoto | null>(null);
+  const loadVersion = useRef(0);
   const dialog = useRef<HTMLDialogElement>(null);
   const url = `/api/inmuebles/${encodeURIComponent(propertyId)}/archivos`;
   const load = useCallback(async (signal?: AbortSignal) => {
+    const version = ++loadVersion.current;
     try {
       const response = await fetch(url, { cache: 'no-store', signal });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'No se pudieron consultar las fotos.');
-      if (!signal?.aborted) { setError(''); setPhotos(data.archivos.filter((file: PropertyPhoto) => file.tipoDocumento === 'FOTO_INMUEBLE' && file.almacenamiento === 'hosting' && file.tipoMime?.startsWith('image/')).sort((a: PropertyPhoto, b: PropertyPhoto) => Number(b.esPortada) - Number(a.esPortada) || b.id - a.id)); }
-    } catch (error) { if (!signal?.aborted) setError(error instanceof Error ? error.message : 'No se pudieron cargar las fotos.'); }
-    finally { if (!signal?.aborted) setLoading(false); }
+      if (!signal?.aborted && version === loadVersion.current) { setError(''); setPhotos(data.archivos.filter((file: PropertyPhoto) => file.tipoDocumento === 'FOTO_INMUEBLE' && file.almacenamiento === 'hosting' && file.tipoMime?.startsWith('image/')).sort((a: PropertyPhoto, b: PropertyPhoto) => Number(b.esPortada) - Number(a.esPortada) || b.id - a.id)); }
+    } catch (error) { if (!signal?.aborted && version === loadVersion.current) setError(error instanceof Error ? error.message : 'No se pudieron cargar las fotos.'); }
+    finally { if (!signal?.aborted && version === loadVersion.current) setLoading(false); }
   }, [url]);
   useEffect(() => {
     const controller = new AbortController();
@@ -47,6 +49,7 @@ export default function PhotoGallery({ propertyId, editable = false, onChanged, 
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'No se pudo actualizar la foto.');
+      if (method === 'DELETE' && selected === photo.id) setSelected(null);
       setEditing(null); setDeleting(null); await load(); onChanged?.();
     } catch (error) { setError(error instanceof Error ? error.message : 'No se pudo actualizar la foto.'); }
     finally { setBusy(false); onBusyChange?.(false); }

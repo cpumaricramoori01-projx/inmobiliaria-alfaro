@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReportRow, ReportSummary, ReportValue } from "@/lib/report-types";
 import { useEffect, useMemo, useState } from "react";
 
 type Reporte = {
@@ -9,7 +10,7 @@ type Reporte = {
   icono: string;
 };
 
-type Row = Record<string, any>;
+type Row = ReportRow;
 
 const reportes: Reporte[] = [
   {
@@ -208,8 +209,8 @@ const tone: Record<string, string> = {
     "bg-cyan-100 text-cyan-700",
 };
 
-function fecha(value: any) {
-  if (!value) return "—";
+function fecha(value: unknown) {
+  if (!(typeof value === "string" || typeof value === "number" || value instanceof Date) || !value) return "—";
 
   const d = new Date(value);
 
@@ -286,8 +287,10 @@ export default function Page() {
   const [categoria, setCategoria] =
     useState("Todos");
 
-  const [seleccionado, setSeleccionado] =
-    useState("Cartera activa");
+  const [consulta, setConsulta] = useState({
+    reporte: "Cartera activa", desde: "", hasta: "", situacion: "Todas", estado: "Todos", posicion: "", tipo: "Todos",
+  });
+  const seleccionado = consulta.reporte;
 
   const [fechaDesde, setFechaDesde] =
     useState("");
@@ -311,7 +314,7 @@ export default function Page() {
     useState<Row[]>([]);
 
   const [resumen, setResumen] =
-    useState<any>(null);
+    useState<ReportSummary | null>(null);
 
   const [cargando, setCargando] =
     useState(true);
@@ -337,66 +340,37 @@ export default function Page() {
         seleccionado,
     )!;
 
-  async function cargar() {
+  function solicitarReporte(reporte: string) {
     setCargando(true);
     setError("");
-
-    try {
-      const params =
-        new URLSearchParams({
-          reporte: seleccionado,
-          desde: fechaDesde,
-          hasta: fechaHasta,
-          situacion,
-          estado,
-          posicion,
-          tipo,
-        });
-
-      const response =
-        await fetch(
-          `/api/reportes?${params.toString()}`,
-          {
-            cache: "no-store",
-          },
-        );
-
-      const data =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data.ok
-      ) {
-        throw new Error(
-          data.error ||
-            "No se pudo generar el reporte.",
-        );
-      }
-
-      setRows(
-        data.rows ?? [],
-      );
-
-      setResumen(
-        data.resumen ?? null,
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "No se pudo generar el reporte.",
-      );
-
-      setRows([]);
-    } finally {
-      setCargando(false);
-    }
+    setConsulta({ reporte, desde: fechaDesde, hasta: fechaHasta, situacion, estado, posicion, tipo });
   }
 
+  function cargar() { solicitarReporte(seleccionado); }
+
   useEffect(() => {
-    cargar();
-  }, [seleccionado]);
+    const controller = new AbortController();
+    async function load() {
+      try {
+        const params = new URLSearchParams(consulta);
+        const response = await fetch(`/api/reportes?${params.toString()}`, { cache: "no-store", signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "No se pudo generar el reporte.");
+        if (controller.signal.aborted) return;
+        setRows(data.rows ?? []);
+        setResumen(data.resumen ?? null);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setError(err instanceof Error ? err.message : "No se pudo generar el reporte.");
+        setRows([]);
+        setResumen(null);
+      } finally {
+        if (!controller.signal.aborted) setCargando(false);
+      }
+    }
+    void load();
+    return () => controller.abort();
+  }, [consulta]);
 
   const limpiar = () => {
     setFechaDesde("");
@@ -483,7 +457,7 @@ export default function Page() {
 
   function renderValor(
     key: string,
-    value: any,
+    value: ReportValue,
   ) {
     if (
       value === null ||
@@ -971,9 +945,7 @@ export default function Page() {
                     reporte.nombre
                   }
                   onClick={() =>
-                    setSeleccionado(
-                      reporte.nombre,
-                    )
+                    solicitarReporte(reporte.nombre)
                   }
                   className={`rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
                     seleccionado ===
