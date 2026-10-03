@@ -29,6 +29,13 @@
       "when": 1790979658527,
       "tag": "0003_acoustic_hedge_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1791007751402,
+      "tag": "0004_adorable_warlock",
+      "breakpoints": true
     }
   ]
 }

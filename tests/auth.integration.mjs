@@ -57,7 +57,7 @@ try {
     assert.equal(response.status, 307, path);
     assert.equal(new URL(response.headers.get("location"), origin).pathname, "/login");
   }
-  const apis = ["/api/cartera", "/api/dashboard", "/api/posiciones", "/api/propietarios?dni=00000000", "/api/visitas", "/api/tasaciones", "/api/publicaciones", "/api/liberaciones", "/api/reportes", "/api/inmuebles", "/api/inmuebles/1", "/api/inmuebles/1/archivos"];
+  const apis = ["/api/cartera", "/api/dashboard", "/api/posiciones", "/api/propietarios?dni=00000000", "/api/visitas", "/api/tasaciones", "/api/publicaciones", "/api/liberaciones", "/api/reportes", "/api/inmuebles", "/api/inmuebles/1", "/api/inmuebles/1/archivos", "/api/inmuebles/1/archivos/1"];
   for (const path of apis) assert.equal((await request(path)).status, 401, path);
   for (const cookie of ["aa_session=falso", "aa_session=" + "a".repeat(64)]) {
     assert.equal((await request("/cartera", { headers: { Cookie: cookie } })).status, 307);
@@ -139,6 +139,17 @@ try {
     const files = await request(`/api/inmuebles/${testPropertyId}/archivos`, { headers: { Cookie: cookie } });
     assert.equal(files.status, 200);
     assert.equal((await files.json()).archivos.some(file => file.id === fileId), true);
+    // External links are not fetched through the protected file route.
+    assert.equal((await request(`/api/inmuebles/${testPropertyId}/archivos/${fileId}`, { headers: { Cookie: cookie } })).status, 404);
+    const multipart = new FormData();
+    multipart.set("tipoDocumento", "COPIA_LITERAL"); multipart.set("nombre", "Archivo de prueba");
+    multipart.set("archivo", new Blob(["MZ executable"]), "renamed.pdf");
+    assert.equal((await request(`/api/inmuebles/${testPropertyId}/archivos`, { method: "POST", headers: { Cookie: cookie, Origin: origin }, body: multipart })).status, 400);
+    multipart.set("archivo", new Blob(["%PDF-1.7\n%%EOF"]), "test.pdf");
+    if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.BLOB_STORE_ID) {
+      assert.equal((await request(`/api/inmuebles/${testPropertyId}/archivos`, { method: "POST", headers: { Cookie: cookie, Origin: origin }, body: multipart })).status, 503);
+    }
+    assert.equal((await request(`/api/inmuebles/${testPropertyId}/archivos`, { method: "POST", headers: { Cookie: cookie, Origin: "https://example.invalid" }, body: multipart })).status, 403);
     const remove = await request(`/api/inmuebles/${testPropertyId}/archivos?archivoId=${fileId}`, { method: "DELETE", headers: { Cookie: cookie, Origin: origin } });
     assert.equal(remove.status, 200);
     assert.equal((await post("/api/inmuebles", {}, cookie)).status, 403);
