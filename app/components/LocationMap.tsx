@@ -12,10 +12,11 @@ export default function LocationMap({ point, editable = false, disabled = false,
   const map = useRef<LeafletMap | null>(null);
   const marker = useRef<Marker | null>(null);
   const callback = useRef(onChange);
+  const interactionEnabled = useRef(editable && !disabled);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const lat = point?.lat, lng = point?.lng;
-  useEffect(() => { callback.current = onChange; }, [onChange]);
+  useEffect(() => { callback.current = onChange; interactionEnabled.current = editable && !disabled; }, [onChange, editable, disabled]);
   useEffect(() => {
     let cancelled = false;
     let observer: ResizeObserver | undefined;
@@ -29,10 +30,10 @@ export default function LocationMap({ point, editable = false, disabled = false,
       const pin = L.divIcon({ className: "property-map-pin", iconSize: [32, 42], iconAnchor: [16, 40],
         html: '<svg width="32" height="42" viewBox="0 0 32 42" aria-hidden="true"><path d="M16 40S2 24 2 16a14 14 0 1 1 28 0c0 8-14 24-14 24Z" fill="#c80000" stroke="white" stroke-width="2"/><circle cx="16" cy="16" r="5" fill="white"/></svg>',
       });
-      marker.current = L.marker(initialCenter, { icon: pin, draggable: editable, keyboard: true, title: "Ubicación del inmueble", alt: "Marcador del inmueble" });
-      marker.current.on("dragend", () => { const position = marker.current?.getLatLng(); if (position) callback.current?.({ lat: position.lat, lng: ((position.lng + 180) % 360 + 360) % 360 - 180 }); });
+      marker.current = L.marker(initialCenter, { icon: pin, draggable: interactionEnabled.current, keyboard: true, title: "Ubicación del inmueble", alt: "Marcador del inmueble" });
+      marker.current.on("dragend", () => { const position = marker.current?.getLatLng(); if (interactionEnabled.current && position) callback.current?.({ lat: position.lat, lng: ((position.lng + 180) % 360 + 360) % 360 - 180 }); });
       instance.on("click", event => {
-        if (marker.current?.dragging?.enabled()) callback.current?.({ lat: event.latlng.lat, lng: ((event.latlng.lng + 180) % 360 + 360) % 360 - 180 });
+        if (interactionEnabled.current) callback.current?.({ lat: event.latlng.lat, lng: ((event.latlng.lng + 180) % 360 + 360) % 360 - 180 });
       });
       observer = new ResizeObserver(() => instance.invalidateSize());
       observer.observe(container.current);
@@ -52,6 +53,7 @@ export default function LocationMap({ point, editable = false, disabled = false,
   }, [lat, lng, ready]);
   useEffect(() => {
     if (!ready || !marker.current) return;
+    marker.current.options.draggable = editable && !disabled;
     if (editable && !disabled) marker.current.dragging?.enable(); else marker.current.dragging?.disable();
   }, [disabled, editable, ready]);
 

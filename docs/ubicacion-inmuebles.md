@@ -27,3 +27,9 @@ Referencias: https://leafletjs.com/examples/quick-start/ ; https://operations.os
 ## Comprobación realizada
 
 Compilación de producción, TypeScript, ESLint sin advertencias y nueve archivos de pruebas correctos. Una prueba con navegador real y un inmueble/cuenta temporales verificó selección y persistencia, GPS simulado con precisión, importación de enlace, retirada de ubicación, enlaces de navegación, rechazo de coordenadas inválidas, sesión y origen. Comprobó ausencia de desbordes horizontales a 320, 390, 768, 1024, 1280 y 1536 píxeles y ausencia de errores de JavaScript. Se eliminaron los registros temporales al finalizar. Las capturas de demostración están en `output/location/` y no forman parte del despliegue.
+
+## Corrección del primer clic
+
+El selector acepta clics aunque todavía no exista un marcador. La posibilidad de seleccionar depende del estado editable de la ficha, sin consultar el manejador de arrastre de un marcador aún no añadido. Al quitar una ubicación se puede volver a marcar con un clic o toque. El marcador conserva el bloqueo durante operaciones pendientes y se vuelve a habilitar al terminar.
+
+Prueba de regresión: `tests/location.integration.mjs`, con Playwright instalado en el entorno de pruebas. `PLAYWRIGHT_MODULE_PATH` permite indicar una instalación externa. Requiere la compilación de producción y la BD configurada; crea y elimina sus propios registros temporales. Verifica primer clic, arrastre con cambio de coordenadas, toque en celular después de retirar el punto y el resto del flujo de ubicación.
