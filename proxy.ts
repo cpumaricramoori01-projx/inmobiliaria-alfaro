@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 // actual session in the database before exposing data or accepting mutations.
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  if (path === "/login" || path.startsWith("/api/auth/")) return NextResponse.next();
+  if (path === "/login" || path === "/apple-icon.png" || path.startsWith("/api/auth/")) return NextResponse.next();
   if (!request.cookies.get("aa_session")?.value) {
     if (path.startsWith("/api/")) {
       return NextResponse.json({ error: "Inicia sesión para continuar." }, { status: 401 });
