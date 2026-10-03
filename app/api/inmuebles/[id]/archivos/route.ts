@@ -2,6 +2,7 @@ import { authorizeApi } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 import { and, asc, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
+import { hostingRequest } from '@/lib/document-hosting';
 import { put, del } from '@vercel/blob';
 import { db } from '@/lib/db';
 import { inmArchivos, inmInmuebles, inmAsignacionesPosicion, inmPosiciones } from '@/db/schema';
@@ -22,7 +23,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const inmueble = await findInmueble((await context.params).id);
     if (!inmueble) return NextResponse.json({ error: 'Inmueble no encontrado.' }, { status: 404 });
     const rows = await db.select().from(inmArchivos).where(eq(inmArchivos.inmuebleId, inmueble.id)).orderBy(asc(inmArchivos.tipoDocumento), asc(inmArchivos.fechaRegistro));
-    const archivos = rows.map(row => ({ ...row, enlace: row.almacenamiento === 'vercel_blob' ? `/api/inmuebles/${inmueble.id}/archivos/${row.id}` : row.enlace, rutaAlmacenamiento: undefined }));
+    const archivos = rows.map(row => ({ ...row, enlace: ['vercel_blob', 'hosting'].includes(row.almacenamiento) ? `/api/inmuebles/${inmueble.id}/archivos/${row.id}` : row.enlace, rutaAlmacenamiento: undefined }));
     return NextResponse.json({ archivos, subidaHabilitada: storageConfigured() }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch { return NextResponse.json({ error: 'No se pudieron consultar los archivos.' }, { status: 500 }); }
 }
@@ -62,16 +63,17 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     let contentType: string;
     try { contentType = validateDocument(file.name, bytes).contentType; }
     catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Archivo no válido.' }, { status: 400 }); }
-    if (!storageConfigured()) return NextResponse.json({ error: 'Falta conectar un almacenamiento Blob privado al proyecto en Vercel.' }, { status: 503 });
+    if (!storageConfigured()) return NextResponse.json({ error: 'Falta configurar el almacenamiento de documentos.' }, { status: 503 });
     const [position] = await db.select({ numero: inmPosiciones.numero }).from(inmAsignacionesPosicion).innerJoin(inmPosiciones, eq(inmPosiciones.id, inmAsignacionesPosicion.posicionId)).where(and(eq(inmAsignacionesPosicion.inmuebleId, inmueble.id), eq(inmAsignacionesPosicion.activa, true))).limit(1);
     const pathname = documentPath({ position: position?.numero ?? null, propertyId: inmueble.id, type: tipoDocumento, name: file.name, uniqueId: randomUUID() });
     const originalName = file.name;
-    const created = await storeDocument({ pathname, bytes, contentType, put, remove: del, register: async (blob: { url: string; pathname: string }) => {
-      const [row] = await db.insert(inmArchivos).values({ inmuebleId: inmueble.id, tipoDocumento, nombre, enlace: blob.url, almacenamiento: 'vercel_blob', rutaAlmacenamiento: blob.pathname, nombreOriginal: originalName, tamanoBytes: bytes.length, tipoMime: contentType, observacion: observacion || null, usuarioId }).$returningId();
+    const hosting = process.env.DOCUMENT_STORAGE === 'hosting';
+    const created = await storeDocument({ pathname, bytes, contentType, put: hosting ? async (path: string, data: Uint8Array) => { await hostingRequest('PUT', path, data); return { url: path, pathname: path }; } : put, remove: hosting ? async (path: string) => { await hostingRequest('DELETE', path); } : del, register: async (blob: { url: string; pathname: string }) => {
+      const [row] = await db.insert(inmArchivos).values({ inmuebleId: inmueble.id, tipoDocumento, nombre, enlace: blob.url, almacenamiento: hosting ? 'hosting' : 'vercel_blob', rutaAlmacenamiento: blob.pathname, nombreOriginal: originalName, tamanoBytes: bytes.length, tipoMime: contentType, observacion: observacion || null, usuarioId }).$returningId();
       return row;
     } });
     return NextResponse.json({ ok: true, id: created.id }, { status: 201 });
-  } catch { return NextResponse.json({ error: 'No se pudo guardar el documento. Comprueba que el almacenamiento de Vercel esté conectado y sea privado.' }, { status: 500 }); }
+  } catch { return NextResponse.json({ error: 'No se pudo guardar el documento. Comprueba la configuración del almacenamiento de documentos.' }, { status: 500 }); }
 }
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -84,6 +86,10 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     const condition = and(eq(inmArchivos.id, fileId), eq(inmArchivos.inmuebleId, inmueble.id));
     const [file] = await db.select().from(inmArchivos).where(condition).limit(1);
     if (!file) return NextResponse.json({ error: 'Documento no encontrado.' }, { status: 404 });
+    if (file.almacenamiento === 'hosting') {
+      if (!file.rutaAlmacenamiento) throw new Error('Ruta no disponible.');
+      await hostingRequest('DELETE', file.rutaAlmacenamiento);
+    }
     if (file.almacenamiento === 'vercel_blob') await del(file.enlace);
     await db.delete(inmArchivos).where(condition);
     return NextResponse.json({ ok: true });

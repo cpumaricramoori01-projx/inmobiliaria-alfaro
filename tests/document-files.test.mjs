@@ -43,3 +43,8 @@ test('private upload cleans up when registration fails', async () => {
   assert.equal(await storeDocument({ ...input, register: async () => 42 }), 42);
   assert.equal(calls.length, 1);
 });
+test('hosting mode requires its own credentials and never falls back to Blob', () => {
+  assert.equal(storageConfigured({ DOCUMENT_STORAGE: 'hosting', BLOB_STORE_ID: 'store' }), false);
+  assert.equal(storageConfigured({ DOCUMENT_STORAGE: 'hosting', DOCUMENT_HOSTING_URL: 'https://files.example/documentos.php', DOCUMENT_HOSTING_TOKEN: 'secret' }), true);
+  assert.equal(storageConfigured({ DOCUMENT_STORAGE: 'hosting', DOCUMENT_HOSTING_URL: 'https://files.example/documentos.php' }), false);
+});
