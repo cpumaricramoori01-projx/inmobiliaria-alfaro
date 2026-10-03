@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
 
 :root {
   --background: #f7f7f5;
@@ -43,3 +44,5 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .mobile-page-shell .grid > * { min-width: 0; }
 .mobile-page-shell input, .mobile-page-shell select, .mobile-page-shell textarea { min-width: 0; max-width: 100%; }
 @media (max-width: 639px) { .mobile-page-shell > main { padding-left: 1rem; padding-right: 1rem; } }
+
+.property-map-pin { background: transparent; border: 0; }
