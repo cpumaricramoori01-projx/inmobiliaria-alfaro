@@ -71,6 +71,31 @@ function SaveBar({ dirty, busy }: { dirty: boolean; busy: boolean }) {
   return <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)] backdrop-blur-sm"><p className={`flex items-center gap-2 text-xs ${dirty ? "text-amber-700" : "text-slate-500"}`}><Icon name={dirty ? "document" : "check"} />{dirty ? "Tienes cambios por guardar" : "Sin cambios pendientes"}</p><button type="submit" disabled={!dirty || busy} className={primaryClass}><Icon name="save" />{busy ? "Guardando…" : "Guardar cambios"}</button></div>;
 }
 
+function DeleteDocumentDialog({ document, busy, onCancel, onConfirm }: {
+  document: Document; busy: boolean; onCancel: () => void; onConfirm: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const hosted = ["vercel_blob", "hosting"].includes(document.almacenamiento);
+  useEffect(() => {
+    const element = dialog.current;
+    element?.showModal();
+    return () => element?.close();
+  }, []);
+
+  return <dialog ref={dialog} aria-labelledby="delete-document-title" aria-describedby="delete-document-description"
+    onCancel={event => { event.preventDefault(); if (!busy) onCancel(); }}
+    className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-3xl border border-slate-200 bg-white p-6 text-slate-800 shadow-2xl backdrop:bg-slate-950/40 backdrop:backdrop-blur-sm">
+    <span className="mb-4 inline-flex rounded-2xl bg-red-50 p-3 text-[#c80000]"><Icon name="document" className="h-6 w-6" /></span>
+    <h2 id="delete-document-title" className="text-lg font-bold text-slate-900">{hosted ? "Eliminar documento" : "Quitar enlace"}</h2>
+    <p className="mt-3 break-words rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold">{document.nombre}</p>
+    <p id="delete-document-description" className="mt-4 text-sm leading-6 text-slate-500">{hosted ? "Se eliminará el documento y su archivo guardado. Esta acción no se puede deshacer." : "Se quitará el enlace de la ficha. El archivo externo se conservará."}</p>
+    <div className="mt-6 flex flex-wrap justify-end gap-3">
+      <button type="button" autoFocus disabled={busy} onClick={onCancel} className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500 disabled:opacity-50">Cancelar</button>
+      <button type="button" disabled={busy} onClick={onConfirm} className={`${primaryClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c80000]`}>{busy ? "Eliminando…" : hosted ? "Eliminar documento" : "Quitar enlace"}</button>
+    </div>
+  </dialog>;
+}
+
 export default function PropertyInformation({ initialCode = "" }: { initialCode?: string }) {
   const admin = isAdministrator(useSessionUser());
   const [items, setItems] = useState<Item[]>([]);
@@ -82,6 +107,7 @@ export default function PropertyInformation({ initialCode = "" }: { initialCode?
   const [form, setForm] = useState<Property | null>(null);
   const [owner, setOwner] = useState<Owner>(emptyOwner);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null);
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [uploadReady, setUploadReady] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -170,14 +196,14 @@ export default function PropertyInformation({ initialCode = "" }: { initialCode?
   }
   async function removeDocument(document: Document) {
     const hosted = ["vercel_blob", "hosting"].includes(document.almacenamiento);
-    if (busy || !window.confirm(hosted ? "¿Eliminar este documento? Se borrará también el archivo del hosting." : "¿Quitar este enlace? El archivo externo se conservará.")) return;
+    if (busy) return;
     setBusy(true); setError(""); setMessage("");
     try {
       await requestJson(`/api/inmuebles/${encodeURIComponent(code)}/archivos?archivoId=${document.id}`, { method: "DELETE" });
       const files = await requestJson<{ archivos: Document[]; subidaHabilitada: boolean }>(`/api/inmuebles/${encodeURIComponent(code)}/archivos`);
       setDocuments(files.archivos); setUploadReady(files.subidaHabilitada); setMessage(hosted ? "Documento eliminado del hosting." : "Enlace retirado. El archivo externo se conserva.");
     } catch (error) { setError(error instanceof Error ? error.message : "No se pudo quitar el enlace."); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setDocumentToDelete(null); }
   }
   function propertyField(label: string, key: keyof Property, type = "text", placeholder?: string) {
     return <label className="block text-xs font-semibold text-slate-600">{label}<input type={type} min={type === "number" ? 0 : undefined} step={type === "number" ? (key === "habitaciones" || key === "banos" ? "1" : "0.01") : undefined} value={form?.[key] ?? ""} placeholder={placeholder} required={key === "referencia"} disabled={busy} onChange={event => setForm(previous => previous ? { ...previous, [key]: event.target.value } : previous)} className={inputClass} /></label>;
@@ -255,7 +281,7 @@ export default function PropertyInformation({ initialCode = "" }: { initialCode?
 
               {tab === "Documentación" && <div className="space-y-7">
                 <Block title="Documentación del inmueble" description="Consulta tus documentos y sube archivos directamente al hosting."><div className="grid gap-2 sm:grid-cols-2">{documentTypes.map(([value, label]) => { const count = documents.filter(document => document.tipoDocumento === value).length; return <div key={value} className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 p-3"><span className="text-[11px] font-medium text-slate-600">{label}</span><span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold ${count ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>{count ? `${count} registrado${count === 1 ? "" : "s"}` : "Por completar"}</span></div>; })}</div></Block>
-                {documents.length > 0 && <Block title="Documentos registrados"><div className="space-y-2">{documents.map(document => <article key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"><div className="flex min-w-0 items-start gap-3"><span className="rounded-xl bg-slate-50 p-2.5 text-slate-400"><Icon name="document" /></span><div className="min-w-0"><p className="break-words text-xs font-bold text-slate-800">{document.nombre}</p><p className="mt-1 text-[10px] text-slate-400">{documentTypes.find(([value]) => value === document.tipoDocumento)?.[1] || document.tipoDocumento}</p>{["vercel_blob", "hosting"].includes(document.almacenamiento) && <p className="mt-1 text-[10px] text-emerald-700">Guardado en hosting · {document.nombreOriginal} · {((document.tamanoBytes || 0) / 1024).toLocaleString("es-PE", { maximumFractionDigits: 0 })} KB</p>}{document.observacion && <p className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{document.observacion}</p>}</div></div><div className="flex gap-2"><a href={document.enlace} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"><Icon name="link" />Abrir</a>{["vercel_blob", "hosting"].includes(document.almacenamiento) && <a href={`${document.enlace}?download=1`} className="rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">Descargar</a>}<button type="button" disabled={busy} onClick={() => removeDocument(document)} aria-label={`${["vercel_blob", "hosting"].includes(document.almacenamiento) ? "Eliminar documento" : "Quitar enlace"} de ${document.nombre}`} className="rounded-lg px-2.5 py-2 text-slate-400 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-50"><Icon name="close" /></button></div></article>)}</div></Block>}
+                {documents.length > 0 && <Block title="Documentos registrados"><div className="space-y-2">{documents.map(document => <article key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"><div className="flex min-w-0 items-start gap-3"><span className="rounded-xl bg-slate-50 p-2.5 text-slate-400"><Icon name="document" /></span><div className="min-w-0"><p className="break-words text-xs font-bold text-slate-800">{document.nombre}</p><p className="mt-1 text-[10px] text-slate-400">{documentTypes.find(([value]) => value === document.tipoDocumento)?.[1] || document.tipoDocumento}</p>{["vercel_blob", "hosting"].includes(document.almacenamiento) && <p className="mt-1 text-[10px] text-emerald-700">Guardado en hosting · {document.nombreOriginal} · {((document.tamanoBytes || 0) / 1024).toLocaleString("es-PE", { maximumFractionDigits: 0 })} KB</p>}{document.observacion && <p className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{document.observacion}</p>}</div></div><div className="flex gap-2"><a href={document.enlace} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"><Icon name="link" />Abrir</a>{["vercel_blob", "hosting"].includes(document.almacenamiento) && <a href={`${document.enlace}?download=1`} className="rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">Descargar</a>}<button type="button" disabled={busy} onClick={() => setDocumentToDelete(document)} aria-label={`${["vercel_blob", "hosting"].includes(document.almacenamiento) ? "Eliminar documento" : "Quitar enlace"} de ${document.nombre}`} className="rounded-lg px-2.5 py-2 text-slate-400 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-50"><Icon name="close" /></button></div></article>)}</div></Block>}
                 {!uploadReady && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">{admin ? "Para activar la subida, configura el almacenamiento de documentos y vuelve a desplegar el proyecto." : "La subida de documentos está pendiente de activación por el administrador."}</p>}
                 <form onSubmit={addDocument} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 sm:p-5"><Block title="Agregar un documento" description="PDF, Word (.doc, .docx) o Excel (.xls, .xlsx), hasta 4 MB. Se guarda de forma privada, organizado por inmueble y tipo de documento."><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold text-slate-600">Tipo de documento<select value={documentForm.tipoDocumento} disabled={busy} onChange={event => setDocumentForm(previous => ({ ...previous, tipoDocumento: event.target.value }))} className={inputClass}>{documentTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="text-xs font-semibold text-slate-600">Nombre<input required maxLength={255} value={documentForm.nombre} disabled={busy} onChange={event => setDocumentForm(previous => ({ ...previous, nombre: event.target.value }))} placeholder="Ej. Copia literal actualizada" className={inputClass} /></label><label className="text-xs font-semibold text-slate-600 sm:col-span-2">Archivo<input ref={fileInput} required type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" disabled={busy || !uploadReady} onChange={event => { const selected = event.target.files?.[0] || null; setDocumentFile(selected); if (selected && !documentForm.nombre) setDocumentForm(previous => ({ ...previous, nombre: selected.name.replace(/\.[^.]+$/, "") })); }} className={`${inputClass} file:mr-3 file:rounded-lg file:border-0 file:bg-red-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-red-700`} />{documentFile && <span className="mt-2 block text-[11px] font-normal text-slate-500">{documentFile.name} · {(documentFile.size / 1024 / 1024).toFixed(2)} MB</span>}</label><label className="text-xs font-semibold text-slate-600 sm:col-span-2">Observación<textarea rows={2} maxLength={500} value={documentForm.observacion} disabled={busy} onChange={event => setDocumentForm(previous => ({ ...previous, observacion: event.target.value }))} placeholder="Fecha, versión o comentario sobre el documento" className={inputClass} /></label></div><button type="submit" disabled={busy || !uploadReady || !documentFile} className={`${primaryClass} mt-5`}><Icon name="document" />{busy ? "Guardando…" : "Subir documento"}</button></Block></form>
               </div>}
@@ -268,5 +294,6 @@ export default function PropertyInformation({ initialCode = "" }: { initialCode?
         </div>
       </div>
     </div>
+    {documentToDelete && <DeleteDocumentDialog document={documentToDelete} busy={busy} onCancel={() => setDocumentToDelete(null)} onConfirm={() => { void removeDocument(documentToDelete); }} />}
   </main>;
 }

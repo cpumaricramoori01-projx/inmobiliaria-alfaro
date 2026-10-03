@@ -17,11 +17,11 @@ test('PDF, legacy Office and Office ZIP accepted; renamed executables and wrong 
   assert.throws(() => validateDocument('large.pdf', Buffer.alloc(MAX_DOCUMENT_BYTES + 1)));
 });
 test('position reuse separates properties; safe names and historic unassigned properties', () => {
-  const input = { position: 11, propertyId: 11, type: 'COPIA_LITERAL', name: '../../copia año.pdf', uniqueId: 'uuid' };
+  const input = { position: 11, propertyId: 11, propertyCode: 'INM-011', type: 'COPIA_LITERAL', name: '../../copia año.pdf', uniqueId: 'uuid' };
   const path = documentPath(input);
-  assert.match(path, /^inmuebles\/posicion-11\/inmueble-11\/copia-literal\/uuid-/);
+  assert.match(path, /^inmuebles\/INM-011-posicion-11\/copia-literal\/uuid-/);
   assert.equal(path.includes('/../'), false);
-  assert.notEqual(path, documentPath({ ...input, propertyId: 12 }));
+  assert.notEqual(path, documentPath({ ...input, propertyId: 12, propertyCode: 'INM-012' }));
   assert.match(documentPath({ ...input, position: null }), /sin-posicion/);
 });
 test('storage configuration accepts a connected OIDC store without optional system variables', () => {
@@ -47,4 +47,12 @@ test('hosting mode requires its own credentials and never falls back to Blob', (
   assert.equal(storageConfigured({ DOCUMENT_STORAGE: 'hosting', BLOB_STORE_ID: 'store' }), false);
   assert.equal(storageConfigured({ DOCUMENT_STORAGE: 'hosting', DOCUMENT_HOSTING_URL: 'https://files.example/documentos.php', DOCUMENT_HOSTING_TOKEN: 'secret' }), true);
   assert.equal(storageConfigured({ DOCUMENT_STORAGE: 'hosting', DOCUMENT_HOSTING_URL: 'https://files.example/documentos.php' }), false);
+});
+
+test('property code and position appear in a safe folder with a unique filename', () => {
+  const input = { position: 1, propertyId: 1, propertyCode: 'INM-001', type: 'DNI_PROPIETARIO', name: 'dni.pdf', uniqueId: 'first' };
+  assert.equal(documentPath(input), 'inmuebles/INM-001-posicion-1/dni-propietario/first-dni.pdf');
+  assert.notEqual(documentPath(input), documentPath({ ...input, uniqueId: 'second' }));
+  assert.equal(documentPath({ ...input, position: null }), 'inmuebles/INM-001-sin-posicion/dni-propietario/first-dni.pdf');
+  assert.equal(documentPath({ ...input, propertyCode: '../../código' }).includes('/../'), false);
 });

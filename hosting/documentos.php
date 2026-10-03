@@ -12,7 +12,10 @@ $token = $config['token'] ?? '';
 $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
 if (strlen($token) < 32 || !hash_equals('Bearer ' . $token, $auth)) fail_request(401);
 $path = $_GET['path'] ?? '';
-if (!is_string($path) || strlen($path) > 1000 || !preg_match('#^inmuebles/(posicion-[1-9][0-9]*|sin-posicion)/inmueble-[1-9][0-9]*/[a-z-]+/[a-zA-Z0-9._-]+\.(pdf|doc|docx|xls|xlsx)$#D', $path)) fail_request(400);
+// Accept both the new code/position folders and the previous layout.
+$legacyPattern = '#^inmuebles/(posicion-[1-9][0-9]*|sin-posicion)/inmueble-[1-9][0-9]*/[a-z-]+/[a-zA-Z0-9._-]+\.(pdf|doc|docx|xls|xlsx)$#D';
+$currentPattern = '#^inmuebles/[a-zA-Z0-9_-]+-(posicion-[1-9][0-9]*|sin-posicion)/[a-z-]+/[a-zA-Z0-9._-]+\.(pdf|doc|docx|xls|xlsx)$#D';
+if (!is_string($path) || strlen($path) > 1000 || (!preg_match($legacyPattern, $path) && !preg_match($currentPattern, $path))) fail_request(400);
 $root = $config['directory'] ?? '';
 if (!$root || !is_dir($root) || is_link($root)) fail_request(503);
 $root = realpath($root);

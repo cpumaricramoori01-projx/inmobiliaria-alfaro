@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 async function findInmueble(key: string) {
-  const [row] = await db.select({ id: inmInmuebles.id }).from(inmInmuebles)
+  const [row] = await db.select({ id: inmInmuebles.id, codigo: inmInmuebles.codigo }).from(inmInmuebles)
     .where(/^\d+$/.test(key) ? eq(inmInmuebles.id, Number(key)) : eq(inmInmuebles.codigo, key)).limit(1);
   return row;
 }
@@ -65,7 +65,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Archivo no válido.' }, { status: 400 }); }
     if (!storageConfigured()) return NextResponse.json({ error: 'Falta configurar el almacenamiento de documentos.' }, { status: 503 });
     const [position] = await db.select({ numero: inmPosiciones.numero }).from(inmAsignacionesPosicion).innerJoin(inmPosiciones, eq(inmPosiciones.id, inmAsignacionesPosicion.posicionId)).where(and(eq(inmAsignacionesPosicion.inmuebleId, inmueble.id), eq(inmAsignacionesPosicion.activa, true))).limit(1);
-    const pathname = documentPath({ position: position?.numero ?? null, propertyId: inmueble.id, type: tipoDocumento, name: file.name, uniqueId: randomUUID() });
+    const pathname = documentPath({ position: position?.numero ?? null, propertyId: inmueble.id, propertyCode: inmueble.codigo, type: tipoDocumento, name: file.name, uniqueId: randomUUID() });
     const originalName = file.name;
     const hosting = process.env.DOCUMENT_STORAGE === 'hosting';
     const created = await storeDocument({ pathname, bytes, contentType, put: hosting ? async (path: string, data: Uint8Array) => { await hostingRequest('PUT', path, data); return { url: path, pathname: path }; } : put, remove: hosting ? async (path: string) => { await hostingRequest('DELETE', path); } : del, register: async (blob: { url: string; pathname: string }) => {

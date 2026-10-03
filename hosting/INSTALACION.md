@@ -19,3 +19,9 @@ Los documentos de Blob anteriores no se migran automáticamente. Conserva sus cr
 El almacenamiento queda en cPanel, pero la subida y descarga pasan por las funciones de Vercel y pueden consumir transferencia y ejecución allí. La aplicación conserva su autenticación y límite de 4 MB. No se publica una URL directa de los documentos ni el secreto en el navegador.
 
 Si la autenticación falla aun con el secreto correcto, revisa con el proveedor que PHP reciba el encabezado Authorization. No habilites acceso público como solución.
+
+## Actualización de carpetas y confirmación de borrado
+
+Reemplaza únicamente `/home5/inmobi16/public_html/documentos.php` por la versión nueva. Conserva `documentos-config.php` y su clave actual. El PHP actualizado admite las rutas anteriores y las nuevas: `inmuebles/INM-001-posicion-1/dni-propietario/identificador-dni.pdf`. Sin reemplazarlo, las nuevas subidas serán rechazadas.
+
+Las nuevas carpetas usan el código real del inmueble y su posición al subir el documento. Si cambia de posición, los documentos previos conservan su ruta. Los archivos existentes siguen funcionando; no se mueven automáticamente. Las direcciones de apertura siguen pasando por la aplicación para comprobar la sesión.
