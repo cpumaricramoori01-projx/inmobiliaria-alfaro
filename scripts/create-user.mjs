@@ -27,7 +27,7 @@ const output = new Writable({ write(chunk, encoding, callback) {
 const terminal = createInterface({ input: process.stdin, output, terminal: true });
 let password;
 try {
-  process.stdout.write("Contraseña (mínimo 12 caracteres, no se mostrará): ");
+  process.stdout.write("Contraseña (mínimo 8 caracteres, no se mostrará): ");
   muted = true;
   password = await terminal.question("");
   muted = false;
@@ -37,7 +37,7 @@ try {
   muted = false;
   process.stdout.write("\n");
   if (password !== confirmation) throw new Error("Las contraseñas no coinciden.");
-  if (password.length < 12 || password.length > 256) throw new Error("La contraseña debe tener entre 12 y 256 caracteres.");
+  if (password.length < 8 || password.length > 256) throw new Error("La contraseña debe tener entre 8 y 256 caracteres.");
 } finally {
   muted = false;
   terminal.close();

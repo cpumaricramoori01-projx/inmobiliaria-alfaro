@@ -12,7 +12,7 @@ npm run auth:user -- --usuario alberto --nombre "Alberto Alfaro" --rol administr
 npm run auth:user -- --usuario operador --nombre "Operador" --rol operador
 ```
 
-Se puede agregar `--email correo@ejemplo.com` para usar el correo de una cuenta existente; si se omite se asigna un identificador interno `usuario@inmobiliaria-alfaro.local`, sin enviar correos. Los comandos preguntan y confirman la contraseña sin mostrarla; nunca se pasa como argumento ni se guarda en el código. Debe tener al menos 12 caracteres. Repetir `auth:user` para la misma cuenta cambia su contraseña e invalida sus sesiones. Los usuarios anteriores sin contraseña no pueden iniciar sesión hasta configurar su cuenta.
+Se puede agregar `--email correo@ejemplo.com` para usar el correo de una cuenta existente; si se omite se asigna un identificador interno `usuario@inmobiliaria-alfaro.local`, sin enviar correos. Los comandos preguntan y confirman la contraseña sin mostrarla; nunca se pasa como argumento ni se guarda en el código. Debe tener al menos 8 caracteres. Repetir `auth:user` para la misma cuenta cambia su contraseña e invalida sus sesiones. Los usuarios anteriores sin contraseña no pueden iniciar sesión hasta configurar su cuenta.
 
 `auth:install` agrega únicamente los campos e índices de acceso y la tabla de sesiones, admite ejecuciones repetidas y conserva los datos existentes. Para instalaciones gestionadas completamente por Drizzle, la migración `0002_mixed_gwen_stacy.sql` incorpora los mismos cambios; usar una sola vía de migración para evitar aplicar las mismas operaciones dos veces.
 
