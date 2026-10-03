@@ -39,3 +39,9 @@ Prueba de regresión: `tests/location.integration.mjs`, con Playwright instalado
 Las imágenes de OpenStreetMap incluyen explícitamente `referrerPolicy: strict-origin-when-cross-origin`. Esto envía el origen real de la aplicación aun si el documento hereda una política restrictiva, sin revelar la ruta de la ficha. No se utilizan proxies, identidades falsas ni otros servidores para eludir bloqueos. Ante errores de carga se muestra un aviso y un botón manual de reintento; los enlaces de Google Maps y los datos guardados siguen disponibles.
 
 La prueba de navegador simula un documento con `Referrer-Policy: no-referrer`, verifica el origen enviado y los estados HTTP de las imágenes. También simula respuestas 403 para comprobar el aviso y la recuperación con «Reintentar mapa». Un navegador o extensión que elimine los encabezados incluso cuando se solicitan explícitamente, o una restricción del proveedor por otro motivo, puede necesitar revisión adicional.
+
+## Acceso desde cartera
+
+Las tarjetas de posición, la vista de lista y el detalle incluyen un acceso a la ubicación. Un diálogo muestra el mapa con las coordenadas de la ficha y los enlaces de Google Maps, sin cambiar de página. Si faltan coordenadas, la tarjeta indica «Ubicación pendiente» y el diálogo ofrece registrar la ubicación; no se deduce un punto a partir de la zona. La API de cartera entrega latitud y longitud desde `inm_inmuebles`.
+
+El enlace de registro/edición abre directamente la pestaña Inmueble mediante `pestana=inmueble`. Se verificaron en navegador las acciones en las tres vistas, las coordenadas procedentes de BD, el estado pendiente, la navegación a la ficha, cierre con Escape, conservación de la galería de fotos y el tamaño del diálogo a 320–1536 píxeles. Las capturas de demostración están en `output/location/tarjetas-con-mapa.png` y `output/location/mapa-desde-tarjeta.png`; se eliminaron los registros temporales usados para comprobarlas.

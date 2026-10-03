@@ -42,6 +42,8 @@ export async function GET() {
         tipo: inmInmuebles.tipo,
         referencia: inmInmuebles.referencia,
         direccion: inmInmuebles.direccion,
+        latitud: inmInmuebles.latitud,
+        longitud: inmInmuebles.longitud,
         distrito: inmInmuebles.distrito,
         provincia: inmInmuebles.provincia,
         departamento: inmInmuebles.departamento,
@@ -312,6 +314,8 @@ const materialPendiente =
             .join(", ") || "Sin ubicación registrada",
 
         direccion: row.direccion ?? null,
+        latitud: row.latitud ?? null,
+        longitud: row.longitud ?? null,
         precioVenta: tasacion?.precioVenta ?? null,
 
         estado:

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRef } from "react";
 import PhotoGallery from "@/app/components/PhotoGallery";
+import PropertyMapDialog from "@/app/components/PropertyMapDialog";
+import { locationPoint } from "@/lib/location.mjs";
 
 type Estado = "Activo" | "Histórico";
 type FiltroActividad =
@@ -51,6 +53,8 @@ type Inmueble = {
   nombre: string;
   ubicacion: string;
   direccion: string | null;
+  latitud: string | null;
+  longitud: string | null;
   estado: Estado;
   propietario: string;
   precioVenta: string | null;
@@ -271,6 +275,7 @@ export default function CarteraPage() {
   const [seleccionado, setSeleccionado] =
     useState<Inmueble | null>(null);
   const [galeria, setGaleria] = useState<Inmueble | null>(null);
+  const [mapa, setMapa] = useState<Inmueble | null>(null);
   const galleryDialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = galleryDialog.current;
@@ -821,7 +826,10 @@ export default function CarteraPage() {
                       </> : <div className="flex flex-1 flex-col items-center justify-center py-6 text-center"><p className="text-xs font-semibold text-slate-400">Disponible</p><p className="mt-1 text-[10px] leading-4 text-slate-400">Lista para un nuevo inmueble</p></div>}
                     </div>
                   </button>
-                  {x && <button type="button" onClick={() => setGaleria(x)} aria-label={`Ver fotos de ${x.nombre}`} className="mx-4 mb-4 flex min-h-11 items-center justify-center rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-[#c80000] hover:bg-red-100">Ver fotos</button>}
+                  {x && <div className="mx-4 mb-4 grid gap-2">
+                    <button type="button" onClick={() => setGaleria(x)} aria-label={`Ver fotos de ${x.nombre}`} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-[#c80000] hover:bg-red-100"><Icon name="camera" />Ver fotos</button>
+                    <button type="button" onClick={() => setMapa(x)} aria-label={`Ver ubicación de ${x.nombre}`} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"><Icon name="map" />{locationPoint(x.latitud, x.longitud) ? "Ver ubicación" : "Ubicación pendiente"}</button>
+                  </div>}
                   </article>
                 );
               })
@@ -892,7 +900,7 @@ export default function CarteraPage() {
                           {x.id} · {x.tipo}
                         </p>
                         <p className="mt-2 text-xs font-semibold text-slate-700">Venta: {salePrice(x.precioVenta)}</p>
-                        <button type="button" onClick={() => setGaleria(x)} className="mt-2 text-xs font-semibold text-[#c80000]">Ver fotos</button>
+                        <div className="mt-2 flex flex-wrap gap-3"><button type="button" onClick={() => setGaleria(x)} className="min-h-11 text-xs font-semibold text-[#c80000]">Ver fotos</button><button type="button" onClick={() => setMapa(x)} aria-label={`Ver ubicación de ${x.nombre}`} className="min-h-11 text-xs font-semibold text-slate-700">{locationPoint(x.latitud, x.longitud) ? "Ver ubicación" : "Ubicación pendiente"}</button></div>
                       </td>
 
                       <td className="px-5 py-4 text-sm text-slate-600">
@@ -1061,6 +1069,7 @@ export default function CarteraPage() {
         <dialog ref={galleryDialog} onCancel={event => { event.preventDefault(); setGaleria(null); }} aria-labelledby="property-gallery-title" className="fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-4xl overflow-auto rounded-3xl bg-white p-5 shadow-2xl backdrop:bg-slate-950/50 sm:p-6">
           {galeria && <><div className="mb-5 flex items-start justify-between gap-3"><div className="min-w-0 break-words"><h2 id="property-gallery-title" className="text-lg font-bold text-slate-900">{galeria.nombre}</h2><p className="mt-1 text-xs text-slate-500">{galeria.id} · {galeria.posicion ? `Posición ${galeria.posicion}` : 'Sin posición'}</p></div><button type="button" autoFocus onClick={() => setGaleria(null)} className="min-h-11 shrink-0 rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold">Cerrar</button></div><PhotoGallery key={galeria.inmuebleId} propertyId={galeria.inmuebleId} /></>}
         </dialog>
+        {mapa && <PropertyMapDialog key={mapa.inmuebleId} property={mapa} onClose={() => setMapa(null)} />}
         {/* MODAL */}
         {seleccionado && (
           <div
@@ -1257,7 +1266,8 @@ export default function CarteraPage() {
                 </p>
               </div>
 
-              <button type="button" onClick={() => setGaleria(seleccionado)} className="mt-5 w-full rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-semibold text-[#c80000]">Ver fotos del inmueble</button>
+              <button type="button" onClick={() => setMapa(seleccionado)} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-100"><Icon name="map" />Ver ubicación del inmueble</button>
+              <button type="button" onClick={() => setGaleria(seleccionado)} className="mt-3 w-full rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-semibold text-[#c80000]">Ver fotos del inmueble</button>
               <div className="mt-5 grid grid-cols-2 gap-2">
                 <Link
                   href={
