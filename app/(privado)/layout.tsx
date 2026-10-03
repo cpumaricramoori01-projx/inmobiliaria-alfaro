@@ -9,7 +9,7 @@ export default async function PrivateLayout({ children }: { children: React.Reac
   return (
     <SessionProvider user={user}>
       <Sidebar />
-      <div className="mobile-page-shell min-h-screen lg:pl-72">{children}</div>
+      <div className="mobile-page-shell min-h-screen min-w-0 xl:pl-72">{children}</div>
     </SessionProvider>
   );
 }

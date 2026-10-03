@@ -46,6 +46,6 @@ export default function PhotoUploader({ propertyId, photos, onUploaded, onBusyCh
     </label>
     {progress && <p role="status" className="text-xs text-emerald-700">{progress}</p>}
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs text-red-700">{error} Las fotos que ya se guardaron siguen disponibles.</p>}
-    {showPreviews && photos.length > 0 && <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">{photos.map(photo => <a key={photo.id} href={photo.enlace} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-slate-200 bg-white"><Image unoptimized src={photo.enlace} alt={photo.nombre} width={240} height={180} className="aspect-[4/3] w-full object-cover" /><p className="truncate px-2 py-2 text-[10px] text-slate-600">{photo.nombre}</p></a>)}</div>}
+    {showPreviews && photos.length > 0 && <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-4">{photos.map(photo => <a key={photo.id} href={photo.enlace} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-slate-200 bg-white"><Image unoptimized src={photo.enlace} alt={photo.nombre} width={240} height={180} className="aspect-[4/3] w-full object-cover" /><p className="truncate px-2 py-2 text-[10px] text-slate-600">{photo.nombre}</p></a>)}</div>}
   </div>;
 }

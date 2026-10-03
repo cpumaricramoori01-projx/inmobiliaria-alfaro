@@ -595,7 +595,7 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
             <label className="text-xs font-semibold text-slate-500">
               Desde
               <input
@@ -769,7 +769,7 @@ export default function Page() {
               </span>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
               {[
                 [
                   "Resultado",

@@ -137,16 +137,16 @@ export default function Sidebar() {
         type="button"
         aria-label={open ? "Cerrar menú" : "Abrir menú"}
         onClick={() => setOpen((value) => !value)}
-        className="fixed left-4 top-4 z-[60] flex h-11 w-11 items-center justify-center rounded-xl border border-[#e7e5e2] bg-white text-slate-700 shadow-sm lg:hidden"
+        className="fixed left-4 top-4 z-[60] flex h-11 w-11 items-center justify-center rounded-xl border border-[#e7e5e2] bg-white text-slate-700 shadow-sm xl:hidden"
       >
         <Icon name={open ? "close" : "menu"}/>
       </button>
 
       {open && (
-        <button type="button" aria-label="Cerrar menú" onClick={() => setOpen(false)} className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-[1px] lg:hidden" />
+        <button type="button" aria-label="Cerrar menú" onClick={() => setOpen(false)} className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-[1px] xl:hidden" />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,18rem)] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 lg:top-0 lg:w-72 lg:translate-x-0 lg:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,18rem)] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 xl:top-0 xl:w-72 xl:translate-x-0 xl:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex h-[104px] shrink-0 flex-col items-center justify-center border-b border-slate-100 px-5">
           <div className="flex h-[54px] w-[170px] items-center justify-center overflow-hidden">
             <Image

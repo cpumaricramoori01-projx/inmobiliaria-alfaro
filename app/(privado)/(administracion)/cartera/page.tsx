@@ -470,7 +470,7 @@ export default function CarteraPage() {
         </div>
 
         {/* INDICADORES */}
-        <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           {[
             {
               label: "En cartera",
@@ -536,7 +536,7 @@ export default function CarteraPage() {
 
         {/* ATENCIÓN OPERATIVA */}
         <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-center xl:justify-between">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
                 Atención operativa
@@ -638,7 +638,7 @@ export default function CarteraPage() {
 
         {/* FILTROS */}
         <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center">
             <div className="relative flex-1">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                 <Icon name="search" />
@@ -765,7 +765,7 @@ export default function CarteraPage() {
         {/* POSICIONES */}
         {vista === "posiciones" &&
         estado !== "Histórico" ? (
-          <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          <div className="property-position-grid mt-3 grid gap-4">
             {cargandoPosiciones ? (
               <div className="col-span-full rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
                 Consultando posiciones reales de la cartera…
@@ -789,12 +789,13 @@ export default function CarteraPage() {
 
                 const theme = x ? cardTheme(x) : null;
                 return (
-                  <div key={pos.numero} className="relative">
+                  <article key={pos.numero} className={`flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border transition duration-200 ${x ? `border-slate-200 bg-white shadow-[0_3px_14px_rgba(15,23,42,0.04)] hover:shadow-lg ${theme?.border}` : "border-dashed border-slate-200 bg-slate-50/60"}`}>
                   <button
                     type="button"
                     onClick={() => x && setSeleccionado(x)}
                     disabled={!x}
-                    className={`group relative flex min-h-[275px] w-full flex-col overflow-hidden rounded-2xl border text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c80000] focus-visible:ring-offset-2 ${x ? `border-slate-200 bg-white shadow-[0_3px_14px_rgba(15,23,42,0.04)] hover:shadow-lg motion-safe:hover:-translate-y-1 ${theme?.border}` : "border-dashed border-slate-200 bg-slate-50/60"}`}
+                    aria-label={x ? `Ver detalle de ${x.nombre}, posición ${pos.numero}` : `Posición ${pos.numero} disponible`}
+                    className="group flex min-h-[345px] w-full flex-1 flex-col text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#c80000]"
                   >
                     <div aria-hidden="true" className={`h-1.5 w-full ${theme?.stripe ?? "bg-slate-100"}`} />
                     <div className="flex w-full flex-1 flex-col p-3.5 sm:p-4">
@@ -804,24 +805,24 @@ export default function CarteraPage() {
                       </div>
                       {x && theme ? <>
                         <span className={`mt-3 inline-flex self-start rounded-lg px-2 py-1 text-[10px] font-semibold ring-1 ring-inset ${theme.badge}`}>{theme.label}</span>
-                        <h3 className="mt-3 line-clamp-2 text-sm font-bold leading-5 text-slate-900" title={x.nombre}>{x.nombre}</h3>
+                        <h3 className="mt-3 min-h-10 line-clamp-2 break-words text-sm font-bold leading-5 text-slate-900" title={x.nombre}>{x.nombre}</h3>
                         <p className="mt-1 text-[11px] text-slate-500">{x.tipo}</p>
-                        <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-4 text-slate-500"><span aria-hidden="true" className="shrink-0"><Icon name="map" /></span><span className="line-clamp-2" title={x.ubicacion}>{x.ubicacion}</span></p>
-                        <div className="mt-3 flex flex-wrap gap-1.5">
+                        <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-4 text-slate-500"><span aria-hidden="true" className="shrink-0"><Icon name="map" /></span><span className="min-h-8 min-w-0 line-clamp-2 break-words" title={x.ubicacion}>{x.ubicacion}</span></p>
+                        <div className="mt-3 flex min-h-12 content-start flex-wrap gap-1.5">
                           {x.visitaPendiente && <span className="rounded-md bg-amber-50 px-1.5 py-1 text-[9px] font-semibold text-amber-800">Visita pendiente</span>}
                           {x.tasacionPendiente && <span className="rounded-md bg-blue-50 px-1.5 py-1 text-[9px] font-semibold text-blue-800">Tasación pendiente</span>}
                           {x.materialPendiente && <span className="rounded-md bg-violet-50 px-1.5 py-1 text-[9px] font-semibold text-violet-800">Material pendiente</span>}
                           {x.negociacionEnCurso && <span className="rounded-md bg-slate-100 px-1.5 py-1 text-[9px] font-semibold text-slate-700">En negociación</span>}
                         </div>
-                        <div className="mt-auto pb-9 pt-4">
+                        <div className="mt-auto pt-4">
                           <div className="border-t border-slate-100 pt-3"><p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Precio de venta</p><p className={`mt-1 break-words text-base font-bold tracking-tight ${x.precioVenta ? "text-slate-900" : "text-slate-400"}`}>{salePrice(x.precioVenta)}</p></div>
                           <p className="mt-3 text-[11px] font-semibold text-[#c80000] group-hover:text-[#a90000]">Ver detalle <span aria-hidden="true">→</span></p>
                         </div>
                       </> : <div className="flex flex-1 flex-col items-center justify-center py-6 text-center"><p className="text-xs font-semibold text-slate-400">Disponible</p><p className="mt-1 text-[10px] leading-4 text-slate-400">Lista para un nuevo inmueble</p></div>}
                     </div>
                   </button>
-                  {x && <button type="button" onClick={() => setGaleria(x)} className="absolute bottom-3 left-3.5 right-3.5 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[11px] font-semibold text-[#c80000] hover:bg-red-100">Ver fotos</button>}
-                  </div>
+                  {x && <button type="button" onClick={() => setGaleria(x)} aria-label={`Ver fotos de ${x.nombre}`} className="mx-4 mb-4 flex min-h-11 items-center justify-center rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-[#c80000] hover:bg-red-100">Ver fotos</button>}
+                  </article>
                 );
               })
             ) : (
@@ -1058,7 +1059,7 @@ export default function CarteraPage() {
         </div>
 
         <dialog ref={galleryDialog} onCancel={event => { event.preventDefault(); setGaleria(null); }} aria-labelledby="property-gallery-title" className="fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-4xl overflow-auto rounded-3xl bg-white p-5 shadow-2xl backdrop:bg-slate-950/50 sm:p-6">
-          {galeria && <><div className="mb-5 flex items-start justify-between gap-3"><div><h2 id="property-gallery-title" className="text-lg font-bold text-slate-900">{galeria.nombre}</h2><p className="mt-1 text-xs text-slate-500">{galeria.id} · {galeria.posicion ? `Posición ${galeria.posicion}` : 'Sin posición'}</p></div><button type="button" autoFocus onClick={() => setGaleria(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold">Cerrar</button></div><PhotoGallery key={galeria.inmuebleId} propertyId={galeria.inmuebleId} /></>}
+          {galeria && <><div className="mb-5 flex items-start justify-between gap-3"><div className="min-w-0 break-words"><h2 id="property-gallery-title" className="text-lg font-bold text-slate-900">{galeria.nombre}</h2><p className="mt-1 text-xs text-slate-500">{galeria.id} · {galeria.posicion ? `Posición ${galeria.posicion}` : 'Sin posición'}</p></div><button type="button" autoFocus onClick={() => setGaleria(null)} className="min-h-11 shrink-0 rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold">Cerrar</button></div><PhotoGallery key={galeria.inmuebleId} propertyId={galeria.inmuebleId} /></>}
         </dialog>
         {/* MODAL */}
         {seleccionado && (
@@ -1067,11 +1068,11 @@ export default function CarteraPage() {
             onClick={() => setSeleccionado(null)}
           >
             <div
-              className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl"
+              className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-3xl bg-white p-4 shadow-2xl sm:p-6"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-start justify-between">
-                <div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs font-bold text-slate-700">
                       {seleccionado.posicion
@@ -1092,7 +1093,7 @@ export default function CarteraPage() {
                     </span>
                   </div>
 
-                  <h3 className="mt-3 text-xl font-bold text-slate-950">
+                  <h3 className="mt-3 break-words text-xl font-bold text-slate-950">
                     {seleccionado.nombre}
                   </h3>
 
@@ -1107,7 +1108,8 @@ export default function CarteraPage() {
                   onClick={() =>
                     setSeleccionado(null)
                   }
-                  className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"
+                  aria-label="Cerrar detalle del inmueble"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
                 >
                   <Icon name="close" />
                 </button>
