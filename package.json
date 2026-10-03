@@ -11,6 +11,7 @@
     "db:migrate": "drizzle-kit migrate",
     "auth:install": "node scripts/install-auth.mjs",
     "auth:user": "node scripts/create-user.mjs",
+    "auth:password": "node scripts/reset-password.mjs",
     "test:auth": "node --test tests/auth.test.mjs"
   },
   "dependencies": {
