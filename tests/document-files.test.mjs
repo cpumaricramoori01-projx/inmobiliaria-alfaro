@@ -24,9 +24,12 @@ test('position reuse separates properties; safe names and historic unassigned pr
   assert.notEqual(path, documentPath({ ...input, propertyId: 12 }));
   assert.match(documentPath({ ...input, position: null }), /sin-posicion/);
 });
-test('storage is available only with a token or connected Vercel project', () => {
+test('storage configuration accepts a connected OIDC store without optional system variables', () => {
   assert.equal(storageConfigured({}), false);
-  assert.equal(storageConfigured({ BLOB_STORE_ID: 'store' }), false);
+  assert.equal(storageConfigured({ BLOB_STORE_ID: 'store' }), true);
+  assert.equal(storageConfigured({ BLOB_STORE_ID: 'store', VERCEL: '0' }), true);
+  assert.equal(storageConfigured({ BLOB_STORE_ID: '   ', BLOB_READ_WRITE_TOKEN: ' ' }), false);
+  assert.equal(storageConfigured({ VERCEL: '1' }), false);
   assert.equal(storageConfigured({ BLOB_STORE_ID: 'store', VERCEL: '1' }), true);
   assert.equal(storageConfigured({ BLOB_READ_WRITE_TOKEN: 'test' }), true);
 });
