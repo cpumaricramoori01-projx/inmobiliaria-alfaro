@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { and, asc, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { hostingRequest } from '@/lib/document-hosting';
-import { put, del } from '@vercel/blob';
 import { db } from '@/lib/db';
 import { inmArchivos, inmInmuebles, inmAsignacionesPosicion, inmPosiciones } from '@/db/schema';
 import { DOCUMENT_TYPES, MAX_DOCUMENT_BYTES, documentPath, storageConfigured, storeDocument, validateDocument } from '@/lib/document-files.mjs';
@@ -23,7 +22,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const inmueble = await findInmueble((await context.params).id);
     if (!inmueble) return NextResponse.json({ error: 'Inmueble no encontrado.' }, { status: 404 });
     const rows = await db.select().from(inmArchivos).where(eq(inmArchivos.inmuebleId, inmueble.id)).orderBy(asc(inmArchivos.tipoDocumento), asc(inmArchivos.fechaRegistro));
-    const archivos = rows.map(row => ({ ...row, enlace: ['vercel_blob', 'hosting'].includes(row.almacenamiento) ? `/api/inmuebles/${inmueble.id}/archivos/${row.id}` : row.enlace, rutaAlmacenamiento: undefined }));
+    const archivos = rows.map(row => ({ ...row, enlace: row.almacenamiento === 'hosting' ? `/api/inmuebles/${inmueble.id}/archivos/${row.id}` : row.enlace, rutaAlmacenamiento: undefined }));
     return NextResponse.json({ archivos, subidaHabilitada: storageConfigured() }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch { return NextResponse.json({ error: 'No se pudieron consultar los archivos.' }, { status: 500 }); }
 }
@@ -67,9 +66,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const [position] = await db.select({ numero: inmPosiciones.numero }).from(inmAsignacionesPosicion).innerJoin(inmPosiciones, eq(inmPosiciones.id, inmAsignacionesPosicion.posicionId)).where(and(eq(inmAsignacionesPosicion.inmuebleId, inmueble.id), eq(inmAsignacionesPosicion.activa, true))).limit(1);
     const pathname = documentPath({ position: position?.numero ?? null, propertyId: inmueble.id, propertyCode: inmueble.codigo, type: tipoDocumento, name: file.name, uniqueId: randomUUID() });
     const originalName = file.name;
-    const hosting = process.env.DOCUMENT_STORAGE === 'hosting';
-    const created = await storeDocument({ pathname, bytes, contentType, put: hosting ? async (path: string, data: Uint8Array) => { await hostingRequest('PUT', path, data); return { url: path, pathname: path }; } : put, remove: hosting ? async (path: string) => { await hostingRequest('DELETE', path); } : del, register: async (blob: { url: string; pathname: string }) => {
-      const [row] = await db.insert(inmArchivos).values({ inmuebleId: inmueble.id, tipoDocumento, nombre, enlace: blob.url, almacenamiento: hosting ? 'hosting' : 'vercel_blob', rutaAlmacenamiento: blob.pathname, nombreOriginal: originalName, tamanoBytes: bytes.length, tipoMime: contentType, observacion: observacion || null, usuarioId }).$returningId();
+    const created = await storeDocument({ pathname, bytes,
+      upload: async (path: string, data: Uint8Array) => { await hostingRequest('PUT', path, data); },
+      remove: async (path: string) => { await hostingRequest('DELETE', path); },
+      register: async (stored: { pathname: string }) => {
+      const [row] = await db.insert(inmArchivos).values({ inmuebleId: inmueble.id, tipoDocumento, nombre, enlace: stored.pathname, almacenamiento: 'hosting', rutaAlmacenamiento: stored.pathname, nombreOriginal: originalName, tamanoBytes: bytes.length, tipoMime: contentType, observacion: observacion || null, usuarioId }).$returningId();
       return row;
     } });
     return NextResponse.json({ ok: true, id: created.id }, { status: 201 });
@@ -90,7 +91,6 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
       if (!file.rutaAlmacenamiento) throw new Error('Ruta no disponible.');
       await hostingRequest('DELETE', file.rutaAlmacenamiento);
     }
-    if (file.almacenamiento === 'vercel_blob') await del(file.enlace);
     await db.delete(inmArchivos).where(condition);
     return NextResponse.json({ ok: true });
   } catch { return NextResponse.json({ error: 'No se pudo eliminar el documento. Puedes intentarlo de nuevo.' }, { status: 500 }); }

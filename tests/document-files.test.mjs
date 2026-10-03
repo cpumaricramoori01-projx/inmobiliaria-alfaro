@@ -24,29 +24,20 @@ test('position reuse separates properties; safe names and historic unassigned pr
   assert.notEqual(path, documentPath({ ...input, propertyId: 12, propertyCode: 'INM-012' }));
   assert.match(documentPath({ ...input, position: null }), /sin-posicion/);
 });
-test('storage configuration accepts a connected OIDC store without optional system variables', () => {
-  assert.equal(storageConfigured({}), false);
-  assert.equal(storageConfigured({ BLOB_STORE_ID: 'store' }), true);
-  assert.equal(storageConfigured({ BLOB_STORE_ID: 'store', VERCEL: '0' }), true);
-  assert.equal(storageConfigured({ BLOB_STORE_ID: '   ', BLOB_READ_WRITE_TOKEN: ' ' }), false);
-  assert.equal(storageConfigured({ VERCEL: '1' }), false);
-  assert.equal(storageConfigured({ BLOB_STORE_ID: 'store', VERCEL: '1' }), true);
-  assert.equal(storageConfigured({ BLOB_READ_WRITE_TOKEN: 'test' }), true);
-});
 test('private upload cleans up when registration fails', async () => {
   const calls = [];
-  const input = { pathname: 'p', bytes: Buffer.from('%PDF-'), contentType: 'application/pdf', put: async (...args) => { calls.push(args); return { url: 'private-url' }; }, remove: async url => calls.push(url), register: async () => { throw new Error('db failure'); } };
+  const input = { pathname: 'p', bytes: Buffer.from('%PDF-'), upload: async (...args) => { calls.push(args);  }, remove: async url => calls.push(url), register: async () => { throw new Error('db failure'); } };
   await assert.rejects(storeDocument(input), /db failure/);
-  assert.equal(calls[0][2].access, 'private');
-  assert.equal(calls[1], 'private-url');
+  assert.equal(calls[0][0], 'p');
+  assert.equal(calls[1], 'p');
   calls.length = 0;
   assert.equal(await storeDocument({ ...input, register: async () => 42 }), 42);
   assert.equal(calls.length, 1);
 });
-test('hosting mode requires its own credentials and never falls back to Blob', () => {
-  assert.equal(storageConfigured({ DOCUMENT_STORAGE: 'hosting', BLOB_STORE_ID: 'store' }), false);
-  assert.equal(storageConfigured({ DOCUMENT_STORAGE: 'hosting', DOCUMENT_HOSTING_URL: 'https://files.example/documentos.php', DOCUMENT_HOSTING_TOKEN: 'secret' }), true);
-  assert.equal(storageConfigured({ DOCUMENT_STORAGE: 'hosting', DOCUMENT_HOSTING_URL: 'https://files.example/documentos.php' }), false);
+test('only hosting credentials enable document storage', () => {
+  assert.equal(storageConfigured({}), false);
+  assert.equal(storageConfigured({ DOCUMENT_HOSTING_URL: 'https://files.example/documentos.php', DOCUMENT_HOSTING_TOKEN: 'secret' }), true);
+  assert.equal(storageConfigured({ DOCUMENT_HOSTING_URL: 'https://files.example/documentos.php' }), false);
 });
 
 test('property code and position appear in a safe folder with a unique filename', () => {

@@ -146,7 +146,7 @@ try {
     multipart.set("archivo", new Blob(["MZ executable"]), "renamed.pdf");
     assert.equal((await request(`/api/inmuebles/${testPropertyId}/archivos`, { method: "POST", headers: { Cookie: cookie, Origin: origin }, body: multipart })).status, 400);
     multipart.set("archivo", new Blob(["%PDF-1.7\n%%EOF"]), "test.pdf");
-    if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.BLOB_STORE_ID) {
+    if (!process.env.DOCUMENT_HOSTING_URL || !process.env.DOCUMENT_HOSTING_TOKEN) {
       assert.equal((await request(`/api/inmuebles/${testPropertyId}/archivos`, { method: "POST", headers: { Cookie: cookie, Origin: origin }, body: multipart })).status, 503);
     }
     assert.equal((await request(`/api/inmuebles/${testPropertyId}/archivos`, { method: "POST", headers: { Cookie: cookie, Origin: "https://example.invalid" }, body: multipart })).status, 403);

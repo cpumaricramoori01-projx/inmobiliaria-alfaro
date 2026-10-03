@@ -14,7 +14,7 @@ DOCUMENT_HOSTING_TOKEN=EL_MISMO_SECRETO_DEL_ARCHIVO_PHP
 
 6. Despliega la versión modificada y prueba subir, abrir, descargar y eliminar un PDF ficticio. Comprueba la carpeta `documentos-privados/inmuebles/` en cPanel. Los registros continúan en la base de datos actual; no hace falta modificar su estructura.
 
-Los documentos de Blob anteriores no se migran automáticamente. Conserva sus credenciales para abrirlos o eliminarlos. Con `DOCUMENT_STORAGE=hosting`, una falla del hosting NO envía nuevas subidas a Blob.
+La aplicación usa exclusivamente el hosting para los documentos. Si el servicio falla, la subida falla; no se envía a otro almacenamiento. `DOCUMENT_STORAGE=hosting` puede conservarse, pero ya no es necesario.
 
 El almacenamiento queda en cPanel, pero la subida y descarga pasan por las funciones de Vercel y pueden consumir transferencia y ejecución allí. La aplicación conserva su autenticación y límite de 4 MB. No se publica una URL directa de los documentos ni el secreto en el navegador.
 
