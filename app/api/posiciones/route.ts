@@ -67,7 +67,7 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error("Error al consultar posiciones:", error);
+    console.error("Operación fallida: posiciones", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");
 
     return NextResponse.json(
       { error: "No se pudo consultar la disponibilidad de posiciones." },

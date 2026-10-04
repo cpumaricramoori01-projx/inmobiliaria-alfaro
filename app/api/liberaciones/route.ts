@@ -102,10 +102,7 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error(
-      "Error al consultar inmuebles para liberar:",
-      error
-    );
+    console.error("Operación fallida: liberaciones", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");
 
     return NextResponse.json(
       {

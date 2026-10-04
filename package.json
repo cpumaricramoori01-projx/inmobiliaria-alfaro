@@ -16,9 +16,12 @@
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
+    "exceljs": "^4.4.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "leaflet": "^1.9.4",
     "mysql2": "^3.23.2",
-    "next": "16.3.5",
+    "next": "^16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "sharp": "^0.35.4"
@@ -29,9 +32,9 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "drizzle-kit": "^0.31.8",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^9",
-    "eslint-config-next": "16.3.5",
+    "eslint-config-next": "^16.3.8",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

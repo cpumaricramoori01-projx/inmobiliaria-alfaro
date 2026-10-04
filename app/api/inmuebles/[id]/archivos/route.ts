@@ -1,3 +1,4 @@
+import { audit, auditValues } from "@/lib/security-audit";
 import { authorizeApi } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 import { and, asc, eq } from 'drizzle-orm';
@@ -5,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { hostingRequest } from '@/lib/document-hosting';
 import { IMAGE_EXTENSIONS, prepareImage } from '@/lib/image-files.mjs';
 import { db } from '@/lib/db';
-import { inmArchivos, inmInmuebles, inmAsignacionesPosicion, inmPosiciones } from '@/db/schema';
+import { inmArchivos, inmInmuebles, inmAsignacionesPosicion, inmPosiciones, securityAudit } from '@/db/schema';
 import { DOCUMENT_TYPES, MAX_DOCUMENT_BYTES, documentPath, storageConfigured, storeDocument, validateDocument } from '@/lib/document-files.mjs';
 
 export const runtime = 'nodejs';
@@ -55,6 +56,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       if (tipoDocumento === 'FOTO_INMUEBLE') return NextResponse.json({ error: 'Sube una imagen directamente; no se admiten enlaces para fotos.' }, { status: 400 });
       if (!/^https?:\/\//i.test(enlace) || enlace.length > 1000) return NextResponse.json({ error: 'Enlace no válido.' }, { status: 400 });
       const [created] = await db.insert(inmArchivos).values({ inmuebleId: inmueble.id, tipoDocumento, nombre, enlace, observacion: observacion || null, usuarioId }).$returningId();
+      await audit(usuarioId,"file.link",`file:${created.id}`);
       return NextResponse.json({ ok: true, id: created.id }, { status: 201 });
     }
     if (!file) return NextResponse.json({ error: 'Selecciona un archivo.' }, { status: 400 });
@@ -81,15 +83,18 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       upload: async (path: string, data: Uint8Array) => { await hostingRequest('PUT', path, data); },
       remove: async (path: string) => { await hostingRequest('DELETE', path); },
       register: async (stored: { pathname: string }) => {
-      const [row] = await db.insert(inmArchivos).values({ inmuebleId: inmueble.id, tipoDocumento, nombre, enlace: stored.pathname, almacenamiento: 'hosting', rutaAlmacenamiento: stored.pathname, nombreOriginal: originalName, tamanoBytes: bytes.length, tipoMime: contentType, observacion: observacion || null, usuarioId }).$returningId();
+      return db.transaction(async tx => {
+      const [row] = await tx.insert(inmArchivos).values({ inmuebleId: inmueble.id, tipoDocumento, nombre, enlace: stored.pathname, almacenamiento: 'hosting', rutaAlmacenamiento: stored.pathname, nombreOriginal: originalName, tamanoBytes: bytes.length, tipoMime: contentType, observacion: observacion || null, usuarioId }).$returningId();
+      await tx.insert(securityAudit).values(auditValues(usuarioId,"file.upload",`file:${row.id}`));
       return row;
+      });
     } });
     return NextResponse.json({ ok: true, id: created.id }, { status: 201 });
   } catch { return NextResponse.json({ error: 'No se pudo guardar el documento. Comprueba la configuración del almacenamiento de documentos.' }, { status: 500 }); }
 }
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await authorizeApi(request, 'informacion');
+    const auth = await authorizeApi(request);
     if (auth.response) return auth.response;
     const inmueble = await findInmueble((await context.params).id);
     if (!inmueble) return NextResponse.json({ error: 'Inmueble no encontrado.' }, { status: 404 });
@@ -105,6 +110,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
         await hostingRequest('DELETE', file.rutaAlmacenamiento);
       }
       await tx.delete(inmArchivos).where(condition);
+      await tx.insert(securityAudit).values(auditValues(auth.user.id,"file.delete",`file:${fileId}`));
       return true;
     });
     if (!found) return NextResponse.json({ error: 'Documento no encontrado.' }, { status: 404 });
@@ -133,6 +139,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (!file?.tipoMime?.startsWith('image/')) return false;
       if (body.esPortada === true) await tx.update(inmArchivos).set({ esPortada: false }).where(and(eq(inmArchivos.inmuebleId, inmueble.id), eq(inmArchivos.tipoDocumento, 'FOTO_INMUEBLE')));
       await tx.update(inmArchivos).set({ nombre, observacion: observacion || null, ...(typeof body.esPortada === 'boolean' ? { esPortada: body.esPortada } : {}) }).where(condition);
+      await tx.insert(securityAudit).values(auditValues(auth.user.id,"photo.update",`file:${archivoId}`));
       return true;
     });
     if (!found) return NextResponse.json({ error: 'Foto no encontrada.' }, { status: 404 });

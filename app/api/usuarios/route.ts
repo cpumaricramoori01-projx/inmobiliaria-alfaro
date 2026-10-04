@@ -1,6 +1,6 @@
 import { asc, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { authorizeApi } from "@/lib/auth";
+import { authorizeApi, requireRecentAuthentication } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { inmUsuarios } from "@/db/schema";
 import { createManagedUser, userManagementError } from "@/lib/user-admin";
@@ -24,6 +24,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const auth = await authorizeApi(request);
   if (auth.response) return auth.response;
+  const confirmation=await requireRecentAuthentication();if(confirmation)return confirmation;
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Datos de usuario no válidos." }, { status: 400 }); }
   try { return NextResponse.json(await createManagedUser(auth.user.id, body), { status: 201 }); }

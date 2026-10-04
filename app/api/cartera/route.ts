@@ -416,7 +416,7 @@ const materialPendiente =
       },
     });
   } catch (error) {
-    console.error("Error al consultar cartera:", error);
+    console.error("Operación fallida: cartera", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");
 
     return NextResponse.json(
       {

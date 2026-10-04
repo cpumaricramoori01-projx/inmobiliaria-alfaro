@@ -23,23 +23,35 @@ export const sessionCookieOptions = {
 
 export async function findSession(token?: string) {
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
-  const [user] = await db.select({
+  const [record] = await db.select({
     id: inmUsuarios.id,
     nombre: inmUsuarios.nombre,
     usuario: inmUsuarios.usuario,
     rol: inmUsuarios.rol,
+    mfaSecret: inmUsuarios.mfaSecret,
+    lastSeen: inmSesiones.lastSeen,
   }).from(inmSesiones).innerJoin(inmUsuarios, eq(inmUsuarios.id, inmSesiones.usuarioId))
     .where(and(
       eq(inmSesiones.tokenHash, hashSessionToken(token)),
       gt(inmSesiones.expira, new Date()),
       eq(inmUsuarios.activo, true),
     )).limit(1);
-  return user ?? null;
+  if (!record || (record.rol === 'administrador' && !record.mfaSecret) || record.lastSeen < new Date(Date.now()-30*60*1000)) return null;
+  await db.update(inmSesiones).set({ lastSeen: new Date() }).where(and(eq(inmSesiones.tokenHash,hashSessionToken(token)),gt(inmSesiones.lastSeen,new Date(Date.now()-30*60*1000))));
+  return {id:record.id,nombre:record.nombre,usuario:record.usuario,rol:record.rol};
 }
 
 export const getSession = cache(async () => {
   return findSession((await cookies()).get(SESSION_COOKIE)?.value);
 });
+
+export async function requireRecentAuthentication() {
+  const token=(await cookies()).get(SESSION_COOKIE)?.value;
+  if(!token)return NextResponse.json({error:'Inicia sesión para continuar.'},{status:401});
+  const [session]=await db.select({at:inmSesiones.authenticatedAt}).from(inmSesiones).where(eq(inmSesiones.tokenHash,hashSessionToken(token))).limit(1);
+  if(!session || session.at < new Date(Date.now()-5*60*1000)) return NextResponse.json({error:'Confirma tu identidad para cambiar accesos.',reauthRequired:true},{status:428});
+  return null;
+}
 
 export async function authorizeApi(request?: Request, access: "administrador" | "informacion" = "administrador") {
   if (request && !["GET", "HEAD", "OPTIONS"].includes(request.method) && !sameOrigin(request)) {

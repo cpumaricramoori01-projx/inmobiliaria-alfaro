@@ -278,7 +278,7 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error("Error al consultar dashboard:", error);
+    console.error("Operación fallida: dashboard", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");
 
     return NextResponse.json(
       { error: "No se pudo consultar el dashboard." },

@@ -218,7 +218,7 @@ export async function GET() {
       publicadas,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Operación fallida: publicaciones", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");
 
     return NextResponse.json(
       {

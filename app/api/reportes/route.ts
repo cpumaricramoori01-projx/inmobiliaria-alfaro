@@ -804,10 +804,7 @@ export async function GET(request: NextRequest) {
       rows,
     });
   } catch (error) {
-    console.error(
-      "Error en reportes:",
-      error,
-    );
+    console.error("Operación fallida: reportes", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");
 
     return NextResponse.json(
       {

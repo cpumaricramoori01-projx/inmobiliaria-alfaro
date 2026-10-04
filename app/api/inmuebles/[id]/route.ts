@@ -1,3 +1,4 @@
+import { auditValues } from "@/lib/security-audit";
 import { propertyInput, ownerInput, PropertyInputError } from "@/lib/property-input.mjs";
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
@@ -10,6 +11,7 @@ import {
   inmPropietarios,
   inmTasaciones,
   inmPublicaciones,
+  securityAudit,
 } from "@/db/schema";
 
 async function findProperty(key: string) {
@@ -88,7 +90,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       publicacion: publicacionId ? { id: publicacionId, texto: textoPublicacion, enlace: enlacePublicacion, publicado, fechaPublicacion } : null,
     });
   } catch (error) {
-    console.error("Error al consultar ficha:", error);
+    console.error("Operación fallida: inmuebles/[id]", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");
     return NextResponse.json({ error: "No se pudo consultar la ficha del inmueble." }, { status: 500 });
   }
 }
@@ -123,13 +125,14 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       } else if (ownerValues === null && current.propietarioId != null) {
         throw new PropertyInputError("Completa los datos del propietario vinculado.");
       }
+      await tx.insert(securityAudit).values(auditValues(auth.user.id,"property.update",`property:${row.id}`));
     });
 
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (error instanceof PropertyInputError) return NextResponse.json({ error: error.message }, { status: 400 });
     if ((error as { cause?: { code?: string } }).cause?.code === "ER_DUP_ENTRY") return NextResponse.json({ error: "Ese DNI ya pertenece a otro propietario. Revisa la identificación." }, { status: 409 });
-    console.error("Error al actualizar ficha:", error);
+    console.error("Operación fallida: inmuebles/[id]", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");
     return NextResponse.json({ error: "No se pudieron guardar los datos del inmueble." }, { status: 500 });
   }
 }

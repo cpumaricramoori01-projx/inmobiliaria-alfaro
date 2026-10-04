@@ -2,7 +2,8 @@ import "server-only";
 import { asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { inmSesiones, inmUsuarios } from "@/db/schema";
+import { inmSesiones, inmUsuarios, securityAudit } from "@/db/schema";
+import { auditValues } from "@/lib/security-audit";
 import { hashPassword } from "@/lib/password.mjs";
 import { assertUserAccessChange, userInput, UserInputError } from "@/lib/user-input.mjs";
 
@@ -14,6 +15,7 @@ export async function createManagedUser(actorId: number, body: unknown) {
     const actor = users.find(user => user.id === actorId);
     if (!actor?.activo || actor.rol !== "administrador") throw new UserInputError("Tu cuenta ya no tiene permiso para administrar usuarios.", 403);
     const [result] = await tx.insert(inmUsuarios).values({ nombre: input.nombre, usuario: input.usuario, email: input.email, rol: input.rol, activo: input.activo, passwordHash });
+    await tx.insert(securityAudit).values(auditValues(actorId,"user.create",`user:${result.insertId}`));
     return { id: result.insertId };
   });
 }
@@ -36,6 +38,7 @@ export async function updateManagedUser(actorId: number, id: number, body: unkno
       ...(passwordHash ? { passwordHash } : {}), ...(unlock ? { intentosFallidos: 0, bloqueoHasta: null } : {}),
     }).where(eq(inmUsuarios.id, id));
     if (revokeSessions) await tx.delete(inmSesiones).where(eq(inmSesiones.usuarioId, id));
+    await tx.insert(securityAudit).values(auditValues(actorId,"user.update",`user:${id}`));
     return { ok: true, volverAIngresar: actorId === id && revokeSessions };
   });
 }

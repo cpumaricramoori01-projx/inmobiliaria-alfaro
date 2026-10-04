@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { authorizeApi } from "@/lib/auth";
+import { authorizeApi, requireRecentAuthentication } from "@/lib/auth";
 import { updateManagedUser, userManagementError } from "@/lib/user-admin";
 
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await authorizeApi(request);
   if (auth.response) return auth.response;
+  const confirmation=await requireRecentAuthentication();if(confirmation)return confirmation;
   const { id } = await context.params;
   if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id))) return NextResponse.json({ error: "Usuario no válido." }, { status: 400 });
   let body;

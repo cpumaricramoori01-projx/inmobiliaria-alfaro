@@ -1,6 +1,7 @@
 import {
   boolean,
   date,
+  datetime,
   decimal,
   int,
   mysqlTable,
@@ -21,6 +22,8 @@ export const inmUsuarios = mysqlTable("inm_usuarios", {
   passwordHash: varchar("password_hash", { length: 255 }),
   intentosFallidos: int("intentos_fallidos").notNull().default(0),
   bloqueoHasta: timestamp("bloqueo_hasta", { mode: "date" }),
+  mfaSecret: varchar("mfa_secret", { length: 255 }),
+  mfaLastStep: bigint("mfa_last_step", { mode: "number" }),
   rol: varchar("rol", { length: 30 }).notNull().default("usuario"),
   activo: boolean("activo").notNull().default(true),
   fechaRegistro: timestamp("fecha_registro", { mode: "date" }).defaultNow().notNull(),
@@ -33,11 +36,33 @@ export const inmSesiones = mysqlTable("inm_sesiones", {
   tokenHash: varchar("token_hash", { length: 64 }).primaryKey(),
   usuarioId: bigint("usuario_id", { mode: "number", unsigned: true }).notNull().references(() => inmUsuarios.id),
   expira: timestamp("expira", { mode: "date" }).notNull(),
+  lastSeen: timestamp("last_seen", { mode: "date" }).defaultNow().notNull(),
+  authenticatedAt: timestamp("authenticated_at", { mode: "date" }).defaultNow().notNull(),
 }, (table) => ({
   usuarioIdx: index("idx_inm_sesiones_usuario").on(table.usuarioId),
   expiraIdx: index("idx_inm_sesiones_expira").on(table.expira),
 }));
 
+export const authLimits = mysqlTable('inm_auth_limits', {
+  bucketKey: varchar('bucket_key',{length:64}).primaryKey(),
+  hits: int('hits',{unsigned:true}).notNull(),
+  expires: datetime('expires',{mode:'date'}).notNull(),
+});
+export const securityAudit = mysqlTable("inm_security_audit", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  actorId: bigint("actor_id", { mode: "number", unsigned: true }),
+  action: varchar("action", { length: 60 }).notNull(),
+  resource: varchar("resource", { length: 120 }).notNull(),
+  outcome: varchar("outcome", { length: 20 }).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+});
+export const authChallenges = mysqlTable("inm_auth_challenges", {
+  tokenHash: varchar("token_hash", { length: 64 }).primaryKey(),
+  userId: bigint("user_id", { mode: "number", unsigned: true }).notNull().references(() => inmUsuarios.id),
+  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+  secret: varchar("secret", { length: 255 }),
+  expires: timestamp("expires", { mode: "date" }).notNull(),
+});
 export const inmPropietarios = mysqlTable("inm_propietarios", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   dni: varchar("dni", { length: 20 }).notNull(),

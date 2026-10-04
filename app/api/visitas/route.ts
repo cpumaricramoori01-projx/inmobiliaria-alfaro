@@ -123,7 +123,7 @@ export async function GET() {
       items,
     });
   } catch (error) {
-    console.error("Error al obtener visitas pendientes:", error);
+    console.error("Operación fallida: visitas", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");
 
     return NextResponse.json(
       { error: "No fue posible obtener las visitas pendientes." },
@@ -262,7 +262,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error al registrar visita:", error);
+    console.error("Operación fallida: visitas", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");
 
     return NextResponse.json(
       {

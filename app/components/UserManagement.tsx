@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import ConfirmDialog from "./ConfirmDialog";
 import { useSessionUser } from "./SessionProvider";
 import type { ManagedUser, UserForm } from "@/lib/user-types";
+import { reauthenticate } from './reauthenticate';
 
 const fieldClass = "mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-normal text-slate-800 outline-none focus:border-red-300 focus:bg-white disabled:opacity-60";
 const primaryClass = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#c80000] px-5 py-3 text-sm font-semibold text-white hover:bg-[#a90000] disabled:cursor-wait disabled:opacity-50";
@@ -14,6 +15,7 @@ class RequestError extends Error { constructor(message: string, public status: n
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, { credentials: "same-origin", cache: "no-store", ...options });
   const data = await response.json();
+  if(response.status===428 && data.reauthRequired){await reauthenticate();const retried=await fetch(url,{credentials:'same-origin',cache:'no-store',...options});const result=await retried.json();if(!retried.ok)throw new RequestError(result.error||'No se pudo completar.',retried.status);return result;}
   if (!response.ok) throw new RequestError(data.error || "No se pudo completar la solicitud.", response.status);
   return data;
 }

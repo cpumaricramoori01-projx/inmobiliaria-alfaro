@@ -185,7 +185,7 @@ export async function GET() {
       aprobadas: aprobadas.map(mapRow),
     });
   } catch (error) {
-    console.error("Error al consultar tasaciones:", error);
+    console.error("Operación fallida: tasaciones", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");
 
     return NextResponse.json(
       {

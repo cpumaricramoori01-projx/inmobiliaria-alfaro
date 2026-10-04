@@ -117,6 +117,7 @@ function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
 </div>
       <div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Administración</div>
       <MenuLink item={{ href: "/usuarios", label: "Usuarios y accesos", icon: "users" }} onNavigate={onNavigate}/>
+      <MenuLink item={{ href: "/seguridad", label: "Registro de seguridad", icon: "clipboard" }} onNavigate={onNavigate}/>
       </>}
       <div className="mb-2 mt-7 flex items-center justify-between px-3">
         <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Información de inmuebles</span>

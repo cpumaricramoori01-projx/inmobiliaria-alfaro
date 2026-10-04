@@ -1,7 +1,9 @@
 "use client";
 
-import type { ReportRow, ReportSummary, ReportValue } from "@/lib/report-types";
+import type { ReportRow, ReportSummary } from "@/lib/report-types";
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { reportText } from "@/lib/report-export";
 
 type Reporte = {
   nombre: string;
@@ -16,7 +18,7 @@ const reportes: Reporte[] = [
   {
     nombre: "Cartera activa",
     descripcion:
-      "Inmuebles actualmente ocupando posiciones 01–90.",
+      "Inmuebles con una posición activa en la cartera.",
     categoria: "Cartera",
     icono: "⌂",
   },
@@ -209,80 +211,6 @@ const tone: Record<string, string> = {
     "bg-cyan-100 text-cyan-700",
 };
 
-function fecha(value: unknown) {
-  if (!(typeof value === "string" || typeof value === "number" || value instanceof Date) || !value) return "—";
-
-  const d = new Date(value);
-
-  if (Number.isNaN(d.getTime())) {
-    return "—";
-  }
-
-  return d.toLocaleDateString("es-PE");
-}
-
-function exportarCSV(
-  rows: Row[],
-  reporte: string,
-) {
-  if (!rows.length) return;
-
-  const keys = Array.from(
-    new Set(
-      rows.flatMap((row) =>
-        Object.keys(row),
-      ),
-    ),
-  ).filter(
-    (key) => !["inmuebleId"].includes(key),
-  );
-
-  const csv = [
-    keys.join(";"),
-    ...rows.map((row) =>
-      keys
-        .map((key) => {
-          const value = row[key] ?? "";
-
-          return (
-            '"' +
-            String(value).replace(
-              /"/g,
-              '""',
-            ) +
-            '"'
-          );
-        })
-        .join(";"),
-    ),
-  ].join("\n");
-
-  const blob = new Blob(
-    ["\ufeff" + csv],
-    {
-      type: "text/csv;charset=utf-8;",
-    },
-  );
-
-  const url =
-    URL.createObjectURL(blob);
-
-  const a =
-    document.createElement("a");
-
-  a.href = url;
-  a.download = `reporte-${reporte
-    .toLowerCase()
-    .replace(
-      /[^a-z0-9]+/g,
-      "-",
-    )}.csv`;
-
-  a.click();
-
-  URL.revokeObjectURL(url);
-}
-
 export default function Page() {
   const [categoria, setCategoria] =
     useState("Todos");
@@ -291,6 +219,9 @@ export default function Page() {
     reporte: "Cartera activa", desde: "", hasta: "", situacion: "Todas", estado: "Todos", posicion: "", tipo: "Todos",
   });
   const seleccionado = consulta.reporte;
+  const [exportando, setExportando] = useState<"pdf" | "excel" | null>(null);
+  const [errorExportacion, setErrorExportacion] = useState("");
+  const [generado, setGenerado] = useState<Date | null>(null);
 
   const [fechaDesde, setFechaDesde] =
     useState("");
@@ -342,7 +273,11 @@ export default function Page() {
 
   function solicitarReporte(reporte: string) {
     setCargando(true);
+    setRows([]);
+    setResumen(null);
+    setGenerado(null);
     setError("");
+    setErrorExportacion("");
     setConsulta({ reporte, desde: fechaDesde, hasta: fechaHasta, situacion, estado, posicion, tipo });
   }
 
@@ -357,6 +292,7 @@ export default function Page() {
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "No se pudo generar el reporte.");
         if (controller.signal.aborted) return;
+        setGenerado(new Date());
         setRows(data.rows ?? []);
         setResumen(data.resumen ?? null);
       } catch (err) {
@@ -379,6 +315,13 @@ export default function Page() {
     setEstado("Todos");
     setPosicion("");
     setTipo("Todos");
+    setCargando(true);
+    setRows([]);
+    setResumen(null);
+    setGenerado(null);
+    setError("");
+    setErrorExportacion("");
+    setConsulta({ reporte: seleccionado, desde: "", hasta: "", situacion: "Todas", estado: "Todos", posicion: "", tipo: "Todos" });
   };
 
   const columnas =
@@ -455,60 +398,29 @@ export default function Page() {
       "Fin",
   };
 
-  function renderValor(
-    key: string,
-    value: ReportValue,
-  ) {
-    if (
-      value === null ||
-      value === undefined ||
-      value === ""
-    ) {
-      return "—";
-    }
+  const filtrosAplicados = [
+    consulta.desde && `Desde: ${reportText("fecha", consulta.desde)}`,
+    consulta.hasta && `Hasta: ${reportText("fecha", consulta.hasta)}`,
+    consulta.situacion !== "Todas" && `Actividad: ${consulta.situacion}`,
+    consulta.estado !== "Todos" && `Estado: ${consulta.estado}`,
+    consulta.posicion && `Posición: ${consulta.posicion}`,
+    consulta.tipo !== "Todos" && `Tipo: ${consulta.tipo}`,
+  ].filter(Boolean).join(" · ") || "Todos los registros · Sin restricciones";
+  const filtrosPendientes = fechaDesde !== consulta.desde || fechaHasta !== consulta.hasta || situacion !== consulta.situacion || estado !== consulta.estado || posicion !== consulta.posicion || tipo !== consulta.tipo;
 
-    if (
-      key === "situaciones" &&
-      Array.isArray(value)
-    ) {
-      return value.length
-        ? value.join(" · ")
-        : "—";
+  async function descargar(formato: "pdf" | "excel") {
+    if (cargando || exportando || !rows.length || !generado) return;
+    setExportando(formato);
+    setErrorExportacion("");
+    try {
+      const exports = await import("@/lib/report-export");
+      const report = { title: seleccionado, description: reporteInfo.descripcion, columns: columnas, labels: etiqueta, rows, summary: resumen, filters: filtrosAplicados, generatedAt: generado };
+      await (formato === "pdf" ? exports.exportReportPDF(report) : exports.exportReportExcel(report));
+    } catch (err) {
+      setErrorExportacion(err instanceof Error ? err.message : "No se pudo descargar el archivo. Inténtalo nuevamente.");
+    } finally {
+      setExportando(null);
     }
-
-    if (
-      key.toLowerCase().includes(
-        "fecha",
-      ) ||
-      key === "fechaVisita" ||
-      key ===
-        "fechaInicioFlujo" ||
-      key ===
-        "fechaFinFlujo" ||
-      key ===
-        "fechaInicioPosicion" ||
-      key ===
-        "fechaFinPosicion"
-    ) {
-      return fecha(value);
-    }
-
-    if (
-      key === "tasacion" &&
-      typeof value === "number"
-    ) {
-      return value > 0
-        ? `S/ ${value.toLocaleString(
-            "es-PE",
-            {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            },
-          )}`
-        : "—";
-    }
-
-    return String(value);
   }
 
   return (
@@ -516,13 +428,13 @@ export default function Page() {
       <div className="mx-auto max-w-7xl print:max-w-none">
         <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between print:mb-4">
           <div className="flex gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-100 text-xl text-indigo-600">
-              ▥
+            <div className="hidden shrink-0 rounded-xl border border-slate-200 bg-white p-3 sm:flex sm:items-center">
+              <Image src="/branding/logo.png" alt="Inmobiliaria Alberto Alfaro" width={170} height={54} className="h-auto w-[150px]" />
             </div>
 
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-indigo-500">
-                Fase 1 · Información
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#c80000]">
+                Información para decidir
               </p>
 
               <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">
@@ -535,27 +447,14 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="flex gap-2 print:hidden">
-            <button
-              onClick={() =>
-                window.print()
-              }
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-            >
-              Imprimir / PDF
+          <div className="flex flex-wrap gap-2 print:hidden" aria-busy={!!exportando}>
+            <button onClick={() => void descargar("pdf")} disabled={cargando || !!exportando || !rows.length}
+              className="rounded-xl border border-[#c80000]/20 bg-white px-4 py-2.5 text-sm font-semibold text-[#c80000] hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40">
+              {exportando === "pdf" ? "Preparando PDF…" : "Descargar PDF"}
             </button>
-
-            <button
-              onClick={() =>
-                exportarCSV(
-                  rows,
-                  seleccionado,
-                )
-              }
-              disabled={!rows.length}
-              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-            >
-              Exportar Excel/CSV
+            <button onClick={() => void descargar("excel")} disabled={cargando || !!exportando || !rows.length}
+              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">
+              {exportando === "excel" ? "Preparando Excel…" : "Descargar Excel"}
             </button>
           </div>
         </header>
@@ -568,26 +467,20 @@ export default function Page() {
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                Los filtros se aplican directamente sobre los datos de la base de datos.
+                Ajusta la consulta y pulsa «Generar reporte». Las descargas usan los filtros del resultado mostrado.
               </p>
             </div>
 
             <div className="flex gap-2">
               <button
                 onClick={cargar}
-                className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                className="rounded-xl bg-[#c80000] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#a80000]"
               >
-                Aplicar filtros
+                Generar reporte
               </button>
 
               <button
-                onClick={() => {
-                  limpiar();
-                  setTimeout(
-                    cargar,
-                    0,
-                  );
-                }}
+                onClick={limpiar}
                 className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50"
               >
                 Limpiar
@@ -741,6 +634,8 @@ export default function Page() {
           </div>
         </section>
 
+        {filtrosPendientes && <p className="mt-3 text-sm font-medium text-amber-700" role="status">Hay filtros pendientes de aplicar. Genera el reporte para actualizar el resultado y las descargas.</p>}
+        {errorExportacion && <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-700">{errorExportacion}</p>}
         {error && (
           <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
             {error}
@@ -752,27 +647,23 @@ export default function Page() {
             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                  Lectura rápida
+                  Indicadores generales · Sin filtros
                 </p>
 
                 <h2 className="mt-1 text-base font-bold text-white">
-                  Resumen del reporte seleccionado
+                  Contexto general de la cartera
                 </h2>
               </div>
 
               <span className="text-xs text-slate-400">
-                {resumen.total}{" "}
-                resultado
-                {resumen.total === 1
-                  ? ""
-                  : "s"}
+                {rows.length} registros en el reporte seleccionado
               </span>
             </div>
 
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
               {[
                 [
-                  "Resultado",
+                  "Registros del reporte",
                   resumen.total,
                 ],
                 [
@@ -950,7 +841,7 @@ export default function Page() {
                   className={`rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
                     seleccionado ===
                     reporte.nombre
-                      ? "border-indigo-300 ring-2 ring-indigo-50"
+                      ? "border-[#c80000]/40 ring-2 ring-red-50"
                       : "border-slate-200"
                   }`}
                 >
@@ -986,7 +877,7 @@ export default function Page() {
         <section className="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.045)] print:mt-0 print:border-0 print:shadow-none">
           <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-indigo-500">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#c80000]">
                 {
                   reporteInfo.categoria
                 }
@@ -1010,7 +901,11 @@ export default function Page() {
             )}
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="border-b border-slate-100 bg-slate-50 px-5 py-3 text-xs leading-5 text-slate-600">
+            <p><span className="font-semibold">Filtros aplicados:</span> {filtrosAplicados}</p>
+            {generado && <p>Consulta actualizada: {generado.toLocaleString("es-PE", { timeZone: "America/Lima" })} · Hora de Perú · {rows.length} registros</p>}
+          </div>
+          <div className="overflow-x-auto" aria-busy={cargando}>
             {rows.length ? (
               <table className="w-full min-w-[1000px] text-left">
                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -1041,7 +936,7 @@ export default function Page() {
                     ) => (
                       <tr
                         key={`${row.codigo || row.posicion || index}-${index}`}
-                        className="hover:bg-slate-50"
+                        className="odd:bg-white even:bg-slate-50/70 hover:bg-red-50/40"
                       >
                         {columnas.map(
                           (key) => (
@@ -1049,7 +944,7 @@ export default function Page() {
                               key={key}
                               className="px-4 py-3 text-xs text-slate-600"
                             >
-                              {renderValor(
+                              {reportText(
                                 key,
                                 row[
                                   key
