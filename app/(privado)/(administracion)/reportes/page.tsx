@@ -3,7 +3,7 @@
 import type { ReportRow, ReportSummary } from "@/lib/report-types";
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { reportText } from "@/lib/report-export";
+import { reportPDFLayout, reportText } from "@/lib/report-export";
 
 type Reporte = {
   nombre: string;
@@ -221,6 +221,7 @@ export default function Page() {
   const seleccionado = consulta.reporte;
   const [exportando, setExportando] = useState<"pdf" | "excel" | null>(null);
   const [errorExportacion, setErrorExportacion] = useState("");
+  const [seleccionColumnas, setSeleccionColumnas] = useState<Record<string, string[]>>({});
   const [generado, setGenerado] = useState<Date | null>(null);
 
   const [fechaDesde, setFechaDesde] =
@@ -362,6 +363,15 @@ export default function Page() {
       );
     }, [rows]);
 
+  const recomendadas = columnas.length <= 6 ? columnas : columnas.filter(key =>
+    !["propietario", "ubicacion", "tipo", "fechaRegistro"].includes(key)).slice(0, 6);
+  const elegidas = seleccionColumnas[seleccionado] ?? recomendadas;
+  const columnasElegidas = columnas.filter(key => elegidas.includes(key));
+  const orientacionPDF = reportPDFLayout(columnasElegidas).orientation === "landscape" ? "horizontal" : "vertical";
+  function seleccionarColumnas(keys: string[]) {
+    setSeleccionColumnas(previous => ({ ...previous, [seleccionado]: keys }));
+  }
+
   const etiqueta: Record<
     string,
     string
@@ -409,12 +419,12 @@ export default function Page() {
   const filtrosPendientes = fechaDesde !== consulta.desde || fechaHasta !== consulta.hasta || situacion !== consulta.situacion || estado !== consulta.estado || posicion !== consulta.posicion || tipo !== consulta.tipo;
 
   async function descargar(formato: "pdf" | "excel") {
-    if (cargando || exportando || !rows.length || !generado) return;
+    if (cargando || exportando || !rows.length || !generado || !columnasElegidas.length) return;
     setExportando(formato);
     setErrorExportacion("");
     try {
       const exports = await import("@/lib/report-export");
-      const report = { title: seleccionado, description: reporteInfo.descripcion, columns: columnas, labels: etiqueta, rows, summary: resumen, filters: filtrosAplicados, generatedAt: generado };
+      const report = { title: seleccionado, description: reporteInfo.descripcion, columns: columnasElegidas, labels: etiqueta, rows, summary: resumen, filters: filtrosAplicados, generatedAt: generado };
       await (formato === "pdf" ? exports.exportReportPDF(report) : exports.exportReportExcel(report));
     } catch (err) {
       setErrorExportacion(err instanceof Error ? err.message : "No se pudo descargar el archivo. Inténtalo nuevamente.");
@@ -448,11 +458,11 @@ export default function Page() {
           </div>
 
           <div className="flex flex-wrap gap-2 print:hidden" aria-busy={!!exportando}>
-            <button onClick={() => void descargar("pdf")} disabled={cargando || !!exportando || !rows.length}
+            <button onClick={() => void descargar("pdf")} disabled={cargando || !!exportando || !rows.length || !columnasElegidas.length}
               className="rounded-xl border border-[#c80000]/20 bg-white px-4 py-2.5 text-sm font-semibold text-[#c80000] hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40">
               {exportando === "pdf" ? "Preparando PDF…" : "Descargar PDF"}
             </button>
-            <button onClick={() => void descargar("excel")} disabled={cargando || !!exportando || !rows.length}
+            <button onClick={() => void descargar("excel")} disabled={cargando || !!exportando || !rows.length || !columnasElegidas.length}
               className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">
               {exportando === "excel" ? "Preparando Excel…" : "Descargar Excel"}
             </button>
@@ -905,12 +915,39 @@ export default function Page() {
             <p><span className="font-semibold">Filtros aplicados:</span> {filtrosAplicados}</p>
             {generado && <p>Consulta actualizada: {generado.toLocaleString("es-PE", { timeZone: "America/Lima" })} · Hora de Perú · {rows.length} registros</p>}
           </div>
+          {!!rows.length && !cargando && (
+            <fieldset disabled={!!exportando} className="border-b border-slate-200 px-5 py-4 print:hidden">
+              <legend className="float-left mb-2 w-full text-sm font-bold text-slate-900">Columnas del reporte</legend>
+              <p className="clear-both text-xs leading-5 text-slate-500">Marca las columnas que quieres ver y descargar en PDF o Excel.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => seleccionarColumnas(recomendadas)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">Recomendadas</button>
+                <button type="button" onClick={() => seleccionarColumnas(columnas)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">Seleccionar todas</button>
+                <button type="button" onClick={() => seleccionarColumnas([])} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold hover:bg-slate-50">Desmarcar todas</button>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {columnas.map(key => (
+                  <label key={key} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={columnasElegidas.includes(key)} onChange={event => seleccionarColumnas(event.target.checked ? [...elegidas, key] : elegidas.filter(column => column !== key))} className="h-4 w-4 accent-[#c80000]" />
+                    {etiqueta[key] ?? key}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-3 text-xs leading-5 text-slate-600" role="status">
+                {columnasElegidas.length ? `${columnasElegidas.length} de ${columnas.length} columnas · PDF ${orientacionPDF}. Todas las columnas elegidas van en el ancho de la página; las filas continúan en otras hojas si hace falta.` : "Selecciona al menos una columna para ver y descargar el reporte."}
+              </p>
+              {columnasElegidas.length > 10 && <p className="mt-1 text-xs text-amber-700">Con muchas columnas, el texto puede quedar estrecho. Selecciona las necesarias para facilitar la lectura.</p>}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => void descargar("pdf")} disabled={!!exportando || !columnasElegidas.length} className="rounded-lg bg-[#c80000] px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">{exportando === "pdf" ? "Preparando PDF…" : "Descargar PDF"}</button>
+                <button type="button" onClick={() => void descargar("excel")} disabled={!!exportando || !columnasElegidas.length} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold disabled:opacity-40">{exportando === "excel" ? "Preparando Excel…" : "Descargar Excel"}</button>
+              </div>
+            </fieldset>
+          )}
           <div className="overflow-x-auto" aria-busy={cargando}>
-            {rows.length ? (
-              <table className="w-full min-w-[1000px] text-left">
+            {rows.length && columnasElegidas.length ? (
+              <table className="w-full text-left">
                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   <tr>
-                    {columnas.map(
+                    {columnasElegidas.map(
                       (key) => (
                         <th
                           key={key}
@@ -938,7 +975,7 @@ export default function Page() {
                         key={`${row.codigo || row.posicion || index}-${index}`}
                         className="odd:bg-white even:bg-slate-50/70 hover:bg-red-50/40"
                       >
-                        {columnas.map(
+                        {columnasElegidas.map(
                           (key) => (
                             <td
                               key={key}
@@ -963,11 +1000,11 @@ export default function Page() {
                 <p className="font-semibold text-slate-700">
                   {cargando
                     ? "Generando reporte…"
-                    : "No hay registros para esta consulta"}
+                    : rows.length ? "Selecciona las columnas del reporte" : "No hay registros para esta consulta"}
                 </p>
 
                 <p className="mt-1 text-sm text-slate-400">
-                  Prueba con otros filtros o selecciona otro reporte.
+                  {rows.length ? "Marca al menos una columna en las opciones de arriba." : "Prueba con otros filtros o selecciona otro reporte."}
                 </p>
               </div>
             )}

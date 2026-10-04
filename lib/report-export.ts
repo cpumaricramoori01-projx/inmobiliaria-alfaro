@@ -13,6 +13,18 @@ export type ReportExport = {
 const brand = "Inmobiliaria Alberto Alfaro";
 const red = "C80000";
 
+export function reportPDFLayout(columns: string[]) {
+  const weights = columns.map(key =>
+    ["posicion", "dias"].includes(key) ? 14 : key === "codigo" ? 22 :
+      key.toLowerCase().includes("fecha") ? 24 :
+        ["nombre", "propietario", "ubicacion", "situaciones", "motivoLiberacion"].includes(key) ? 40 : 28);
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  const orientation = total > 182 ? "landscape" : "portrait";
+  const available = orientation === "landscape" ? 269 : 182;
+  return { orientation, fontSize: columns.length > 10 ? 7 : 8,
+    columnStyles: Object.fromEntries(columns.map((key, index) => [key, { cellWidth: available * weights[index] / (total || 1) }])) } as const;
+}
+
 export function reportDate(value: ReportValue): Date | null {
   if (typeof value !== "string" && typeof value !== "number") return null;
   if (value === "") return null;
@@ -52,8 +64,10 @@ function metrics(report: ReportExport): [string, number][] {
 }
 
 export async function exportReportPDF(report: ReportExport) {
+  if (!report.columns.length) throw new Error("Selecciona al menos una columna para descargar.");
   const [{ jsPDF }, { default: autoTable }, image] = await Promise.all([import("jspdf"), import("jspdf-autotable"), logo()]);
-  const doc = new jsPDF({ orientation: report.columns.length > 6 ? "landscape" : "portrait", unit: "mm", format: "a4" });
+  const layout = reportPDFLayout(report.columns);
+  const doc = new jsPDF({ orientation: layout.orientation, unit: "mm", format: "a4" });
   doc.setProperties({ title: report.title, author: brand, subject: report.description });
   const width = doc.internal.pageSize.getWidth();
   const properties = doc.getImageProperties(image);
@@ -88,12 +102,13 @@ export async function exportReportPDF(report: ReportExport) {
     columns: report.columns.map(key => ({ header: report.labels[key] ?? key, dataKey: key })),
     body: report.rows.map(row => Object.fromEntries(report.columns.map(key => [key, reportText(key, row[key])]))),
     theme: "striped",
-    styles: { font: "helvetica", fontSize: 8, cellPadding: 2.5, overflow: "linebreak", textColor: [55, 65, 81], minCellWidth: 22 },
+    tableWidth: width - 28,
+    columnStyles: layout.columnStyles,
+    styles: { font: "helvetica", fontSize: layout.fontSize, cellPadding: 2, overflow: "linebreak", textColor: [55, 65, 81] },
     headStyles: { fillColor: [200, 0, 0], textColor: 255, fontStyle: "bold" },
     alternateRowStyles: { fillColor: [247, 247, 248] },
     margin: { top: 38, bottom: 18, left: 14, right: 14 },
-    showHead: "everyPage", rowPageBreak: "avoid", horizontalPageBreak: true,
-    horizontalPageBreakRepeat: report.columns.includes("codigo") ? "codigo" : report.columns[0],
+    showHead: "everyPage", rowPageBreak: "avoid", horizontalPageBreak: false,
     willDrawPage: data => { if (data.pageNumber > 1) header(); },
   });
   const pages = doc.getNumberOfPages();
@@ -108,6 +123,7 @@ export async function exportReportPDF(report: ReportExport) {
 }
 
 export async function exportReportExcel(report: ReportExport) {
+  if (!report.columns.length) throw new Error("Selecciona al menos una columna para descargar.");
   const [ExcelJS, image] = await Promise.all([import("exceljs"), logo()]);
   const workbook = new ExcelJS.Workbook();
   workbook.creator = brand; workbook.created = report.generatedAt;
