@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeading from "@/app/components/PageHeading";
+
 import { requestJson } from "@/lib/client-request";
 
 import ConfirmDialog from "@/app/components/ConfirmDialog";
@@ -153,19 +155,7 @@ export default function Page() {
         <header className="mb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="mb-2 flex items-center gap-2">
-                <span className="rounded-full bg-[#fff1f1] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#b00000]">
-                  Fase 1
-                </span>
-
-                <span className="text-xs text-slate-400">
-                  Gestión de cartera
-                </span>
-              </div>
-
-              <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
-                Liberar inmueble
-              </h1>
+              <PageHeading href="/liberar-inmuebles" />
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
                 Registra la salida de un inmueble de la cartera activa. La

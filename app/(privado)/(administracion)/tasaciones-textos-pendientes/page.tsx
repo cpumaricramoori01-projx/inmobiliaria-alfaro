@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeading from "@/app/components/PageHeading";
+
 import { requestJson } from "@/lib/client-request";
 
 import Link from "next/link";
@@ -279,13 +281,7 @@ export default function TasacionesTextosPendientesPage() {
 
         <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#c80000]">
-              Fase 1 · Seguimiento
-            </div>
-
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              Tasaciones y textos pendientes
-            </h1>
+            <PageHeading href="/tasaciones-textos-pendientes" />
 
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
               Bandeja central para continuar el inmueble

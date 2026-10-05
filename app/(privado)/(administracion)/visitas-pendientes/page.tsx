@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeading from "@/app/components/PageHeading";
+
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -39,7 +41,7 @@ export default function Page() {
     <main className="min-h-screen bg-[#f5f7fa] p-6 lg:p-8">
       <div className="mx-auto max-w-[1500px]">
         <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div><div className="flex items-center gap-2"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700">◷</span><p className="text-xs font-bold uppercase tracking-[.14em] text-slate-400">Fase 1 · Seguimiento</p></div><h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950">Visitas pendientes</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Bandeja conectada a la base de datos. Cada inmueble permanece aquí hasta que la visita sea realmente realizada y registrada.</p></div>
+          <div><PageHeading href="/visitas-pendientes" /><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Bandeja conectada a la base de datos. Cada inmueble permanece aquí hasta que la visita sea realmente realizada y registrada.</p></div>
           <Link href="/registrar-visitas" className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">Registrar visita realizada →</Link>
         </header>
 

@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeading from "@/app/components/PageHeading";
+
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import ConfirmDialog from "./ConfirmDialog";
@@ -227,7 +229,7 @@ export default function PropertyInformation({ initialCode = "", initialTab = "Re
     {pendingProperty !== null && <ConfirmDialog title="Cambios sin guardar" confirmLabel="Descartar cambios" onCancel={() => setPendingProperty(null)} onConfirm={() => selectProperty(pendingProperty, true)}><p>Tienes cambios pendientes en esta ficha. Si cambias de inmueble, se descartarán.</p></ConfirmDialog>}
     <div className="mx-auto max-w-[1500px]">
       <header className="flex flex-wrap items-end justify-between gap-4">
-        <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#c80000]">Archivo inmobiliario</p><h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Información de inmuebles</h1><p className="mt-2 text-sm text-slate-500">Encuentra un inmueble y completa su ficha, paso a paso.</p></div>
+        <div><PageHeading href="/datos-inmuebles" /><p className="mt-2 text-sm text-slate-500">Encuentra un inmueble y completa su ficha, paso a paso.</p></div>
         {admin && <Link href="/cartera" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300">← Volver a cartera</Link>}
       </header>
 

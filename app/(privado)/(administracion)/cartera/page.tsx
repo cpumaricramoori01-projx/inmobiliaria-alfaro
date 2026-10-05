@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeading from "@/app/components/PageHeading";
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRef } from "react";
@@ -449,15 +451,7 @@ export default function CarteraPage() {
         {/* CABECERA */}
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-slate-400">
-              <span>Fase 1</span>
-              <span className="text-slate-300">/</span>
-              <span>Cartera</span>
-            </div>
-
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
-              Cartera de inmuebles
-            </h1>
+            <PageHeading href="/cartera" />
 
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
               Control operativo de los inmuebles activos,

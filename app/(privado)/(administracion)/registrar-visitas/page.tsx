@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeading from "@/app/components/PageHeading";
+
 import Link from "next/link";
 import { todayInPeru } from "@/lib/calendar.mjs";
 import PhotoUploader, { type UploadedPhoto } from "@/app/components/PhotoUploader";
@@ -148,41 +150,7 @@ export default function Page() {
         {/* Encabezado */}
         <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-[#c80000]">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className="h-5 w-5"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M8 6h8M8 10h8M8 14h5M6 3.75h12A1.25 1.25 0 0 1 19.25 5v14A1.25 1.25 0 0 1 18 20.25H6A1.25 1.25 0 0 1 4.75 19V5A1.25 1.25 0 0 1 6 3.75Z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="m8.5 17 1.5 1.5 3-3"
-                  />
-                </svg>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
-                  Fase 1 · Gestión de cartera
-                </p>
-                <p className="mt-0.5 text-sm font-medium text-slate-500">
-                  Registro de actividad
-                </p>
-              </div>
-            </div>
-
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-950">
-              Registrar visitas realizadas
-            </h1>
+            <PageHeading href="/registrar-visitas" />
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
               Confirma las visitas que realmente se realizaron. Al registrar

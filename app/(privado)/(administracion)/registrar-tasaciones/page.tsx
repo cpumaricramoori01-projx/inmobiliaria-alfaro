@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeading from "@/app/components/PageHeading";
+
 import { requestJson } from "@/lib/client-request";
 
 import Link from "next/link";
@@ -95,11 +97,10 @@ export default function Page() {
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[.15em] text-orange-500">Fase 1 · Gestión comercial</p>
             <div className="mt-2 flex items-start gap-3">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">ₛ</span>
               <div>
-                <h1 className="text-3xl font-bold tracking-tight text-slate-950">Registrar tasaciones realizadas</h1>
+                <PageHeading href="/registrar-tasaciones" />
                 <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Registra una tasación ya negociada con el propietario: precio de tasación, precio objetivo y precio de venta acordado. Conserva los comentarios en observación.</p>
               </div>
             </div>

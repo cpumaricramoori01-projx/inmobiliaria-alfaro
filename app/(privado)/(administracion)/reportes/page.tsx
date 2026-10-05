@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeading from "@/app/components/PageHeading";
+
 import type { ReportRow, ReportSummary } from "@/lib/report-types";
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
@@ -443,13 +445,7 @@ export default function Page() {
             </div>
 
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#c80000]">
-                Información para decidir
-              </p>
-
-              <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">
-                Reportes
-              </h1>
+              <PageHeading href="/reportes" />
 
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
                 Consulta datos reales de la cartera, gestión, salidas, histórico y tiempos del flujo.
