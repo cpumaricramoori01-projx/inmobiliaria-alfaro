@@ -1,0 +1,13 @@
+import { dashboardMenuItem, menuGroups } from "@/lib/navigation";
+
+export default function PageHeading({ href }: { href: string }) {
+  const group = menuGroups.find(group => group.items.some(item => item.href === href));
+  const item = group?.items.find(item => item.href === href);
+  if (!group || !item) {
+    return <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{dashboardMenuItem.label}</h1>;
+  }
+  return <div>
+    <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{group.label}</h1>
+    <p className="mt-2 text-sm font-semibold text-[#c80000]">{item.label}</p>
+  </div>;
+}

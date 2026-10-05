@@ -1,3 +1,4 @@
+import { publicationReadiness } from "@/lib/publication-readiness";
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, desc, eq, sql } from "drizzle-orm";
@@ -192,6 +193,7 @@ export async function GET() {
     let textosPendientes = 0;
     let listosParaPublicar = 0;
 
+    const expedientes = await publicationReadiness();
     for (const inmuebleId of activos) {
       const visita = ultimaVisita.get(inmuebleId);
       const tasacion = tasacionPorInmueble.get(inmuebleId);
@@ -214,11 +216,11 @@ export async function GET() {
         negociacionesEnCurso++;
       }
 
-      if (tasacion === "aprobado" && publicacion === undefined) {
+      if (tasacion === "aprobado" && !expedientes.get(inmuebleId)?.complete) {
         textosPendientes++;
       }
 
-      if (publicacion === false) {
+      if (publicacion === false && expedientes.get(inmuebleId)?.complete) {
         listosParaPublicar++;
       }
     }
@@ -248,17 +250,7 @@ export async function GET() {
           tone: "orange",
         },
         {
-          etapa: "Pendiente de aprobación",
-          total: aprobaciones,
-          tone: "violet",
-        },
-        {
-          etapa: "En negociación",
-          total: negociacionesEnCurso,
-          tone: "violet",
-        },
-        {
-          etapa: "Texto pendiente",
+          etapa: "Expediente pendiente",
           total: textosPendientes,
           tone: "rose",
         },
