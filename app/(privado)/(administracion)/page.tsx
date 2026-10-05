@@ -135,7 +135,7 @@ export default function Home() {
   useEffect(() => {
     const actualizarCabeceraDashboard = () => {
     const ahora = new Date();
-    const hora = ahora.getHours();
+    const hora = Number(new Intl.DateTimeFormat("es-PE", { timeZone: "America/Lima", hour: "numeric", hourCycle: "h23" }).format(ahora));
 
     let saludo = "Buenos días";
     let icono = "☀️";
@@ -152,6 +152,7 @@ export default function Home() {
     }
 
     const fecha = ahora.toLocaleDateString("es-PE", {
+      timeZone: "America/Lima",
       weekday: "long",
       day: "2-digit",
       month: "short",
@@ -159,8 +160,10 @@ export default function Home() {
     });
 
     const horaActual = ahora.toLocaleTimeString("es-PE", {
+      timeZone: "America/Lima",
       hour: "2-digit",
       minute: "2-digit",
+      second: "2-digit",
       hour12: false,
     });
 
@@ -197,9 +200,18 @@ export default function Home() {
   };
 
     actualizarCabeceraDashboard();
-    const intervalo = window.setInterval(actualizarCabeceraDashboard, 60000);
+    const intervalo = window.setInterval(actualizarCabeceraDashboard, 1000);
+    const sincronizarAlVolver = () => {
+      if (document.visibilityState === "visible") actualizarCabeceraDashboard();
+    };
+    document.addEventListener("visibilitychange", sincronizarAlVolver);
+    window.addEventListener("focus", actualizarCabeceraDashboard);
 
-    return () => window.clearInterval(intervalo);
+    return () => {
+      window.clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", sincronizarAlVolver);
+      window.removeEventListener("focus", actualizarCabeceraDashboard);
+    };
   }, [data, firstName]);
 
   return (
@@ -266,7 +278,7 @@ export default function Home() {
             </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777]">
-              <span id="dashboard-clock">--:--</span>
+              <span id="dashboard-clock" className="font-mono tabular-nums">--:--:--</span>
               <span className="h-1 w-1 rounded-full bg-[#c80000]" />
               <span>Secretaría virtual</span>
             </div>
