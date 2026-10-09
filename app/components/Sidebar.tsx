@@ -2,30 +2,12 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { dashboardMenuItem, menuGroups } from "@/lib/navigation";
 import { isAdministrator } from "@/lib/access.mjs";
 import LogoutButton from "./LogoutButton";
 import { useSessionUser } from "./SessionProvider";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const fase1 = [
-  { href: "/cartera", label: "Cartera de inmuebles", icon: "home" },
-  { href: "/registrar-inmueble", label: "Registrar inmueble", icon: "plus" },
-  { href: "/registrar-visitas", label: "Registrar visitas", icon: "visit" },
-  { href: "/visitas-pendientes", label: "Visitas pendientes", icon: "clock" },
-  { href: "/registrar-tasaciones", label: "Registrar tasaciones", icon: "valuation" },
-  { href: "/tasaciones-textos-pendientes", label: "Tasaciones y textos", icon: "clipboard" },
-  { href: "/liberar-inmuebles", label: "Liberar inmueble", icon: "release" },
-  { href: "/reportes", label: "Reportes", icon: "report" },
-];
-
-const fase2 = [
-  {
-    href: "/datos-inmuebles",
-    label: "Ficha, documentos y fotos",
-    icon: "database",
-  },
-];
 
 function Icon({ name }: { name: string }) {
   const common = { className: "h-[18px] w-[18px]", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -41,6 +23,7 @@ function Icon({ name }: { name: string }) {
     report: <><path d="M5 20V10M12 20V4M19 20v-7"/><path d="M3 20h18"/></>,
     database: <><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5"/><path d="M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7"/></>,
     users: <><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 5a3 3 0 0 1 0 6M21 20v-2a6 6 0 0 0-4-5"/></>,
+    map: <><path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></>,
     menu: <><path d="M4 7h16M4 12h16M4 17h16"/></>,
     close: <><path d="M6 6l12 12M18 6 6 18"/></>,
   };
@@ -55,7 +38,7 @@ function MenuLink({ item, onNavigate }: { item: { href: string; label: string; i
       href={item.href}
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
-      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition ${active ? "bg-[#171717] text-white shadow-[0_8px_22px_rgba(23,23,23,0.12)]" : "text-slate-600 hover:bg-[#f5f4f2] hover:text-[#171717]"}`}
+      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition ${active ? "bg-[#c80000] text-white shadow-[0_8px_22px_rgba(23,23,23,0.12)]" : "text-slate-600 hover:bg-[#f5f4f2] hover:text-[#171717]"}`}
     >
       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-white/10 text-white" : "bg-[#f2f1ef] text-[#66615c]"}`}>
         <Icon name={item.icon}/>
@@ -70,63 +53,16 @@ function MenuContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <>
       {isAdministrator(user) && <>
-      <div className="rounded-2xl border border-[#e7e5e2] bg-[#faf9f7] p-2">
-        <MenuLink item={{ href: "/", label: "Panel de control", icon: "dashboard" }} onNavigate={onNavigate}/>
-      </div>
-
-    <div className="mb-2 mt-7 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#96928c]">
-  Operación
-</div>
-
-<div className="space-y-1">
-  {fase1.slice(0, 2).map((item) => (
-    <MenuLink
-      key={item.href}
-      item={item}
-      onNavigate={onNavigate}
-    />
-  ))}
-</div>
-
-<div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-  Seguimiento
-</div>
-
-<div className="space-y-1">
-  {fase1.slice(2, 6).map((item) => (
-    <MenuLink
-      key={item.href}
-      item={item}
-      onNavigate={onNavigate}
-    />
-  ))}
-</div>
-
-<div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-  Cierre e información
-</div>
-
-<div className="space-y-1">
-  {fase1.slice(6).map((item) => (
-    <MenuLink
-      key={item.href}
-      item={item}
-      onNavigate={onNavigate}
-    />
-  ))}
-</div>
-      <div className="mb-2 mt-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Administración</div>
-      <MenuLink item={{ href: "/usuarios", label: "Usuarios y accesos", icon: "users" }} onNavigate={onNavigate}/>
-      <MenuLink item={{ href: "/seguridad", label: "Registro de seguridad", icon: "clipboard" }} onNavigate={onNavigate}/>
+        <div className="rounded-2xl border border-[#e7e5e2] bg-[#faf9f7] p-2">
+          <MenuLink item={dashboardMenuItem} onNavigate={onNavigate} />
+        </div>
       </>}
-      <div className="mb-2 mt-7 flex items-center justify-between px-3">
-        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Información de inmuebles</span>
-      </div>
-      <div className="space-y-1">
-        {fase2.map(item => (
-          <MenuLink key={item.href} item={item} onNavigate={onNavigate}/>
-        ))}
-      </div>
+      {menuGroups.filter(group => isAdministrator(user) || group.items.some(item => item.href === "/datos-inmuebles")).map(group => <div key={group.label}>
+        <div className="mb-2 mt-6 px-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{group.label}</div>
+        <div className="space-y-1">
+          {group.items.map(item => <MenuLink key={item.href} item={item} onNavigate={onNavigate} />)}
+        </div>
+      </div>)}
     </>
   );
 }
@@ -137,9 +73,14 @@ export default function Sidebar() {
 
   return (
     <>
+      <div aria-hidden="true" className="fixed inset-x-0 top-0 z-30 flex h-16 items-center justify-center border-b border-slate-200 bg-white/95 px-20 backdrop-blur-sm xl:hidden">
+        <Image src="/branding/logo.png" alt="" width={128} height={40} className="h-auto max-h-10 w-32 object-contain" />
+      </div>
       <button
         type="button"
         aria-label={open ? "Cerrar menú" : "Abrir menú"}
+        aria-expanded={open}
+        aria-controls="navigation-panel"
         onClick={() => setOpen((value) => !value)}
         className="fixed left-4 top-4 z-[60] flex h-11 w-11 items-center justify-center rounded-xl border border-[#e7e5e2] bg-white text-slate-700 shadow-sm xl:hidden"
       >
@@ -150,7 +91,7 @@ export default function Sidebar() {
         <button type="button" aria-label="Cerrar menú" onClick={() => setOpen(false)} className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-[1px] xl:hidden" />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,18rem)] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 xl:top-0 xl:w-72 xl:translate-x-0 xl:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside id="navigation-panel" className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,18rem)] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 xl:top-0 xl:w-72 xl:translate-x-0 xl:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex h-[104px] shrink-0 flex-col items-center justify-center border-b border-slate-100 px-5">
           <div className="flex h-[54px] w-[170px] items-center justify-center overflow-hidden">
             <Image
@@ -161,7 +102,7 @@ export default function Sidebar() {
               className="h-auto max-h-full w-full object-contain"
             />
           </div>
-          <div className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          <div className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
             Secretaría virtual
           </div>
         </div>
@@ -177,10 +118,10 @@ export default function Sidebar() {
               </span>
               <div>
                 <div className="text-xs font-bold text-slate-800">{user.nombre}</div>
-                <div className="text-[10px] text-slate-400">{user.rol === "administrador" ? "Administrador" : "Operador"}</div>
+                <div className="text-xs text-slate-500">{user.rol === "administrador" ? "Administrador" : "Operador"}</div>
               </div>
             </div>
-            <div className="mt-3 border-t border-slate-200 pt-3 text-[10px] leading-4 text-slate-500">
+            <div className="mt-3 border-t border-slate-200 pt-3 text-xs leading-4 text-slate-500">
               Cartera, seguimiento y pendientes en un solo lugar.
             </div>
           </div>

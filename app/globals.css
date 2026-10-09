@@ -31,7 +31,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgb(80 80 80 / .22);border-radius:999px}
 .aa-card{border:1px solid var(--aa-line);background:white;border-radius:1rem;box-shadow:0 8px 28px rgb(23 23 23 / .035)}
-.aa-eyebrow{font-size:10px;font-weight:800;letter-spacing:.17em;text-transform:uppercase;color:#8a8782}
+.aa-eyebrow{font-size:.75rem;font-weight:800;line-height:1.5;letter-spacing:.12em;text-transform:uppercase;color:#64748b}
 .aa-red{color:var(--aa-red)}
 .aa-red-bg{background:var(--aa-red)}
 .aa-red-border{border-color:rgb(200 0 0 / .22)}
@@ -46,3 +46,32 @@ button, a { -webkit-tap-highlight-color: transparent; }
 @media (max-width: 639px) { .mobile-page-shell > main { padding-left: 1rem; padding-right: 1rem; } }
 
 .property-map-pin { background: transparent; border: 0; }
+
+/* Shared visual language for operational screens. */
+@layer components {
+.aa-button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: .5rem; border-radius: .75rem; padding: .65rem 1rem; font-size: .875rem; font-weight: 600; line-height: 1.4; transition: background-color .15s, border-color .15s; }
+.aa-button-primary { background: var(--aa-red); color: white; }
+.aa-button-primary:hover { background: var(--aa-red-dark); }
+.aa-button-secondary { border: 1px solid var(--aa-line); background: white; color: #334155; }
+.aa-button-secondary:hover { background: #f8fafc; border-color: #cbd5e1; }
+.aa-input { min-height: 44px; border: 1px solid #cbd5e1; border-radius: .75rem; background: #fff; padding: .65rem .85rem; font-size: .875rem; color: #1e293b; }
+.aa-input:focus { border-color: var(--aa-red); }
+}
+.mobile-page-shell .text-xs { font-size: .8125rem; line-height: 1.45; }
+.mobile-page-shell :is(button, input:not([type="checkbox"]):not([type="radio"]), select) { min-height: 44px; }
+.mobile-page-shell button:disabled { cursor: not-allowed; }
+.mobile-page-shell :is(h1, h2, h3) { overflow-wrap: break-word; }
+.mobile-page-shell section[id] { scroll-margin-top: 6rem; }
+.mobile-page-shell :is(.bg-slate-900, .bg-\[\#171717\]) .text-slate-500 { color: #cbd5e1; }
+@media (max-width: 639px) {
+  .mobile-page-shell input:not([type="checkbox"]):not([type="radio"]), .mobile-page-shell select, .mobile-page-shell textarea { font-size: 1rem; }
+  .property-position-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .mobile-page-shell *, .mobile-page-shell *::before, .mobile-page-shell *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* Consistent keyboard focus and readable text on dark operational cards. */
+:where(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid #c80000; outline-offset: 3px; }
+.bg-slate-900 .text-slate-500 { color: #cbd5e1; }

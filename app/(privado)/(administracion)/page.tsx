@@ -1,597 +1,100 @@
 "use client";
 
+import RentalAlerts from "@/app/components/RentalAlerts";
+import WorkAgenda from "@/app/components/WorkAgenda";
+import PageHeading from "@/app/components/PageHeading";
+
+
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSessionUser } from "@/app/components/SessionProvider";
+import StatusBadge from "@/app/components/StatusBadge";
+import { Feedback, LoadingCards } from "@/app/components/InterfaceFeedback";
 
 type DashboardData = {
-  resumen: {
-    activos: number;
-    posicionesDisponibles: number;
-    visitasPendientes: number;
-    tasacionesPendientes: number;
-    aprobaciones: number;
-    negociaciones: number;
-    textosPendientes: number;
-    listosParaPublicar: number;
+  resumen: { activos: number; posicionesDisponibles: number; visitasPendientes: number; tasacionesPendientes: number; aprobaciones: number; negociaciones: number; textosPendientes: number; listosParaPublicar: number };
+  pendientes: { etapa: string; total: number; tone: string }[];
+  recientes: { numero: string; nombre: string; etapa: string; fecha: string | null }[];
+};
+const destinations: Record<string, { href: string; action: string }> = {
+  "Visita pendiente": { href: "/visitas-pendientes", action: "Revisar visitas" },
+  "Tasación pendiente": { href: "/registrar-tasaciones", action: "Registrar tasaciones" },
+  "Expediente pendiente": { href: "/tasaciones-textos-pendientes#material", action: "Completar material" },
+  "Listo para publicar": { href: "/tasaciones-textos-pendientes#listos", action: "Revisar publicaciones" },
+};
+function businessClock(now: Date) {
+  const hour = Number(new Intl.DateTimeFormat("es-PE", { timeZone: "America/Lima", hour: "numeric", hourCycle: "h23" }).format(now));
+  return { greeting: hour >= 5 && hour < 12 ? "Buenos días" : hour < 18 && hour >= 12 ? "Buenas tardes" : "Buenas noches",
+    icon: hour >= 5 && hour < 12 ? "☀️" : hour >= 12 && hour < 18 ? "🌤️" : hour >= 18 && hour < 23 ? "🌅" : "🌙",
+    date: now.toLocaleDateString("es-PE", { timeZone: "America/Lima", weekday: "long", day: "numeric", month: "long" }),
+    time: now.toLocaleTimeString("es-PE", { timeZone: "America/Lima", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
   };
-  pendientes: {
-    etapa: string;
-    total: number;
-    tone: string;
-  }[];
-  recientes: {
-    numero: string;
-    nombre: string;
-    etapa: string;
-    fecha: string | Date | null;
-  }[];
-};
-
-const dotStyles: Record<string, string> = {
-  amber: "bg-[#c80000]",
-  orange: "bg-[#c80000]",
-  violet: "bg-[#c80000]",
-  rose: "bg-[#c80000]",
-  emerald: "bg-[#c80000]",
-};
-
-function formatDate(value: string | Date | null) {
-  if (!value) return "—";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return "—";
-
-  return date.toLocaleDateString("es-PE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
 }
-
 export default function Home() {
   const user = useSessionUser();
-  const firstName = user.nombre.split(" ")[0];
   const [data, setData] = useState<DashboardData | null>(null);
-  const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
-
+  const [loading, setLoading] = useState(true);
+  const [reload, setReload] = useState(0);
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then(async (response) => {
-        const body = await response.json();
-
-        if (!response.ok) {
-          throw new Error(body.error || "No se pudo cargar el dashboard.");
-        }
-
-        return body;
-      })
-      .then(setData)
-      .catch((err) =>
-        setError(
-          err instanceof Error
-            ? err.message
-            : "No se pudo cargar el dashboard.",
-        ),
-      )
-      .finally(() => setCargando(false));
+    const update = () => setNow(new Date());
+    const initial = window.setTimeout(update, 0);
+    const timer = window.setInterval(update, 1000);
+    const syncWhenVisible = () => { if (document.visibilityState === "visible") update(); };
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    window.addEventListener("focus", update);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+      window.removeEventListener("focus", update);
+    };
   }, []);
-
-  const resumen = data
-    ? [
-        {
-          titulo: "Inmuebles activos",
-          valor: data.resumen.activos,
-          detalle: "de 90 posiciones",
-          attention: false,
-        },
-        {
-          titulo: "Posiciones disponibles",
-          valor: data.resumen.posicionesDisponibles,
-          detalle: "listas para nuevos inmuebles",
-          attention: false,
-        },
-        {
-          titulo: "Visitas pendientes",
-          valor: data.resumen.visitasPendientes,
-          detalle: "requieren atención",
-          attention: data.resumen.visitasPendientes > 0,
-        },
-        {
-          titulo: "Tasaciones pendientes",
-          valor: data.resumen.tasacionesPendientes,
-          detalle: "requieren atención",
-          attention: data.resumen.tasacionesPendientes > 0,
-        },
-      ]
-    : [];
-
-  const metricas = data
-    ? [
-        {
-          titulo: "Aprobaciones",
-          valor: data.resumen.aprobaciones,
-          detalle: "pendientes de decisión",
-        },
-        {
-          titulo: "En negociación",
-          valor: data.resumen.negociaciones,
-          detalle: "con el propietario",
-        },
-        {
-          titulo: "Textos pendientes",
-          valor: data.resumen.textosPendientes,
-          detalle: "requiere completar",
-        },
-        {
-          titulo: "Listos para publicar",
-          valor: data.resumen.listosParaPublicar,
-          detalle: "esperando publicación",
-        },
-      ]
-    : [];
-
   useEffect(() => {
-    const actualizarCabeceraDashboard = () => {
-    const ahora = new Date();
-    const hora = ahora.getHours();
-
-    let saludo = "Buenos días";
-    let icono = "☀️";
-
-    if (hora >= 12 && hora < 18) {
-      saludo = "Buenas tardes";
-      icono = "🌤️";
-    } else if (hora >= 18 && hora < 23) {
-      saludo = "Buenas noches";
-      icono = "🌅";
-    } else if (hora >= 23 || hora < 5) {
-      saludo = "Buenas noches";
-      icono = "🌙";
-    }
-
-    const fecha = ahora.toLocaleDateString("es-PE", {
-      weekday: "long",
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-
-    const horaActual = ahora.toLocaleTimeString("es-PE", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-
-    const pendientesVisita = data?.resumen.visitasPendientes ?? 0;
-    const pendientesTasacion = data?.resumen.tasacionesPendientes ?? 0;
-    const listosPublicar = data?.resumen.listosParaPublicar ?? 0;
-    const activos = data?.resumen.activos ?? 0;
-
-    let resumen = "La cartera está al día. Puedes revisar el estado general o consultar reportes.";
-
-    if (pendientesVisita > 0 && pendientesTasacion > 0 && listosPublicar > 0) {
-      resumen = `Tienes ${pendientesVisita} visita${pendientesVisita === 1 ? "" : "s"} pendiente${pendientesVisita === 1 ? "" : "s"}, ${pendientesTasacion} tasación${pendientesTasacion === 1 ? "" : "es"} pendiente${pendientesTasacion === 1 ? "" : "s"} y ${listosPublicar} inmueble${listosPublicar === 1 ? "" : "s"} listo${listosPublicar === 1 ? "" : "s"} para publicar.`;
-    } else if (pendientesVisita > 0) {
-      resumen = `Tienes ${pendientesVisita} visita${pendientesVisita === 1 ? "" : "s"} pendiente${pendientesVisita === 1 ? "" : "s"} por atender en la cartera.`;
-    } else if (pendientesTasacion > 0) {
-      resumen = `Hay ${pendientesTasacion} tasación${pendientesTasacion === 1 ? "" : "es"} pendiente${pendientesTasacion === 1 ? "" : "s"} para continuar el proceso.`;
-    } else if (listosPublicar > 0) {
-      resumen = `Hay ${listosPublicar} inmueble${listosPublicar === 1 ? "" : "s"} listo${listosPublicar === 1 ? "" : "s"} para publicación.`;
-    } else if (activos > 0) {
-      resumen = `Tienes ${activos} inmueble${activos === 1 ? "" : "s"} activo${activos === 1 ? "" : "s"} en cartera.`;
-    }
-
-    const greeting = document.getElementById("dashboard-greeting");
-    const date = document.getElementById("dashboard-date");
-    const clock = document.getElementById("dashboard-clock");
-    const summary = document.getElementById("dashboard-summary");
-    const contextIcon = document.getElementById("dashboard-context-icon");
-
-    if (greeting) greeting.textContent = `${saludo}, ${firstName}.`;
-    if (date) date.textContent = fecha;
-    if (clock) clock.textContent = horaActual;
-    if (summary) summary.textContent = resumen;
-    if (contextIcon) contextIcon.textContent = icono;
-  };
-
-    actualizarCabeceraDashboard();
-    const intervalo = window.setInterval(actualizarCabeceraDashboard, 60000);
-
-    return () => window.clearInterval(intervalo);
-  }, [data, firstName]);
-
-  return (
-    <main className="min-h-screen bg-[#f7f7f5] p-6 lg:p-8">
-      <div className="mx-auto max-w-[1500px]">
-      {/* Encabezado */}
-      <header className="sticky top-0 z-20 border-b border-[#e7e5e2] bg-[#f7f7f5]/95 backdrop-blur">
-        <div className="flex min-h-[76px] items-center justify-between px-5 sm:px-6 lg:px-8">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#c80000]">
-              Secretaría virtual
-            </p>
-
-            <h1 className="mt-1 text-[24px] font-bold tracking-[-0.02em] text-[#171717]">
-              Dashboard
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-semibold text-[#171717]">
-                {user.nombre}
-              </p>
-              <p className="mt-0.5 text-[11px] text-[#777]">
-                {user.rol === "administrador" ? "Administrador" : "Operador"}
-              </p>
-            </div>
-
-            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#e7e5e2] bg-white text-[10px] font-bold text-[#c80000]">
-              {user.nombre.split(" ").slice(0, 2).map(part => part[0]).join("").toUpperCase()}
-            </div>
-          </div>
-        </div>
+    const controller = new AbortController();
+    fetch("/api/dashboard", { cache: "no-store", signal: controller.signal }).then(async response => {
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "No se pudo cargar el panel.");
+      if (!controller.signal.aborted) setData(body);
+    }).catch(error => { if (!controller.signal.aborted) setError(error instanceof Error ? error.message : "No se pudo cargar el panel."); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [reload]);
+  const clock = now ? businessClock(now) : null;
+  const work = data?.pendientes.filter(item => item.total > 0) ?? [];
+  return <main className="min-h-screen bg-[#f7f7f5] p-6 lg:p-8">
+    <div className="mx-auto max-w-[1500px] space-y-6">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <PageHeading href="/" />
+        <Link href="/registrar-inmueble" className="aa-button aa-button-primary">+ Registrar inmueble</Link>
       </header>
-
-      <div className="p-5 sm:p-6 lg:p-8">
-        {/* Entrada principal */}
-        <section className="relative mb-7 overflow-hidden rounded-[22px] border border-[#e7e5e2] bg-white px-6 py-7 shadow-[0_8px_30px_rgba(23,23,23,0.04)] sm:px-8 sm:py-8">
-          <div className="absolute right-0 top-0 h-full w-1 bg-[#c80000]" />
-
-          <div className="relative max-w-3xl">
-            <div className="flex items-center gap-3">
-              <span className="h-px w-8 bg-[#c80000]" />
-
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#777]">
-                <span id="dashboard-context-icon" className="mr-2">☀️</span>
-                <span id="dashboard-context-label">Hoy · Resumen de cartera</span>
-              </span>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h2 id="dashboard-greeting" className="text-[28px] font-bold tracking-[-0.025em] text-[#171717] sm:text-[32px]">
-                Buenos días, {firstName}.
-              </h2>
-
-              <span id="dashboard-date" className="rounded-full border border-[#e7e5e2] bg-[#faf9f7] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777]">
-                Cargando fecha...
-              </span>
-            </div>
-
-            <p id="dashboard-summary" className="mt-2 max-w-2xl text-sm leading-6 text-[#6b6b6b]">
-              Aquí tienes lo importante de la cartera: qué está pendiente,
-              qué avanzó y dónde puedes continuar trabajando.
-            </p>
-
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777]">
-              <span id="dashboard-clock">--:--</span>
-              <span className="h-1 w-1 rounded-full bg-[#c80000]" />
-              <span>Secretaría virtual</span>
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-2.5">
-              <a
-                href="/cartera"
-                className="rounded-lg bg-[#c80000] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#a90000]"
-              >
-                Ver cartera →
-              </a>
-
-              <a
-                href="/reportes"
-                className="rounded-lg border border-[#e1dfdc] bg-white px-4 py-2.5 text-xs font-semibold text-[#444] transition hover:border-[#c80000] hover:text-[#c80000]"
-              >
-                Ver reportes
-              </a>
-            </div>
-          </div>
-        </section>
-
-        {/* Estados de carga */}
-        {cargando && (
-          <div className="mb-6 rounded-xl border border-[#e7e5e2] bg-white px-5 py-4 text-sm text-[#777]">
-            Cargando información real de la cartera...
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-6 rounded-xl border border-[#f0caca] bg-[#fff7f7] px-5 py-4 text-sm text-[#a90000]">
-            {error}
-          </div>
-        )}
-
-        {/* Indicadores principales */}
-        <section>
-          <div className="mb-3 flex items-end justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c80000]">
-                Situación actual
-              </p>
-
-              <h2 className="mt-1 text-lg font-bold tracking-tight text-[#171717]">
-                Estado de la cartera
-              </h2>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {resumen.map((x) => (
-              <div
-                key={x.titulo}
-                className={`rounded-xl border bg-white p-5 transition ${
-                  x.attention
-                    ? "border-[#ead1d1] shadow-[0_5px_20px_rgba(200,0,0,0.04)]"
-                    : "border-[#e7e5e2]"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#777]">
-                    {x.titulo}
-                  </p>
-
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      x.attention ? "bg-[#c80000]" : "bg-[#b9b7b3]"
-                    }`}
-                  />
-                </div>
-
-                <p className="mt-4 text-[34px] font-bold leading-none tracking-[-0.03em] text-[#171717]">
-                  {x.valor}
-                </p>
-
-                <p
-                  className={`mt-2 text-xs ${
-                    x.attention ? "text-[#a90000]" : "text-[#777]"
-                  }`}
-                >
-                  {x.detalle}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Indicadores secundarios */}
-        <section className="mt-6">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {metricas.map((x) => (
-              <div
-                key={x.titulo}
-                className="rounded-xl border border-[#e7e5e2] bg-white px-5 py-4"
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#888]">
-                  {x.titulo}
-                </p>
-
-                <div className="mt-3 flex items-end justify-between gap-3">
-                  <p className="text-2xl font-bold tracking-tight text-[#171717]">
-                    {x.valor}
-                  </p>
-
-                  <span className="pb-0.5 text-right text-[10px] leading-4 text-[#999]">
-                    {x.detalle}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Atención + recientes */}
-        <div className="mt-7 grid gap-5 xl:grid-cols-[1.55fr_1fr]">
-          <section className="overflow-hidden rounded-xl border border-[#e7e5e2] bg-white">
-            <div className="flex items-center justify-between border-b border-[#eee] px-5 py-5 sm:px-6">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#c80000]" />
-
-                  <h3 className="text-sm font-bold text-[#171717]">
-                    Requieren atención
-                  </h3>
-                </div>
-
-                <p className="mt-1.5 text-xs text-[#777]">
-                  Trabajo pendiente que puede mover el flujo hacia la siguiente
-                  etapa.
-                </p>
-              </div>
-
-              <a
-                href="/visitas-pendientes"
-                className="hidden text-xs font-semibold text-[#777] transition hover:text-[#c80000] sm:block"
-              >
-                Ver pendientes →
-              </a>
-            </div>
-
-            <div className="divide-y divide-[#f0efed]">
-              {data?.pendientes.map((x) => (
-                <div
-                  key={x.etapa}
-                  className="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-[#faf9f7] sm:px-6"
-                >
-                  <div className="flex min-w-0 items-center gap-4">
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${
-                        x.total > 0
-                          ? "bg-[#fff1f1] text-[#c80000]"
-                          : "bg-[#f5f5f3] text-[#777]"
-                      }`}
-                    >
-                      {x.total}
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[#333]">
-                        {x.etapa}
-                      </p>
-
-                      <p className="mt-1 truncate text-xs text-[#888]">
-                        Inmuebles en esta etapa del flujo
-                      </p>
-                    </div>
-                  </div>
-
-                  <span
-                    className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${
-                      x.total > 0
-                        ? "bg-[#fff5f5] text-[#a90000]"
-                        : "bg-[#f5f5f3] text-[#888]"
-                    }`}
-                  >
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        x.total > 0
-                          ? dotStyles[x.tone] || "bg-[#c80000]"
-                          : "bg-[#aaa]"
-                      }`}
-                    />
-
-                    {x.total > 0 ? "Pendiente" : "Sin pendientes"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="overflow-hidden rounded-xl border border-[#e7e5e2] bg-white">
-            <div className="border-b border-[#eee] px-5 py-5 sm:px-6">
-              <div className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#171717]" />
-
-                <h3 className="text-sm font-bold text-[#171717]">
-                  Avances recientes
-                </h3>
-              </div>
-
-              <p className="mt-1.5 text-xs text-[#777]">
-                Últimos movimientos registrados en la cartera.
-              </p>
-            </div>
-
-            <div className="divide-y divide-[#f0efed]">
-              {data?.recientes.map((x, index) => (
-                <div
-                  key={`${x.numero}-${index}`}
-                  className="flex items-center gap-3 px-5 py-4 sm:px-6"
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#e7e5e2] bg-[#faf9f7] text-[10px] font-bold text-[#666]">
-                    {x.numero}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-[#333]">
-                      {x.nombre}
-                    </p>
-
-                    <p className="mt-1 text-xs text-[#888]">{x.etapa}</p>
-                  </div>
-
-                  <span className="text-[10px] text-[#999]">
-                    {formatDate(x.fecha)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
+      <section className="aa-card relative overflow-hidden p-5 sm:p-7">
+        <div aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-[#c80000]" />
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0"><div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs font-semibold text-slate-600"><p className="capitalize">{clock?.date ?? "Resumen de la jornada"}</p><span aria-hidden="true" className="h-1 w-1 rounded-full bg-slate-300" /><time className="font-mono tabular-nums" dateTime={now?.toISOString()} aria-label={clock ? `Hora actual: ${clock.time}` : "Cargando hora"}>{clock?.time ?? "--:--:--"}</time></div><h2 className="mt-3 break-words text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl"><span aria-hidden="true" className="mr-2">{clock?.icon ?? ""}</span>{clock?.greeting ?? "Bienvenido"}, {user.nombre.split(" ")[0]}.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{loading ? "Estamos consultando los avances de la cartera." : error ? "Vuelve a cargar la información para consultar el estado actual." : work.length ? `${work.length} áreas del flujo necesitan seguimiento. Elige una para continuar.` : "No hay pendientes en las áreas consultadas. Puedes revisar la cartera y los reportes."}</p></div>
+          <div className="flex flex-wrap gap-2"><Link href="/cartera" className="aa-button aa-button-secondary">Ver cartera →</Link><Link href="/reportes" className="aa-button aa-button-secondary">Reportes</Link></div>
         </div>
+      </section>
+      <WorkAgenda/><RentalAlerts/>
+      {error && <Feedback tone="error">{error}<button type="button" onClick={() => { setError(""); setLoading(true); setReload(value => value + 1); }} className="ml-3 font-semibold underline">Reintentar</button></Feedback>}
+      {loading ? <LoadingCards label="Cargando cartera y pendientes…" count={6} /> : data && !error && <>
+        <details open aria-labelledby="attention-title" className="aa-card p-5 sm:p-6">
+          <summary className="cursor-pointer list-none"><div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><p className="aa-eyebrow">Tu siguiente acción</p><h2 id="attention-title" className="mt-1 text-xl font-bold text-slate-950">Qué necesita atención</h2><p className="mt-2 text-sm leading-6 text-slate-600">Abre una bandeja para revisar sus inmuebles. Las tasaciones pendientes corresponden a inmuebles que ya tienen una visita realizada.</p></div><StatusBadge tone={work.length ? "pending" : "complete"}>{work.length ? "Hay tareas por atender" : "Al día"}</StatusBadge></div></summary>
+          {work.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{work.map(item => {
+            const target = destinations[item.etapa] ?? { href: "/cartera", action: "Ver cartera" };
+            const progress = item.etapa === "En negociación";
+            return <Link key={item.etapa} href={target.href} className={`group flex min-w-0 flex-col rounded-2xl border p-4 transition hover:shadow-md ${progress ? "border-blue-200 bg-blue-50/50" : "border-amber-200 bg-amber-50/40"}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-3xl font-bold tabular-nums text-slate-950">{item.total}</span><StatusBadge tone={progress ? "progress" : "pending"}>{progress ? "En proceso" : "Pendiente"}</StatusBadge></div><h3 className="mt-3 text-sm font-bold text-slate-900">{item.etapa}</h3><span className="mt-4 text-sm font-semibold text-slate-800 group-hover:underline">{target.action} →</span>
+            </Link>;
+          })}</div> : <p className="mt-5 rounded-xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">✓ No hay visitas, tasaciones, expedientes ni publicaciones pendientes en las áreas consultadas.</p>}
+        </details>
 
-        {/* Acciones rápidas */}
-        <section className="mt-7 rounded-xl border border-[#e7e5e2] bg-white p-5 sm:p-6">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c80000]">
-                Operación
-              </p>
-
-              <h3 className="mt-1 text-base font-bold text-[#171717]">
-                Acciones rápidas
-              </h3>
-
-              <p className="mt-1 text-xs text-[#777]">
-                Accesos directos al trabajo operativo.
-              </p>
-            </div>
-
-            <a
-              href="/cartera"
-              className="rounded-lg border border-[#e1dfdc] px-3 py-2 text-xs font-semibold text-[#555] transition hover:border-[#c80000] hover:text-[#c80000]"
-            >
-              Abrir cartera →
-            </a>
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              [
-                "/registrar-inmueble",
-                "Registrar inmueble",
-                "Asignar una posición disponible.",
-              ],
-              [
-                "/registrar-visitas",
-                "Registrar visita",
-                "Completar el proceso de visita.",
-              ],
-              [
-                "/registrar-tasaciones",
-                "Registrar tasación",
-                "Actualizar la tasación actual.",
-              ],
-              [
-                "/liberar-inmuebles",
-                "Liberar inmueble",
-                "Registrar y confirmar una salida.",
-              ],
-            ].map((x) => (
-              <a
-                key={x[0]}
-                href={x[0]}
-                className="group rounded-lg border border-[#e7e5e2] p-4 transition hover:border-[#d8baba] hover:bg-[#fffafa]"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-[#333] group-hover:text-[#c80000]">
-                    {x[1]}
-                  </p>
-
-                  <span className="text-xs text-[#aaa] transition group-hover:text-[#c80000]">
-                    →
-                  </span>
-                </div>
-
-                <p className="mt-1.5 text-xs leading-5 text-[#888]">
-                  {x[2]}
-                </p>
-              </a>
-            ))}
-          </div>
-        </section>
-
-        {/* Flujo operativo */}
-        <section className="mt-5 flex flex-col gap-4 rounded-xl border border-[#e7e5e2] bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#888]">
-              Flujo operativo
-            </p>
-
-            <p className="mt-1.5 text-xs text-[#666]">
-              Registro → visita → tasación → aprobación → texto → publicación
-              → liberación.
-            </p>
-          </div>
-
-          <a
-            href="/reportes"
-            className="shrink-0 rounded-lg border border-[#e1dfdc] px-3 py-2 text-xs font-semibold text-[#555] transition hover:border-[#c80000] hover:text-[#c80000]"
-          >
-            Ver reportes
-          </a>
-        </section>
-      </div>
-      </div>
-    </main>
-  );
+        <div className="grid items-start gap-5">
+          <section className="aa-card overflow-hidden"><div className="border-b border-slate-100 p-5"><h2 className="text-lg font-bold text-slate-900">Avances recientes</h2><p className="mt-1 text-sm text-slate-600">Últimos movimientos registrados.</p></div><div className="divide-y divide-slate-100">{data.recientes.length ? data.recientes.map((item, index) => <div key={`${item.numero}-${index}`} className="flex items-start gap-3 p-4 sm:p-5"><span className="flex h-10 min-w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-2 font-mono text-sm font-bold text-slate-700">{item.numero}</span><div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold text-slate-900">{item.nombre}</p><p className="mt-1 text-sm text-slate-600">{item.etapa}</p><p className="mt-2 text-xs text-slate-500">{item.fecha ? new Date(item.fecha).toLocaleDateString("es-PE", { timeZone: "America/Lima", day: "numeric", month: "short" }) : "Sin fecha"}</p></div></div>) : <p className="p-5 text-sm text-slate-600">Todavía no hay movimientos registrados.</p>}</div></section>
+        </div>
+      </>}
+      <section className="aa-card p-5 sm:p-6"><h2 className="text-lg font-bold text-slate-900">Acciones rápidas</h2><div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Registrar visita", "/registrar-visitas"], ["Registrar tasación", "/registrar-tasaciones"], ["Completar material", "/tasaciones-textos-pendientes#material"], ["Consultar fichas", "/datos-inmuebles"]].map(([label, href]) => <Link key={href} href={href} className="aa-button aa-button-secondary justify-between">{label}<span aria-hidden="true">→</span></Link>)}</div></section>
+    </div>
+  </main>;
 }

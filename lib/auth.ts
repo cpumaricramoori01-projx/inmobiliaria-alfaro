@@ -9,6 +9,7 @@ import { inmSesiones, inmUsuarios } from "@/db/schema";
 import { hashSessionToken } from "@/lib/password.mjs";
 import { sameOrigin } from "@/lib/request-origin.mjs";
 import { isAdministrator } from "@/lib/access.mjs";
+import { LOGIN_MFA_REQUIRED } from "@/lib/auth-policy";
 
 export { sameOrigin };
 
@@ -36,7 +37,7 @@ export async function findSession(token?: string) {
       gt(inmSesiones.expira, new Date()),
       eq(inmUsuarios.activo, true),
     )).limit(1);
-  if (!record || (record.rol === 'administrador' && !record.mfaSecret) || record.lastSeen < new Date(Date.now()-30*60*1000)) return null;
+  if (!record || (LOGIN_MFA_REQUIRED && record.rol === 'administrador' && !record.mfaSecret) || record.lastSeen < new Date(Date.now()-30*60*1000)) return null;
   await db.update(inmSesiones).set({ lastSeen: new Date() }).where(and(eq(inmSesiones.tokenHash,hashSessionToken(token)),gt(inmSesiones.lastSeen,new Date(Date.now()-30*60*1000))));
   return {id:record.id,nombre:record.nombre,usuario:record.usuario,rol:record.rol};
 }

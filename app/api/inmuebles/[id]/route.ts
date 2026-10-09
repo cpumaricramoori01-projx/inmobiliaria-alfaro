@@ -1,3 +1,8 @@
+import {lockGeography,validateGeography} from "@/lib/geography";
+import { assignedPropertyType } from "@/lib/property-types";
+import { databaseInstant } from '@/lib/business-time';
+import { isDemoProperty } from '@/lib/demo-data';
+import { publicationReadiness } from "@/lib/publication-readiness";
 import { auditValues } from "@/lib/security-audit";
 import { propertyInput, ownerInput, PropertyInputError } from "@/lib/property-input.mjs";
 import { authorizeApi } from "@/lib/auth";
@@ -11,7 +16,10 @@ import {
   inmPropietarios,
   inmTasaciones,
   inmPublicaciones,
+  inmLiberaciones,
   securityAudit,
+  inmTimeline,
+  inmUsuarios,
 } from "@/db/schema";
 
 async function findProperty(key: string) {
@@ -19,10 +27,16 @@ async function findProperty(key: string) {
     .select({
       id: inmInmuebles.id,
       codigo: inmInmuebles.codigo,
+      datosPrueba: inmInmuebles.datosPrueba,
+      datosValidados: inmInmuebles.datosValidados,
+      evidenciaPrueba: isDemoProperty,
       propietarioId: inmInmuebles.propietarioId,
       tipo: inmInmuebles.tipo,
+        operacion: inmInmuebles.operacion,
       referencia: inmInmuebles.referencia,
       direccion: inmInmuebles.direccion,
+        numeroDireccion: inmInmuebles.numeroDireccion,
+        inmuebleOrigenId: inmInmuebles.inmuebleOrigenId,
       latitud: inmInmuebles.latitud,
       longitud: inmInmuebles.longitud,
       distrito: inmInmuebles.distrito,
@@ -35,10 +49,11 @@ async function findProperty(key: string) {
       caracteristicas: inmInmuebles.caracteristicas,
       observaciones: inmInmuebles.observaciones,
       estado: inmInmuebles.estado,
-      etapa: inmInmuebles.etapa,
-      fechaRegistro: inmInmuebles.fechaRegistro,
+      etapa: sql<string>`CASE WHEN ${inmInmuebles.estado}<>'activo' THEN 'historico' WHEN EXISTS(SELECT 1 FROM inm_publicaciones p WHERE p.inmueble_id=${inmInmuebles.id} AND p.publicado=1) THEN 'publicado' WHEN EXISTS(SELECT 1 FROM inm_tasaciones t WHERE t.inmueble_id=${inmInmuebles.id}) THEN 'material_pendiente' WHEN EXISTS(SELECT 1 FROM inm_visitas v WHERE v.inmueble_id=${inmInmuebles.id} AND v.completada=1) THEN 'tasacion_pendiente' ELSE 'visita_pendiente' END`,
+      fechaRegistro: databaseInstant(inmInmuebles.fechaRegistro),
       fechaActualizacion: inmInmuebles.fechaActualizacion,
       fechaSalida: inmInmuebles.fechaSalida,
+      visitaRealizada: sql<number>`EXISTS (SELECT 1 FROM inm_visitas v WHERE v.inmueble_id = ${inmInmuebles.id} AND v.completada = 1)`,
       posicion: inmPosiciones.numero,
       propietarioDni: inmPropietarios.dni,
       propietarioNombres: inmPropietarios.nombres,
@@ -82,10 +97,21 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const row = await findProperty(key);
     if (!row) return NextResponse.json({ error: "Inmueble no encontrado." }, { status: 404 });
 
-    const { tasacionId, fechaTasacion, valorReferencia, precioObjetivo, precioVenta, situacionTasacion, observacionTasacion, publicacionId, textoPublicacion, enlacePublicacion, publicado, fechaPublicacion, ...inmueble } = row;
+    const { visitaRealizada, tasacionId, fechaTasacion, valorReferencia, precioObjetivo, precioVenta, situacionTasacion, observacionTasacion, publicacionId, textoPublicacion, enlacePublicacion, publicado, fechaPublicacion, ...inmueble } = row;
 
+    const expediente = (await publicationReadiness(db, row.id)).get(row.id);
+    const [venta] = await db.select({ fechaVenta: inmLiberaciones.fechaVenta, precioFinal: inmLiberaciones.precioFinal, comision: inmLiberaciones.comision, datosSimulados: inmLiberaciones.datosSimulados }).from(inmLiberaciones).where(and(eq(inmLiberaciones.inmuebleId, row.id), eq(inmLiberaciones.motivo, "vendido"), eq(inmLiberaciones.confirmado, true), eq(inmLiberaciones.anulada, false))).limit(1);
+    const [alquiler] = await db.select({ fechaAlquiler: inmLiberaciones.fechaAlquiler, rentaMensual: inmLiberaciones.rentaMensual, comision: inmLiberaciones.comision, garantia: inmLiberaciones.garantia, adelanto: inmLiberaciones.adelanto, fechaInicioAlquiler: inmLiberaciones.fechaInicioAlquiler, fechaFinAlquiler: inmLiberaciones.fechaFinAlquiler }).from(inmLiberaciones).where(and(eq(inmLiberaciones.inmuebleId, row.id), eq(inmLiberaciones.motivo, "alquilado"), eq(inmLiberaciones.confirmado, true), eq(inmLiberaciones.anulada, false))).limit(1);
+    const relacionados = row.propietarioId == null ? [] : await db.select({id:inmInmuebles.id,codigo:inmInmuebles.codigo,referencia:inmInmuebles.referencia}).from(inmInmuebles).where(eq(inmInmuebles.propietarioId,row.propietarioId));
+    const historial = await db.select({id:inmTimeline.id,evento:inmTimeline.evento,observacion:inmTimeline.observacion,fecha:databaseInstant(inmTimeline.fechaEvento),usuario:inmUsuarios.nombre}).from(inmTimeline).leftJoin(inmUsuarios,eq(inmUsuarios.id,inmTimeline.usuarioId)).where(eq(inmTimeline.inmuebleId,row.id)).orderBy(inmTimeline.fechaEvento,inmTimeline.id);
     return NextResponse.json({
+      relacionados,
+      historial,
       inmueble,
+      expediente,
+      venta: venta ?? null,
+      alquiler: alquiler ?? null,
+      progreso: { estado: row.estado, visitaRealizada: Boolean(visitaRealizada), tasacionRegistrada: Boolean(tasacionId), situacionTasacion, publicado: Boolean(publicado), expedienteCompleto: Boolean(expediente?.complete) },
       tasacion: tasacionId ? { id: tasacionId, fechaTasacion, valorReferencia, precioObjetivo, precioVenta, situacion: situacionTasacion, observacion: observacionTasacion } : null,
       publicacion: publicacionId ? { id: publicacionId, texto: textoPublicacion, enlace: enlacePublicacion, publicado, fechaPublicacion } : null,
     });
@@ -105,26 +131,67 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
 
     let body;
     try { body = await request.json(); } catch { return NextResponse.json({ error: "Datos no válidos." }, { status: 400 }); }
-    const propertyValues = propertyInput(body);
+    const propertyValues: Partial<typeof inmInmuebles.$inferInsert> = propertyInput(body);
     const ownerValues = body.propietario === undefined ? undefined : ownerInput(body.propietario);
     await db.transaction(async tx => {
-      const [current] = await tx.select({ propietarioId: inmInmuebles.propietarioId }).from(inmInmuebles)
+      const locationEdited=["departamento","provincia","distrito"].some(key=>body[key]!==undefined);
+      if(locationEdited)await lockGeography(tx);
+      const [current] = await tx.select().from(inmInmuebles)
         .where(eq(inmInmuebles.id, row.id)).limit(1).for("update");
       if (!current) throw new PropertyInputError("Inmueble no encontrado.");
+      if(locationEdited)Object.assign(propertyValues,await validateGeography(tx,{departamento:propertyValues.departamento===undefined?current.departamento:propertyValues.departamento,provincia:propertyValues.provincia===undefined?current.provincia:propertyValues.provincia,distrito:propertyValues.distrito===undefined?current.distrito:propertyValues.distrito},current));
+      if (propertyValues.operacion && propertyValues.operacion !== current.operacion) {
+        if (auth.user.rol !== 'administrador') throw new PropertyInputError('Solo el administrador puede cambiar la operación.');
+        const [prices] = await tx.select({ id: inmTasaciones.id }).from(inmTasaciones).where(eq(inmTasaciones.inmuebleId, current.id)).limit(1);
+        const [publication] = await tx.select({ id: inmPublicaciones.id }).from(inmPublicaciones).where(eq(inmPublicaciones.inmuebleId, current.id)).limit(1);
+        if (prices || publication || current.estado !== 'activo') throw new PropertyInputError('La operación solo se puede cambiar antes de registrar precios o publicación, y mientras el inmueble esté activo.');
+      }
+      if (propertyValues.tipo) propertyValues.tipo = await assignedPropertyType(tx, propertyValues.tipo, current.tipo);
       if (Object.keys(propertyValues).length) await tx.update(inmInmuebles).set(propertyValues).where(eq(inmInmuebles.id, row.id));
+      const before = current;
+      if(body.datosValidados !== undefined){
+        if(auth.user.rol!=='administrador'||typeof body.datosValidados!=='boolean')throw new PropertyInputError('Solo un administrador puede validar datos de prueba.');
+        await tx.update(inmInmuebles).set({datosValidados:body.datosValidados}).where(eq(inmInmuebles.id,row.id));
+        if(body.datosValidados!==current.datosValidados)await tx.insert(inmTimeline).values({inmuebleId:row.id,evento:'datos_validados',usuarioId:auth.user.id,observacion:body.datosValidados?'El administrador confirmó que los datos y documentos se revisaron y corresponden al inmueble real.':'Se retiró la validación de datos reales.'});
+      }
+      if (body.datosPrueba !== undefined) {
+        if(auth.user.rol !== 'administrador' || typeof body.datosPrueba !== 'boolean') throw new PropertyInputError('Solo un administrador puede clasificar los datos de prueba.');
+        await tx.update(inmInmuebles).set({datosPrueba:body.datosPrueba}).where(eq(inmInmuebles.id,row.id));
+      }
       if (ownerValues) {
         let ownerId = current.propietarioId;
-        if (ownerId == null) {
-          await tx.insert(inmPropietarios).values(ownerValues).onDuplicateKeyUpdate({ set: { dni: sql`dni` } });
-          const [owner] = await tx.select({ id: inmPropietarios.id }).from(inmPropietarios)
-            .where(eq(inmPropietarios.dni, ownerValues.dni)).limit(1).for("update");
-          ownerId = owner.id;
-          await tx.update(inmInmuebles).set({ propietarioId: ownerId }).where(eq(inmInmuebles.id, row.id));
+        const [oldOwner] = ownerId == null ? [] : await tx.select().from(inmPropietarios).where(eq(inmPropietarios.id,ownerId)).limit(1).for('update');
+        const changing = oldOwner && oldOwner.dni != null && oldOwner.dni !== ownerValues.dni;
+        if(changing && body.cambiarPropietario !== true) throw new PropertyInputError('Para vincular otro DNI, selecciona Cambiar propietario de este inmueble.');
+        const [knownOwner] = !oldOwner?.dni && ownerValues.dni
+          ? await tx.select().from(inmPropietarios).where(eq(inmPropietarios.dni, ownerValues.dni)).limit(1).for('update')
+          : [];
+        if (ownerId == null || changing || (knownOwner && knownOwner.id !== ownerId)) {
+          if (ownerValues.dni) {
+            await tx.insert(inmPropietarios).values(ownerValues).onDuplicateKeyUpdate({set:{dni:sql`dni`}});
+            const [owner] = await tx.select().from(inmPropietarios).where(eq(inmPropietarios.dni,ownerValues.dni)).limit(1).for('update');
+            ownerId = owner.id;
+          } else {
+            const [owner] = await tx.insert(inmPropietarios).values(ownerValues).$returningId();
+            ownerId = owner.id;
+          }
+          // Linking an existing owner preserves their shared personal information.
+          await tx.update(inmInmuebles).set({propietarioId:ownerId}).where(eq(inmInmuebles.id,row.id));
+          await tx.insert(inmTimeline).values({inmuebleId:row.id,evento:'propietario_vinculado',usuarioId:auth.user.id,observacion:JSON.stringify({anteriorId:current.propietarioId,nuevoId:ownerId})});
+        } else if(oldOwner) {
+          const changed = Object.keys(ownerValues).filter(key=>ownerValues[key as keyof typeof ownerValues] !== oldOwner[key as keyof typeof ownerValues]);
+          if(changed.length){
+            const related=await tx.select({id:inmInmuebles.id}).from(inmInmuebles).where(eq(inmInmuebles.propietarioId,ownerId!));
+            if(related.length>1 && body.confirmarPropietarioCompartido !== true)throw new PropertyInputError('Este propietario está vinculado a varios inmuebles. Confirma el cambio compartido.');
+            await tx.update(inmPropietarios).set(ownerValues).where(eq(inmPropietarios.id,ownerId!));
+            for(const property of related) await tx.insert(inmTimeline).values({inmuebleId:property.id,evento:'propietario_actualizado',usuarioId:auth.user.id,observacion:JSON.stringify({campos:changed,anterior:{nombres:oldOwner.nombres,apellidos:oldOwner.apellidos},nuevo:{nombres:ownerValues.nombres,apellidos:ownerValues.apellidos}})});
+          }
         }
-        await tx.update(inmPropietarios).set(ownerValues).where(eq(inmPropietarios.id, ownerId));
       } else if (ownerValues === null && current.propietarioId != null) {
         throw new PropertyInputError("Completa los datos del propietario vinculado.");
       }
+      const changedFields = Object.keys(propertyValues).filter(key=>propertyValues[key as keyof typeof propertyValues] !== before[key as keyof typeof before]);
+      if(changedFields.length || body.datosPrueba !== undefined && body.datosPrueba !== before.datosPrueba)await tx.insert(inmTimeline).values({inmuebleId:row.id,evento:'ficha_actualizada',usuarioId:auth.user.id,observacion:JSON.stringify({anterior:Object.fromEntries(changedFields.map(key=>[key,before[key as keyof typeof before]])),nuevo:propertyValues,datosPrueba:body.datosPrueba})});
       await tx.insert(securityAudit).values(auditValues(auth.user.id,"property.update",`property:${row.id}`));
     });
 

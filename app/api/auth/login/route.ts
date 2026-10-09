@@ -13,6 +13,7 @@ import { authLimited } from '@/lib/auth-limits';
 import { audit } from '@/lib/security-audit';
 import { newSecret, encryptSecret } from '@/lib/mfa.mjs';
 import { startSession } from '@/lib/auth-session';
+import { LOGIN_MFA_REQUIRED } from '@/lib/auth-policy';
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return NextResponse.json({ error: "Solicitud no permitida." }, { status: 403 });
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
       const [current] = await tx.select().from(inmUsuarios).where(eq(inmUsuarios.id,user.id)).limit(1).for('update');
       if (!current?.activo || current.passwordHash !== user.passwordHash || current.usuario?.toLowerCase() !== usuario) throw new LoginChangedError();
       await tx.update(inmUsuarios).set({intentosFallidos:0,bloqueoHasta:null}).where(eq(inmUsuarios.id,user.id));
-      if (current.rol === 'administrador') {
+      if (LOGIN_MFA_REQUIRED && current.rol === 'administrador') {
         const token=createSessionToken();
         const secret=current.mfaSecret ? null : newSecret();
         await tx.insert(authChallenges).values({tokenHash:hashSessionToken(token),userId:current.id,passwordHash:current.passwordHash!,secret:secret ? encryptSecret(secret):null,expires:new Date(Date.now()+5*60*1000)});

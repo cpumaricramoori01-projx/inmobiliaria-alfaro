@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { hostingRequest } from '@/lib/document-hosting';
 import { IMAGE_EXTENSIONS, prepareImage } from '@/lib/image-files.mjs';
 import { db } from '@/lib/db';
-import { inmArchivos, inmInmuebles, inmAsignacionesPosicion, inmPosiciones, securityAudit } from '@/db/schema';
+import { inmArchivos, inmInmuebles, inmAsignacionesPosicion, inmPosiciones, inmVisitas, securityAudit } from '@/db/schema';
 import { DOCUMENT_TYPES, MAX_DOCUMENT_BYTES, documentPath, storageConfigured, storeDocument, validateDocument } from '@/lib/document-files.mjs';
 
 export const runtime = 'nodejs';
@@ -50,6 +50,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     } catch { return NextResponse.json({ error: 'Solicitud de documento no válida.' }, { status: 400 }); }
     const tipoDocumento = String(body.tipoDocumento ?? '').trim(), nombre = String(body.nombre ?? '').trim(), observacion = String(body.observacion ?? '').trim();
     if (!DOCUMENT_TYPES.has(tipoDocumento) || !nombre || nombre.length > 255 || observacion.length > 500) return NextResponse.json({ error: 'Revisa el tipo, nombre (máximo 255 caracteres) y observación (máximo 500).' }, { status: 400 });
+    const visitaId = body.visitaId === undefined ? null : Number(body.visitaId);
+    if (visitaId !== null) {
+      if (!multipart || tipoDocumento !== 'FOTO_INMUEBLE' || !Number.isSafeInteger(visitaId) || visitaId < 1) return NextResponse.json({ error: 'La visita seleccionada no es válida.' }, { status: 400 });
+      const [visit] = await db.select({ id: inmVisitas.id }).from(inmVisitas).where(and(eq(inmVisitas.id, visitaId), eq(inmVisitas.inmuebleId, inmueble.id), eq(inmVisitas.completada, true))).limit(1);
+      if (!visit) return NextResponse.json({ error: 'La visita no corresponde a este inmueble o no está realizada.' }, { status: 400 });
+    }
     // Compatibility for previously registered external links and existing API clients.
     if (!multipart) {
       const enlace = String(body.enlace ?? '').trim();
@@ -84,7 +90,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       remove: async (path: string) => { await hostingRequest('DELETE', path); },
       register: async (stored: { pathname: string }) => {
       return db.transaction(async tx => {
-      const [row] = await tx.insert(inmArchivos).values({ inmuebleId: inmueble.id, tipoDocumento, nombre, enlace: stored.pathname, almacenamiento: 'hosting', rutaAlmacenamiento: stored.pathname, nombreOriginal: originalName, tamanoBytes: bytes.length, tipoMime: contentType, observacion: observacion || null, usuarioId }).$returningId();
+      if (visitaId !== null) {
+        const [visit] = await tx.select({ id: inmVisitas.id }).from(inmVisitas).where(and(eq(inmVisitas.id, visitaId), eq(inmVisitas.inmuebleId, inmueble.id), eq(inmVisitas.completada, true))).limit(1).for('update');
+        if (!visit) throw new Error('La visita ya no está disponible.');
+      }
+      const [row] = await tx.insert(inmArchivos).values({ inmuebleId: inmueble.id, visitaId, tipoDocumento, nombre, enlace: stored.pathname, almacenamiento: 'hosting', rutaAlmacenamiento: stored.pathname, nombreOriginal: originalName, tamanoBytes: bytes.length, tipoMime: contentType, observacion: observacion || null, usuarioId }).$returningId();
       await tx.insert(securityAudit).values(auditValues(usuarioId,"file.upload",`file:${row.id}`));
       return row;
       });

@@ -1,3 +1,7 @@
+import {lockGeography,validateGeography} from "@/lib/geography";
+import { operation } from "@/lib/operation.mjs";
+import { assignedPropertyType } from "@/lib/property-types";
+import { isDemoProperty } from '@/lib/demo-data';
 import { propertyInput, ownerInput, PropertyInputError } from "@/lib/property-input.mjs";
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
@@ -11,15 +15,6 @@ import {
   inmTimeline,
 } from "@/db/schema";
 
-const TIPOS = new Set([
-  "Casa",
-  "Departamento",
-  "Terreno",
-  "Local",
-  "Oficina",
-  "Otros",
-]);
-
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -31,8 +26,12 @@ export async function GET() {
     if (auth.response) return auth.response;
     const rows = await db.select({
       id: inmInmuebles.codigo,
+      datosPrueba: isDemoProperty,
       nombre: inmInmuebles.referencia,
       tipo: inmInmuebles.tipo,
+      operacion: inmInmuebles.operacion,
+      direccion: inmInmuebles.direccion,
+        numeroDireccion: inmInmuebles.numeroDireccion,
       distrito: inmInmuebles.distrito,
       provincia: inmInmuebles.provincia,
       departamento: inmInmuebles.departamento,
@@ -48,10 +47,10 @@ export async function GET() {
       ))
       .leftJoin(inmPosiciones, eq(inmPosiciones.id, inmAsignacionesPosicion.posicionId))
       .orderBy(sql`CASE WHEN ${inmInmuebles.estado} = 'activo' THEN 0 ELSE 1 END`, sql`${inmPosiciones.numero} IS NULL`, asc(inmPosiciones.numero), asc(inmInmuebles.referencia));
-    return NextResponse.json({ inmuebles: rows.map(({ distrito, provincia, departamento, propietarioNombres, propietarioApellidos, ...row }) => ({
+    return NextResponse.json({ inmuebles: rows.map(({ direccion, distrito, provincia, departamento, propietarioNombres, propietarioApellidos, ...row }) => ({
       ...row,
       estado: row.estado === "activo" ? "activo" : "historico",
-      ubicacion: [distrito, provincia, departamento].filter(Boolean).join(", ") || "Ubicación por completar",
+      ubicacion: [direccion, row.numeroDireccion, distrito, provincia, departamento].filter(Boolean).join(", ") || "Ubicación por completar",
       propietario: [propietarioNombres, propietarioApellidos].filter(Boolean).join(" ") || "Sin propietario",
     })) });
   } catch {
@@ -67,9 +66,11 @@ export async function POST(request: Request) {
     try { body = await request.json(); } catch { return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 }); }
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 });
 
+    let operacion: string;
+    try { operacion = operation(body.operacion); } catch { throw new PropertyInputError("Selecciona Venta o Alquiler."); }
     const posicion = Number(body.posicion);
-    const tipo = clean(body.tipo);
-    const referencia = clean(body.referencia);
+    let tipo = clean(body.tipo);
+    const referencia = clean(body.referencia) || clean(body.nombres);
     const dni = clean(body.dni);
     const nombres = clean(body.nombres);
     const apellidos = clean(body.apellidos);
@@ -83,36 +84,21 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!TIPOS.has(tipo)) {
+    if (!referencia || !direccion) {
       return NextResponse.json(
-        { error: "Tipo de inmueble no válido." },
+        { error: "Completa tipo, nombre del inmueble y dirección." },
         { status: 400 }
       );
     }
 
-    if (!referencia) {
-      return NextResponse.json(
-        { error: "Completa posición, tipo y referencia." },
-        { status: 400 }
-      );
-    }
-
-    const hasOwnerData = Boolean(dni || nombres || apellidos || telefono);
-
-    if (hasOwnerData && (!/^\d{8}$/.test(dni) || !nombres || !apellidos)) {
-      return NextResponse.json(
-        {
-          error:
-            "Si registras propietario, completa DNI, nombres y apellidos.",
-        },
-        { status: 400 }
-      );
-    }
-
+    const address = propertyInput({direccion,numeroDireccion:body.numeroDireccion,distrito:body.distrito,provincia:body.provincia,departamento:body.departamento});
     propertyInput({ tipo, referencia, direccion });
-    if (hasOwnerData) ownerInput({ dni, nombres, apellidos, telefono });
+    const ownerValues = ownerInput({ dni, nombres, apellidos, telefono });
 
     const result = await db.transaction(async (tx) => {
+      tipo = await assignedPropertyType(tx, tipo);
+      await lockGeography(tx);
+      const location=await validateGeography(tx,{departamento:body.departamento,provincia:body.provincia,distrito:body.distrito});
       // Buscar y bloquear la posición seleccionada
       const [positionRows] = (await tx.execute(
         sql`
@@ -137,7 +123,8 @@ export async function POST(request: Request) {
         );
       }
 
-      // Verificar que la posición no haya sido ocupada mientras se registraba
+      // Leer el estado actual, no la instantánea anterior de REPEATABLE READ.
+      // Otra captación puede haber confirmado mientras esperábamos la posición.
       const [assignmentRows] = (await tx.execute(
         sql`
           SELECT id
@@ -145,6 +132,7 @@ export async function POST(request: Request) {
           WHERE posicion_id = ${position.id}
             AND activa = 1
           LIMIT 1
+          FOR UPDATE
         `
       )) as unknown as [{ id: number }[], unknown];
 
@@ -156,16 +144,18 @@ export async function POST(request: Request) {
         );
       }
 
-      // Propietario es opcional en Fase 1.
-      // Si se proporcionan datos completos, buscar o crear propietario.
       let propietarioId: number | null = null;
-
-      if (hasOwnerData) {
-        await tx.insert(inmPropietarios).values({ dni, nombres, apellidos, telefono: telefono || null })
-          .onDuplicateKeyUpdate({ set: { nombres, apellidos, telefono: telefono || null } });
-        const [owner] = await tx.select({ id: inmPropietarios.id }).from(inmPropietarios)
-          .where(eq(inmPropietarios.dni, dni)).limit(1);
-        propietarioId = owner.id;
+      if (ownerValues) {
+        if (ownerValues.dni) {
+          await tx.insert(inmPropietarios).values(ownerValues)
+            .onDuplicateKeyUpdate({ set: { dni: sql`dni` } });
+          const [owner] = await tx.select({ id: inmPropietarios.id }).from(inmPropietarios)
+            .where(eq(inmPropietarios.dni, ownerValues.dni)).limit(1);
+          propietarioId = owner.id;
+        } else {
+          const [owner] = await tx.insert(inmPropietarios).values(ownerValues).$returningId();
+          propietarioId = owner.id;
+        }
       }
 
       // Generar código del inmueble
@@ -179,9 +169,12 @@ export async function POST(request: Request) {
       const [createdProperty] = await tx
         .insert(inmInmuebles)
         .values({
+          ...address,
+          ...location,
           codigo,
           propietarioId,
           tipo,
+          operacion,
           referencia,
           direccion: direccion || null,
           estado: "activo",

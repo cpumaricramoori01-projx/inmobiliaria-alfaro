@@ -1,0 +1,1 @@
+ALTER TABLE inm_propietarios MODIFY COLUMN dni VARCHAR(20) NULL;

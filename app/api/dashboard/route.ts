@@ -1,3 +1,6 @@
+import { databaseInstant } from '@/lib/business-time';
+import { isDemoProperty } from '@/lib/demo-data';
+import { publicationReadiness } from "@/lib/publication-readiness";
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, desc, eq, sql } from "drizzle-orm";
@@ -14,12 +17,15 @@ import {
 } from "@/db/schema";
 
 const eventoMap: Record<string, string> = {
+  alquiler_renovado: "Alquiler renovado",
+  alquiler_reingresado: "Alquiler reingresado a cartera",
   inmueble_registrado: "Inmueble registrado",
   visita_realizada: "Visita realizada",
   tasacion_realizada: "Tasación realizada",
   tasacion_actualizada: "Tasación actualizada",
   publicacion_registrada: "Texto registrado",
   publicacion_actualizada: "Publicación actualizada",
+  renta_mensual_actualizada: "Renta mensual actualizada",
   precio_venta_actualizado: "Precio de venta actualizado",
   listo_para_publicar: "Listo para publicar",
   publicado: "Publicado",
@@ -27,10 +33,13 @@ const eventoMap: Record<string, string> = {
   inmueble_liberado: "Inmueble liberado",
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const auth = await authorizeApi();
     if (auth.response) return auth.response;
+    const scope = new URL(request.url).searchParams.get("modo") || "todos";
+    if (!["real", "demo", "todos"].includes(scope)) return NextResponse.json({error:"Modo no válido."},{status:400});
+    const scopeFilter = scope === "todos" ? sql`1=1` : scope === "demo" ? isDemoProperty : sql`NOT ${isDemoProperty}`;
     const [
       inmueblesActivos,
       visitas,
@@ -46,7 +55,7 @@ export async function GET() {
           hasPosition: sql<number>`EXISTS (SELECT 1 FROM inm_asignaciones_posicion ap WHERE ap.inmueble_id = ${inmInmuebles.id} AND ap.activa = 1)`,
         })
         .from(inmInmuebles)
-        .where(eq(inmInmuebles.estado, "activo")),
+        .where(and(eq(inmInmuebles.estado,"activo"),scopeFilter)),
 
       db
         .select({
@@ -86,7 +95,7 @@ export async function GET() {
           numero: inmPosiciones.numero,
           nombre: inmInmuebles.referencia,
           evento: inmTimeline.evento,
-          fecha: inmTimeline.fechaEvento,
+          fecha: databaseInstant(inmTimeline.fechaEvento),
         })
         .from(inmTimeline)
         .innerJoin(
@@ -104,6 +113,7 @@ export async function GET() {
             inmAsignacionesPosicion.posicionId
           )
         )
+        .where(scopeFilter)
         .orderBy(desc(inmTimeline.fechaEvento))
         .limit(5),
 
@@ -192,6 +202,7 @@ export async function GET() {
     let textosPendientes = 0;
     let listosParaPublicar = 0;
 
+    const expedientes = await publicationReadiness();
     for (const inmuebleId of activos) {
       const visita = ultimaVisita.get(inmuebleId);
       const tasacion = tasacionPorInmueble.get(inmuebleId);
@@ -214,11 +225,11 @@ export async function GET() {
         negociacionesEnCurso++;
       }
 
-      if (tasacion === "aprobado" && publicacion === undefined) {
+      if (tasacion === "aprobado" && !expedientes.get(inmuebleId)?.complete) {
         textosPendientes++;
       }
 
-      if (publicacion === false) {
+      if (publicacion === false && expedientes.get(inmuebleId)?.complete) {
         listosParaPublicar++;
       }
     }
@@ -226,6 +237,7 @@ export async function GET() {
     const totalActivos = activos.size;
 
     return NextResponse.json({
+      modo: scope,
       resumen: {
         activos: totalActivos,
         posicionesDisponibles,
@@ -248,17 +260,7 @@ export async function GET() {
           tone: "orange",
         },
         {
-          etapa: "Pendiente de aprobación",
-          total: aprobaciones,
-          tone: "violet",
-        },
-        {
-          etapa: "En negociación",
-          total: negociacionesEnCurso,
-          tone: "violet",
-        },
-        {
-          etapa: "Texto pendiente",
+          etapa: "Expediente pendiente",
           total: textosPendientes,
           tone: "rose",
         },

@@ -1,10 +1,14 @@
+import { databaseBusinessDay, databaseInstant } from '@/lib/business-time';
+import { reportPeriodField, validCalendarDate } from '@/lib/report-period.mjs';
+import { factsFrom, reportPredicates, globalSummaryQuery } from '@/lib/report-facts';
+import { isDemoProperty } from '@/lib/demo-data';
+import { publicationReadiness } from "@/lib/publication-readiness";
 import type { ReportRow } from "@/lib/report-types";
 import { authorizeApi } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
-  inmArchivos,
   inmAsignacionesPosicion,
   inmInmuebles,
   inmLiberaciones,
@@ -107,16 +111,77 @@ export async function GET(request: NextRequest) {
     const situacion = sp.get("situacion") || "Todas";
     const estado = sp.get("estado") || "Todos";
     const posicionFiltro = sp.get("posicion") || "";
+    const operacion = sp.get("operacion") || "Todos";
+    if (!["Todos", "venta", "alquiler"].includes(operacion)) return NextResponse.json({error:"Operación no válida."},{status:400});
     const tipo = sp.get("tipo") || "Todos";
 
+    if ((desde && !validCalendarDate(desde)) || (hasta && !validCalendarDate(hasta)) || (desde && hasta && desde > hasta)) return NextResponse.json({error:'Indica un período válido, con Desde anterior o igual a Hasta.'},{status:400});
+    const includeDemo=sp.get('pruebas')==='1';
+    const all=sp.get('todos')==='1';
+    const page=Number(sp.get('pagina')||1),pageSize=50;
+    if(!Number.isSafeInteger(page)||page<1)return NextResponse.json({error:'Página no válida.'},{status:400});
+    const periodField=reportPeriodField(reporte);
+    const flowStarts:Record<string,string>={'Registro → visita':'inmueble_registrado','Visita → tasación':'visita_realizada','Tasación → publicación':'tasacion_realizada','Tasación → aprobación':'tasacion_realizada'};
+    const periods:Record<string,ReturnType<typeof sql>>={
+      fechaInicioFlujo:sql`(SELECT DATE(DATE_SUB(t.fecha_evento, INTERVAL (TIMESTAMPDIFF(SECOND,UTC_TIMESTAMP(),NOW()) + 18000) SECOND)) FROM inm_timeline t WHERE t.inmueble_id=${inmInmuebles.id} AND t.evento=${flowStarts[reporte]??""} ORDER BY t.fecha_evento LIMIT 1)`,
+      fechaRegistro:databaseBusinessDay(inmInmuebles.fechaRegistro),
+      fechaSalida:sql`DATE(DATE_SUB(${inmInmuebles.fechaSalida}, INTERVAL 5 HOUR))`,
+      fechaAlquiler:sql`(SELECT l.fecha_alquiler FROM inm_liberaciones l WHERE l.inmueble_id=${inmInmuebles.id} AND l.motivo='alquilado' AND l.confirmado=1 AND l.anulada=0 ORDER BY l.id DESC LIMIT 1)`,
+      fechaVenta:sql`(SELECT l.fecha_venta FROM inm_liberaciones l WHERE l.inmueble_id=${inmInmuebles.id} AND l.motivo='vendido' AND l.confirmado=1 AND l.anulada=0 ORDER BY l.id DESC LIMIT 1)`,
+      fechaVisita:sql`(SELECT v.fecha_visita FROM inm_visitas v WHERE v.inmueble_id=${inmInmuebles.id} AND v.completada=1 ORDER BY v.fecha_registro DESC LIMIT 1)`,
+      fechaTasacion:sql`${inmTasaciones.fechaTasacion}`,
+      fechaPublicacion:sql`DATE(DATE_SUB(${inmPublicaciones.fechaPublicacion}, INTERVAL 5 HOUR))`,
+      fechaInicioPosicion:sql`(SELECT DATE(DATE_SUB(p.fecha_inicio, INTERVAL (TIMESTAMPDIFF(SECOND,UTC_TIMESTAMP(),NOW()) + 18000) SECOND)) FROM inm_asignaciones_posicion p WHERE p.inmueble_id=${inmInmuebles.id} ORDER BY p.fecha_inicio DESC LIMIT 1)`,
+    };
+    const conditions=[];
+    if(!includeDemo)conditions.push(sql`NOT ${isDemoProperty}`);
+    if(desde)conditions.push(sql`${periods[periodField]} >= ${desde}`);
+    if(hasta)conditions.push(sql`${periods[periodField]} <= ${hasta}`);
+    if(estado==='Activo')conditions.push(eq(inmInmuebles.estado,'activo'));
+    if(estado==='Histórico')conditions.push(sql`${inmInmuebles.estado}<>'activo'`);
+    if(operacion!=='Todos')conditions.push(eq(inmInmuebles.operacion,operacion));
+    if(tipo!=='Todos')conditions.push(eq(inmInmuebles.tipo,tipo));
+    if(posicionFiltro){const position=Number(posicionFiltro);if(!Number.isInteger(position)||position<1||position>90)return NextResponse.json({error:'Posición no válida.'},{status:400});conditions.push(sql`EXISTS(SELECT 1 FROM inm_asignaciones_posicion a JOIN inm_posiciones p ON p.id=a.posicion_id WHERE a.inmueble_id=${inmInmuebles.id} AND p.numero=${position} AND (a.activa=1 OR ${inmInmuebles.estado}<>'activo'))`);}
+    if(flowStarts[reporte])conditions.push(sql`EXISTS(SELECT 1 FROM inm_timeline t WHERE t.inmueble_id=${inmInmuebles.id} AND t.evento=${flowStarts[reporte]})`);
+    if(reportPredicates[reporte])conditions.push(reportPredicates[reporte]);
+    const situationReports:Record<string,string>={'Visita pendiente':'Visitas pendientes','Tasación pendiente':'Tasaciones pendientes','Material pendiente':'Material pendiente','Listo para publicar':'Listos para publicar','Publicado':'Publicados'};
+    if(situacion!=='Todas'&&situationReports[situacion])conditions.push(reportPredicates[situationReports[situacion]]);
+    const where=and(...conditions)??sql`1=1`;
+    const [countResult]=await db.execute(sql`SELECT COUNT(*) total ${factsFrom} WHERE ${where}`);
+    const count=Number((countResult as unknown as {total:number}[])[0]?.total??0);
+    if(all&&count>10000)return NextResponse.json({error:'La descarga supera 10 000 inmuebles. Reduce el período o los filtros.'},{status:400});
+    const [summaryResult]=await db.execute(globalSummaryQuery);
+    const globalSummary=Object.fromEntries(Object.entries((summaryResult as unknown as Record<string,unknown>[])[0]??{}).map(([key,value])=>[key,Number(value)]));
+    if(reporte==='Posición ocupada'){
+      const positionConditions=[];
+      if(!includeDemo)positionConditions.push(sql`NOT ${isDemoProperty}`);
+      if(desde)positionConditions.push(sql`${databaseBusinessDay(inmAsignacionesPosicion.fechaInicio)} >= ${desde}`);
+      if(hasta)positionConditions.push(sql`${databaseBusinessDay(inmAsignacionesPosicion.fechaInicio)} <= ${hasta}`);
+      if(estado==='Activo')positionConditions.push(eq(inmInmuebles.estado,'activo'));
+      if(estado==='Histórico')positionConditions.push(sql`${inmInmuebles.estado}<>'activo'`);
+      if(operacion!=='Todos')positionConditions.push(eq(inmInmuebles.operacion,operacion));
+      if(tipo!=='Todos')positionConditions.push(eq(inmInmuebles.tipo,tipo));
+      if(posicionFiltro)positionConditions.push(eq(inmPosiciones.numero,Number(posicionFiltro)));
+      if(situacion!=='Todas'&&situationReports[situacion])positionConditions.push(reportPredicates[situationReports[situacion]]);
+      const positionWhere=and(...positionConditions)??sql`1=1`;
+      const positionFrom=sql`${factsFrom} INNER JOIN ${inmAsignacionesPosicion} ON ${inmAsignacionesPosicion.inmuebleId}=${inmInmuebles.id} INNER JOIN ${inmPosiciones} ON ${inmPosiciones.id}=${inmAsignacionesPosicion.posicionId}`;
+      const [positionCountResult]=await db.execute(sql`SELECT COUNT(*) total ${positionFrom} WHERE ${positionWhere}`);
+      const total=Number((positionCountResult as unknown as {total:number}[])[0]?.total??0);
+      if(all&&total>10000)return NextResponse.json({error:'Reduce el período o los filtros para descargar como máximo 10 000 asignaciones.'},{status:400});
+      const [positionData]=await db.execute(sql`SELECT ${inmInmuebles.codigo} codigo,${inmInmuebles.referencia} nombre,${inmInmuebles.tipo} tipo,${inmInmuebles.operacion} operacion,TRIM(CONCAT(COALESCE(${inmPropietarios.nombres},''),' ',COALESCE(${inmPropietarios.apellidos},''))) propietario,${inmPosiciones.numero} posicion,IF(${inmInmuebles.estado}='activo','Activo','Histórico') estado,${databaseInstant(inmAsignacionesPosicion.fechaInicio)} fechaInicioPosicion,${inmAsignacionesPosicion.fechaFin} fechaFinPosicion,${inmAsignacionesPosicion.activa} activaPosicion,${isDemoProperty} datosPrueba ${positionFrom} WHERE ${positionWhere} ORDER BY ${inmAsignacionesPosicion.fechaInicio},${inmAsignacionesPosicion.id} LIMIT ${all?10000:pageSize} OFFSET ${all?0:(page-1)*pageSize}`);
+      const [available]=await db.execute(sql`SELECT COUNT(*) total FROM inm_posiciones p WHERE p.activo=1 AND NOT EXISTS(SELECT 1 FROM inm_asignaciones_posicion a WHERE a.posicion_id=p.id AND a.activa=1)`);
+      return NextResponse.json({ok:true,reporte,rows:(positionData as unknown as Record<string,unknown>[]).map(row=>({...row,datosPrueba:Boolean(row.datosPrueba),activaPosicion:Boolean(row.activaPosicion)})),resumen:{...globalSummary,total,disponibles:Number((available as unknown as {total:number}[])[0]?.total??0),aprobaciones:0,negociaciones:0},paginacion:{pagina:page,tamano:pageSize,total,paginas:Math.ceil(total/pageSize)},fechaFiltro:periodField});
+    }
     const inmuebleRows = await db
       .select({
         id: inmInmuebles.id,
+        datosPrueba: isDemoProperty,
         codigo: inmInmuebles.codigo,
         referencia: inmInmuebles.referencia,
         tipo: inmInmuebles.tipo,
+        operacion: inmInmuebles.operacion,
         estado: inmInmuebles.estado,
-        fechaRegistro: inmInmuebles.fechaRegistro,
+        fechaRegistro: databaseInstant(inmInmuebles.fechaRegistro),
         fechaSalida: inmInmuebles.fechaSalida,
         distrito: inmInmuebles.distrito,
         provincia: inmInmuebles.provincia,
@@ -129,14 +194,19 @@ export async function GET(request: NextRequest) {
         inmPropietarios,
         eq(inmPropietarios.id, inmInmuebles.propietarioId),
       )
-      .orderBy(asc(inmInmuebles.fechaRegistro));
+      .leftJoin(inmTasaciones,eq(inmTasaciones.inmuebleId,inmInmuebles.id))
+      .leftJoin(inmPublicaciones,eq(inmPublicaciones.inmuebleId,inmInmuebles.id))
+      .where(where)
+      .orderBy(asc(inmInmuebles.fechaRegistro),asc(inmInmuebles.id))
+      .limit(all ? 10000 : pageSize).offset(all ? 0 : (page-1)*pageSize);
 
+    const ids=inmuebleRows.map(item=>item.id);
     const positionRows = await db
       .select({
         inmuebleId: inmAsignacionesPosicion.inmuebleId,
         posicion: inmPosiciones.numero,
         activa: inmAsignacionesPosicion.activa,
-        fechaInicio: inmAsignacionesPosicion.fechaInicio,
+        fechaInicio: databaseInstant(inmAsignacionesPosicion.fechaInicio),
         fechaFin: inmAsignacionesPosicion.fechaFin,
       })
       .from(inmAsignacionesPosicion)
@@ -144,6 +214,7 @@ export async function GET(request: NextRequest) {
         inmPosiciones,
         eq(inmPosiciones.id, inmAsignacionesPosicion.posicionId),
       )
+      .where(ids.length?inArray(inmAsignacionesPosicion.inmuebleId,ids):sql`0=1`)
       .orderBy(
         asc(inmAsignacionesPosicion.fechaInicio),
       );
@@ -157,36 +228,39 @@ export async function GET(request: NextRequest) {
     const visitas = await db
       .select()
       .from(inmVisitas)
-      .where(eq(inmVisitas.completada, true))
+      .where(and(eq(inmVisitas.completada,true),ids.length?inArray(inmVisitas.inmuebleId,ids):sql`0=1`))
       .orderBy(desc(inmVisitas.fechaRegistro));
 
-    const photos = await db.select({ inmuebleId: inmArchivos.inmuebleId }).from(inmArchivos)
-      .where(and(eq(inmArchivos.tipoDocumento, "FOTO_INMUEBLE"), eq(inmArchivos.almacenamiento, "hosting")));
-    const propertiesWithPhotos = new Set(photos.map(photo => photo.inmuebleId));
+    const expedientes = await publicationReadiness(db, ids);
 
     const tasaciones = await db
       .select()
       .from(inmTasaciones)
+      .where(ids.length?inArray(inmTasaciones.inmuebleId,ids):sql`0=1`)
       .orderBy(desc(inmTasaciones.fechaRegistro));
 
     const publicaciones = await db
       .select()
       .from(inmPublicaciones)
+      .where(ids.length?inArray(inmPublicaciones.inmuebleId,ids):sql`0=1`)
       .orderBy(desc(inmPublicaciones.fechaRegistro));
 
     const negociaciones = await db
       .select()
       .from(inmNegociaciones)
+      .where(ids.length?inArray(inmNegociaciones.inmuebleId,ids):sql`0=1`)
       .orderBy(desc(inmNegociaciones.fechaRegistro));
 
     const liberaciones = await db
       .select()
       .from(inmLiberaciones)
+      .where(and(ids.length?inArray(inmLiberaciones.inmuebleId,ids):sql`0=1`,eq(inmLiberaciones.confirmado,true),eq(inmLiberaciones.anulada,false)))
       .orderBy(desc(inmLiberaciones.fechaRegistro));
 
     const timeline = await db
-      .select()
+      .select({id:inmTimeline.id,inmuebleId:inmTimeline.inmuebleId,evento:inmTimeline.evento,fechaEvento:databaseInstant(inmTimeline.fechaEvento)})
       .from(inmTimeline)
+      .where(ids.length?inArray(inmTimeline.inmuebleId,ids):sql`0=1`)
       .orderBy(asc(inmTimeline.fechaEvento));
 
     const posByInmueble = new Map<
@@ -318,7 +392,7 @@ export async function GET(request: NextRequest) {
       const materialPendiente =
         activo &&
         esTasacionAprobada(tasacion?.situacion) &&
-        (!publicacion?.texto?.trim() || !propertiesWithPhotos.has(x.id));
+        !expedientes.get(x.id)?.complete;
 
       const negociacionEnCurso =
         activo &&
@@ -329,7 +403,7 @@ export async function GET(request: NextRequest) {
         activo &&
         Boolean(
           publicacion &&
-            !publicacion.publicado,
+            !publicacion.publicado && expedientes.get(x.id)?.complete,
         );
 
       const publicado =
@@ -347,15 +421,18 @@ export async function GET(request: NextRequest) {
       });
 
       const fechaVisita =
-        visita?.fechaCompletada ??
         visita?.fechaVisita ??
+        visita?.fechaCompletada ??
         null;
 
       return {
+        datosPrueba: Boolean(x.datosPrueba),
         inmuebleId: x.id,
         codigo: x.codigo,
         nombre: x.referencia,
         tipo: normalizarTipo(x.tipo),
+        operacion: x.operacion === "alquiler" ? "Alquiler" : "Venta",
+        rentaMensualSolicitada: x.operacion === "alquiler" ? tasacion?.precioVenta ?? null : null,
         ubicacion:
           [
             x.distrito,
@@ -379,15 +456,13 @@ export async function GET(request: NextRequest) {
 
         visitaRealizada,
         visitaPendiente,
-        fechaVisita: fmtDate(fechaVisita),
+        fechaVisita: fechaVisita ? new Date(fechaVisita).toISOString().slice(0,10) : null,
 
         tasacionRegistrada: Boolean(tasacion),
         tasacionPendiente,
-        fechaTasacion: fmtDate(
-          tasacion?.fechaTasacion,
-        ),
+        fechaTasacion: tasacion?.fechaTasacion ? new Date(tasacion.fechaTasacion).toISOString().slice(0,10) : null,
         tasacion:
-          tasacion
+          tasacion && x.operacion !== "alquiler"
             ? Number(
                 tasacion.precioObjetivo ??
                   tasacion.valorReferencia ??
@@ -431,34 +506,23 @@ export async function GET(request: NextRequest) {
 
         motivoLiberacion:
           liberacion?.motivo ?? null,
+        fechaVenta: liberacion?.fechaVenta ? new Date(liberacion.fechaVenta).toISOString().slice(0,10) : null,
+        precioFinal: liberacion?.precioFinal ?? null,
+        fechaAlquiler: liberacion?.fechaAlquiler ?? null,
+        rentaMensual: liberacion?.rentaMensual ?? null,
+        garantia: liberacion?.garantia ?? null,
+        adelanto: liberacion?.adelanto ?? null,
+        fechaInicioAlquiler: liberacion?.fechaInicioAlquiler ?? null,
+        fechaFinAlquiler: liberacion?.fechaFinAlquiler ?? null,
+        comision: liberacion?.comision ?? null,
+        datosSimulados: liberacion?.datosSimulados ?? false,
+        expedientePendiente: expedientes.get(x.id)?.missing ?? [],
         detalleLiberacion:
           liberacion?.detalleOtro ?? null,
       };
     });
 
     const filtered = base.filter((x) => {
-      const fecha = x.fechaRegistro
-        ? new Date(x.fechaRegistro)
-        : null;
-
-      if (
-        desde &&
-        (!fecha ||
-          fecha <
-            new Date(`${desde}T00:00:00`))
-      ) {
-        return false;
-      }
-
-      if (
-        hasta &&
-        (!fecha ||
-          fecha >
-            new Date(`${hasta}T23:59:59`))
-      ) {
-        return false;
-      }
-
       if (
         situacion !== "Todas" &&
         !x.situaciones.includes(situacion)
@@ -573,6 +637,10 @@ export async function GET(request: NextRequest) {
         (x) => x.publicado,
       );
     } else if (
+      reporte === "Alquilados"
+    ) {
+      rows = filtered.filter(x => x.motivoLiberacion === "alquilado");
+    } else if (
       reporte === "Vendidos"
     ) {
       rows = filtered.filter(
@@ -664,9 +732,9 @@ export async function GET(request: NextRequest) {
           "tasacion_realizada",
           "tasacion_actualizada",
         ],
-        "Aprobación → publicación": [
-          "tasacion_actualizada",
-          "publicacion_registrada",
+        "Tasación → publicación": [
+          "tasacion_realizada",
+          "publicado",
         ],
       };
 
@@ -737,71 +805,14 @@ export async function GET(request: NextRequest) {
       rows = active;
     }
 
-    const activosBase = base.filter(
-      (x) => x.estado === "Activo",
-    );
-
-    const disponibles = availablePositions.length;
-
-    const resumen = {
-      total: rows.length,
-      activos: activosBase.length,
-      historicos: base.filter(
-        (x) => x.estado === "Histórico",
-      ).length,
-      disponibles,
-
-      visitasPendientes:
-        activosBase.filter(
-          (x) => x.visitaPendiente,
-        ).length,
-
-      visitasRealizadas:
-        activosBase.filter(
-          (x) => x.visitaRealizada,
-        ).length,
-
-      tasacionesPendientes:
-        activosBase.filter(
-          (x) => x.tasacionPendiente,
-        ).length,
-
-      tasacionesRealizadas:
-        activosBase.filter(
-          (x) => x.tasacionRegistrada,
-        ).length,
-
-      aprobaciones:
-        activosBase.filter(
-          (x) => x.aprobacionPendiente,
-        ).length,
-
-      negociaciones:
-        activosBase.filter(
-          (x) => x.negociacionEnCurso,
-        ).length,
-
-      materialPendiente:
-        activosBase.filter(
-          (x) => x.materialPendiente,
-        ).length,
-
-      listosParaPublicar:
-        activosBase.filter(
-          (x) => x.listoParaPublicar,
-        ).length,
-
-      publicados:
-        activosBase.filter(
-          (x) => x.publicado,
-        ).length,
-    };
-
+    const resumen={...globalSummary,total:reporte==='Posiciones disponibles'?rows.length:count,disponibles:availablePositions.length,aprobaciones:0,negociaciones:0};
     return NextResponse.json({
       ok: true,
       reporte,
       resumen,
       rows,
+      paginacion:{pagina:page,tamano:pageSize,total:reporte==='Posiciones disponibles'?rows.length:count,paginas:reporte==='Posiciones disponibles'?1:Math.ceil(count/pageSize)},
+      fechaFiltro:periodField,
     });
   } catch (error) {
     console.error("Operación fallida: reportes", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");

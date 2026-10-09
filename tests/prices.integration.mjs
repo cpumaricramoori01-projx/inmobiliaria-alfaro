@@ -1,4 +1,5 @@
 // Creates isolated temporary records and removes them in finally.
+import { encryptSecret, newSecret } from "../lib/mfa.mjs";
 import { todayInPeru } from "../lib/calendar.mjs";
 import assert from "node:assert/strict";
 import { loadEnvFile } from "node:process";
@@ -8,9 +9,10 @@ import mysql from "mysql2/promise";
 import { createSessionToken, hashSessionToken } from "../lib/password.mjs";
 
 loadEnvFile(".env.local");
+process.env.AUTH_MFA_KEY ||= randomBytes(32).toString("hex");
 const connection = await mysql.createConnection(process.env.DATABASE_URL);
 const base = "http://127.0.0.1:3111";
-let userId, inmuebleId, positionId, server;
+let userId, inmuebleId, positionId, ownerId, server;
 const token = createSessionToken();
 const cookie = `aa_session=${token}`;
 const request = (path, method = "GET", body, origin = base, authenticated = true) => fetch(base + path, {
@@ -28,7 +30,8 @@ try {
   const suffix = randomBytes(6).toString("hex");
   const [user] = await connection.execute("INSERT INTO inm_usuarios (nombre, email, usuario, rol, activo) VALUES (?, ?, ?, 'administrador', 1)", ["Prueba precios", `prices_${suffix}@example.invalid`, `prices_${suffix}`]);
   userId = user.insertId;
-  await connection.execute("INSERT INTO inm_sesiones (token_hash, usuario_id, expira) VALUES (?, ?, ?)", [hashSessionToken(token), userId, new Date(Date.now() + 3600000)]);
+  await connection.execute("UPDATE inm_usuarios SET mfa_secret=? WHERE id=?", [encryptSecret(newSecret()), userId]);
+  await connection.execute("INSERT INTO inm_sesiones (token_hash, usuario_id, expira, last_seen, authenticated_at) VALUES (?, ?, ?, ?, ?)", [hashSessionToken(token), userId, new Date(Date.now() + 3600000), new Date(), new Date()]);
   const [property] = await connection.execute("INSERT INTO inm_inmuebles (codigo, tipo, referencia, estado, etapa) VALUES (?, 'casa', 'Prueba temporal precios', 'activo', 'visita_pendiente')", [`TEST-PRICE-${suffix}`]);
   inmuebleId = property.insertId;
   const [positions] = await connection.execute('SELECT id,numero FROM inm_posiciones WHERE numero >= 201 OR id >= 201');
@@ -36,9 +39,14 @@ try {
   assert.ok(positionId);
   await connection.execute('INSERT INTO inm_posiciones (id,numero,activo) VALUES (?,?,1)', [positionId,positionId]);
   await connection.execute('INSERT INTO inm_asignaciones_posicion (inmueble_id,posicion_id,activa) VALUES (?,?,1)', [inmuebleId,positionId]);
+  const [owner] = await connection.execute("INSERT INTO inm_propietarios (dni,nombres,apellidos) VALUES (?, 'Prueba', 'Precios')", [String(Math.floor(10000000 + Math.random() * 89999999))]);
+  ownerId = owner.insertId;
+  await connection.execute('UPDATE inm_inmuebles SET propietario_id=? WHERE id=?', [ownerId, inmuebleId]);
   await connection.execute('INSERT INTO inm_visitas (inmueble_id,completada,fecha_visita,usuario_id) VALUES (?,1,?,?)', [inmuebleId,todayInPeru(),userId]);
   await connection.execute("INSERT INTO inm_archivos (inmueble_id,tipo_documento,nombre,enlace,almacenamiento,tipo_mime,usuario_id) VALUES (?,'FOTO_INMUEBLE','Temporal prueba precios','fixture','hosting','image/webp',?)", [inmuebleId,userId]);
 
+  await connection.execute('UPDATE inm_archivos SET visita_id=(SELECT id FROM inm_visitas WHERE inmueble_id=? LIMIT 1) WHERE inmueble_id=?', [inmuebleId, inmuebleId]);
+  for (const type of ['DNI_PROPIETARIO', 'TASACION']) await connection.execute("INSERT INTO inm_archivos (inmueble_id,tipo_documento,nombre,enlace,almacenamiento,tipo_mime,usuario_id) VALUES (?,?,'Prueba temporal','fixture','hosting','application/pdf',?)", [inmuebleId,type,userId]);
   server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3111", "-H", "127.0.0.1"], { env: { ...process.env, NODE_ENV: "production" }, stdio: ["ignore", "pipe", "pipe"] });
   server.stdout.on("data", chunk => { output += chunk; });
   server.stderr.on("data", chunk => { output += chunk; });
@@ -96,8 +104,10 @@ try {
     for (const table of ["inm_timeline", "inm_publicaciones", "inm_tasaciones", "inm_archivos", "inm_visitas", "inm_asignaciones_posicion"]) await connection.execute(`DELETE FROM ${table} WHERE inmueble_id = ?`, [inmuebleId]);
     await connection.execute("DELETE FROM inm_inmuebles WHERE id = ?", [inmuebleId]);
   }
+  if (ownerId) await connection.execute('DELETE FROM inm_propietarios WHERE id=?', [ownerId]);
   if (positionId) await connection.execute("DELETE FROM inm_posiciones WHERE id = ?", [positionId]);
   if (userId) {
+    await connection.execute("DELETE FROM inm_security_audit WHERE actor_id = ?", [userId]);
     await connection.execute("DELETE FROM inm_sesiones WHERE usuario_id = ?", [userId]);
     await connection.execute("DELETE FROM inm_usuarios WHERE id = ?", [userId]);
   }

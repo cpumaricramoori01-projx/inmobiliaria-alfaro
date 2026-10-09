@@ -35,9 +35,10 @@ export function reportDate(value: ReportValue): Date | null {
 }
 export function reportText(key: string, value: ReportValue): string {
   if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Sí" : "No";
   if (Array.isArray(value)) return value.length ? value.join(" · ") : "—";
   if (key.toLowerCase().includes("fecha")) return reportDate(value)?.toLocaleDateString("es-PE", { timeZone: "America/Lima" }) ?? "—";
-  if (key === "tasacion" && Number.isFinite(Number(value))) return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(Number(value));
+  if (["tasacion", "precioFinal", "comision", "rentaMensual", "rentaMensualSolicitada", "garantia", "adelanto"].includes(key) && Number.isFinite(Number(value))) return new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(Number(value));
   return String(value);
 }
 function stamp(date: Date) {
@@ -155,7 +156,7 @@ export async function exportReportExcel(report: ReportExport) {
       const calendar = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
       return new Date(`${calendar}T00:00:00Z`);
     }
-    if ((key === "tasacion" || key === "dias" || key === "posicion") && Number.isFinite(Number(value))) return Number(value);
+    if ((["tasacion", "precioFinal", "comision", "rentaMensual", "rentaMensualSolicitada", "garantia", "adelanto"].includes(key) || key === "dias" || key === "posicion") && Number.isFinite(Number(value))) return Number(value);
     return Array.isArray(value) ? value.join(" · ") : value;
   })) });
   detail.getRow(1).height = 32;
@@ -163,7 +164,7 @@ export async function exportReportExcel(report: ReportExport) {
   report.columns.forEach((key, index) => {
     const column = detail.getColumn(index + 1);
     if (key.toLowerCase().includes("fecha")) column.numFmt = "dd/mm/yyyy";
-    if (key === "tasacion") column.numFmt = '"S/ "#,##0.00';
+    if (["tasacion", "precioFinal", "comision", "rentaMensual", "rentaMensualSolicitada", "garantia", "adelanto"].includes(key)) column.numFmt = '"S/ "#,##0.00';
     if (key === "posicion") column.numFmt = "00";
   });
   detail.eachRow((row, index) => { if (index > 1) { row.height = Math.max(32, ...report.columns.map((key, columnIndex) => { const value = report.rows[index - 2]?.[key]; const text = Array.isArray(value) ? value.join(" · ") : String(value ?? ""); return (Math.ceil(text.length / Math.max(10, (detail.getColumn(columnIndex + 1).width ?? 24) - 3)) + text.split("\n").length - 1) * 15 + 12; })); row.eachCell(cell => { cell.alignment = { vertical: "middle", wrapText: true }; cell.font = { name: "Calibri", size: 11 }; if (cell.value === "Activo" || cell.value === "Disponible") cell.font.color = { argb: "15803D" }; if (cell.value === "Histórico") cell.font.color = { argb: "64748B" }; }); } });

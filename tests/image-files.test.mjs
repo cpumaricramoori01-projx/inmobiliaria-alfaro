@@ -27,5 +27,7 @@ test('renamed files, SVG, corrupt images and oversized input are rejected', asyn
 });
 test('visits require distinct positive photo IDs and allow at most twenty', () => {
   assert.deepEqual(visitPhotoIds([1, 2]), [1, 2]);
+  assert.deepEqual(visitPhotoIds([], true), []);
+  for (const invalid of [undefined, [0], [1, 1], ["1"]]) assert.throws(() => visitPhotoIds(invalid, true));
   for (const invalid of [undefined, [], ['1'], [0], [-1], [1, 1], [1.5], Array.from({ length: 21 }, (_, index) => index + 1)]) assert.throws(() => visitPhotoIds(invalid));
 });

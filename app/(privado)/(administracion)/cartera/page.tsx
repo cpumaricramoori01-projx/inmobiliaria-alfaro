@@ -1,19 +1,29 @@
 "use client";
+import OperationSelect from "@/app/components/OperationSelect";
+import { operationLabel, priceLabel } from "@/lib/operation.mjs";
+
+import PropertyTypeSelect from "@/app/components/PropertyTypeSelect";
+import { propertyDisplayId } from "@/lib/property-display-id";
+
+import PageHeading from "@/app/components/PageHeading";
+
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRef } from "react";
+import PublicationChecklist, { type Checklist } from "@/app/components/PublicationChecklist";
+import StatusBadge from "@/app/components/StatusBadge";
+import { Feedback, LoadingCards } from "@/app/components/InterfaceFeedback";
+import ResponsiveFilters from "@/app/components/ResponsiveFilters";
 import PhotoGallery from "@/app/components/PhotoGallery";
 import PropertyMapDialog from "@/app/components/PropertyMapDialog";
-import { locationPoint } from "@/lib/location.mjs";
 
 type Estado = "Activo" | "Histórico";
 type FiltroActividad =
   | "Todas"
   | "Visita pendiente"
   | "Tasación pendiente"
-  | "Material pendiente"
-  | "Negociación";
+  | "Material pendiente";
 
 type Actividades = {
   visita: {
@@ -46,13 +56,17 @@ type Actividades = {
 };
 
 type Inmueble = {
+  datosPrueba?: boolean;
+  expediente?: Checklist;
   id: string;
   inmuebleId: number;
   posicion?: number;
   tipo: string;
+  operacion: string;
   nombre: string;
   ubicacion: string;
   direccion: string | null;
+  zona?: string;
   latitud: string | null;
   longitud: string | null;
   estado: Estado;
@@ -63,6 +77,7 @@ type Inmueble = {
   tasacionPendiente: boolean;
   materialPendiente: boolean;
   fotosPendientes: boolean;
+  tieneFotos: boolean;
   textoPendiente: boolean;
   negociacionEnCurso: boolean;
   fechaRegistro?: string | Date;
@@ -227,36 +242,36 @@ function EstadoActividad({
                 ? "Pendiente"
                 : estado;
 
-  const clase = pendiente
-    ? "border-[#eadede] bg-[#fff5f5] text-[#a90000]"
-    : estado === "en_curso"
-      ? "border-slate-200 bg-slate-100 text-slate-700"
-      : "border-slate-200 bg-white text-slate-500";
+  const tone = estado === "en_curso" ? "progress" : pendiente ? "pending" : ["realizada", "registrada", "aprobado", "completo"].includes(estado) ? "complete" : "neutral";
+  return <StatusBadge tone={tone}><span className="inline-flex items-center gap-1.5"><Icon name={icon} />{etiqueta}</span></StatusBadge>;
 
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${clase}`}
-    >
-      <Icon name={icon} />
-      {etiqueta}
-    </span>
-  );
 }
 
 const cardThemes = {
   visita: { label: "Visita pendiente", stripe: "bg-amber-400", badge: "bg-amber-50 text-amber-800 ring-amber-200", position: "bg-amber-50 text-amber-800", border: "hover:border-amber-300" },
-  tasacion: { label: "Tasación pendiente", stripe: "bg-blue-400", badge: "bg-blue-50 text-blue-800 ring-blue-200", position: "bg-blue-50 text-blue-800", border: "hover:border-blue-300" },
-  material: { label: "Publicación pendiente", stripe: "bg-violet-400", badge: "bg-violet-50 text-violet-800 ring-violet-200", position: "bg-violet-50 text-violet-800", border: "hover:border-violet-300" },
+  tasacion: { label: "Tasación pendiente", stripe: "bg-amber-400", badge: "bg-amber-50 text-amber-900 ring-amber-200", position: "bg-amber-50 text-amber-900", border: "hover:border-amber-300" },
+  material: { label: "Publicación pendiente", stripe: "bg-amber-400", badge: "bg-amber-50 text-amber-900 ring-amber-200", position: "bg-amber-50 text-amber-900", border: "hover:border-amber-300" },
   publicado: { label: "Publicado", stripe: "bg-emerald-400", badge: "bg-emerald-50 text-emerald-800 ring-emerald-200", position: "bg-emerald-50 text-emerald-800", border: "hover:border-emerald-300" },
-  seguimiento: { label: "En seguimiento", stripe: "bg-slate-300", badge: "bg-slate-100 text-slate-700 ring-slate-200", position: "bg-slate-100 text-slate-700", border: "hover:border-slate-300" },
+  seguimiento: { label: "En seguimiento", stripe: "bg-blue-400", badge: "bg-blue-50 text-blue-800 ring-blue-200", position: "bg-blue-50 text-blue-800", border: "hover:border-blue-300" },
 };
 
 function cardTheme(item: Inmueble) {
+  if (item.estado === "Histórico") return { ...cardThemes.seguimiento, label: "Histórico", stripe: "bg-slate-300", badge: "bg-slate-100 text-slate-700 ring-slate-200" };
   if (item.actividades.publicacion.publicado) return cardThemes.publicado;
+  if (item.actividades.tasacion.situacion === "pendiente_aprobacion") return { ...cardThemes.visita, label: "Tasación anterior por revisar" };
+  if (item.negociacionEnCurso) return { ...cardThemes.seguimiento, label: "Seguimiento anterior" };
   if (item.visitaPendiente) return cardThemes.visita;
   if (item.tasacionPendiente) return cardThemes.tasacion;
   if (item.materialPendiente || item.actividades.tasacion.situacion === "aprobado") return cardThemes.material;
   return cardThemes.seguimiento;
+}
+
+function primaryTone(item: Inmueble) {
+  if (item.estado === "Histórico") return "neutral" as const;
+  if (item.actividades.publicacion.publicado) return "complete" as const;
+  if (item.negociacionEnCurso) return "progress" as const;
+  if (item.visitaPendiente || item.tasacionPendiente || item.materialPendiente || item.actividades.tasacion.situacion === "pendiente_aprobacion") return "pending" as const;
+  return "progress" as const;
 }
 
 function salePrice(value: string | null) {
@@ -265,12 +280,14 @@ function salePrice(value: string | null) {
 
 export default function CarteraPage() {
   const [estado, setEstado] = useState<"Todos" | Estado>("Activo");
+  const [operacion, setOperacion] = useState("Todos");
   const [tipo, setTipo] = useState("Todos");
   const [actividad, setActividad] =
     useState<FiltroActividad>("Todas");
+  const [soloDisponibles, setSoloDisponibles] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [vista, setVista] =
-    useState<"posiciones" | "lista">("posiciones");
+    useState<"posiciones" | "lista">("lista");
 
   const [seleccionado, setSeleccionado] =
     useState<Inmueble | null>(null);
@@ -352,7 +369,15 @@ export default function CarteraPage() {
   }
 
   useEffect(() => {
-    const inicial = window.setTimeout(() => { void cargarDatos(); }, 0);
+    const inicial = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const activity = params.get("actividad");
+      if (["Visita pendiente", "Tasación pendiente", "Material pendiente"].includes(activity ?? "")) setActividad(activity as FiltroActividad);
+      if (params.get("vista") === "lista") setVista("lista");
+      if (params.get("vista") === "posiciones" || params.get("disponibles") === "1") setVista("posiciones");
+      if (params.get("disponibles") === "1") setSoloDisponibles(true);
+      void cargarDatos();
+    }, 0);
 
     const intervalo = window.setInterval(
       cargarDatos,
@@ -374,7 +399,7 @@ export default function CarteraPage() {
     return inmuebles.filter((x) => {
       const coincideTexto =
         !texto ||
-        `${x.id} ${x.posicion ?? ""} ${x.nombre} ${x.ubicacion} ${x.propietario}`
+        `${propertyDisplayId(x)} ${x.id} ${x.posicion ?? ""} ${x.nombre} ${x.ubicacion} ${x.propietario}`
           .toLowerCase()
           .includes(texto);
 
@@ -385,13 +410,12 @@ export default function CarteraPage() {
         (actividad === "Tasación pendiente" &&
           x.tasacionPendiente) ||
         (actividad === "Material pendiente" &&
-          x.materialPendiente) ||
-        (actividad === "Negociación" &&
-          x.negociacionEnCurso);
+          x.materialPendiente);
 
       return (
         (estado === "Todos" || x.estado === estado) &&
         (tipo === "Todos" || x.tipo === tipo) &&
+        (operacion === "Todos" || x.operacion === operacion) &&
         coincideActividad &&
         coincideTexto
       );
@@ -400,6 +424,7 @@ export default function CarteraPage() {
     inmuebles,
     estado,
     tipo,
+    operacion,
     actividad,
     busqueda,
   ]);
@@ -408,7 +433,7 @@ export default function CarteraPage() {
     resumen.capacidad > 0
       ? Math.min(
           100,
-          (resumen.enCartera / resumen.capacidad) * 100
+          ((resumen.capacidad - resumen.disponibles) / resumen.capacidad) * 100
         )
       : 0;
 
@@ -424,56 +449,39 @@ export default function CarteraPage() {
     return mapa;
   }, [activos]);
 
-  const totalPendientes =
-    resumen.visitasPendientes +
-    resumen.tasacionesPendientes +
-    resumen.materialPendiente +
-    resumen.negociaciones;
-
   const limpiarFiltros = () => {
+    setSoloDisponibles(false);
     setEstado("Activo");
     setTipo("Todos");
+    setOperacion("Todos");
     setActividad("Todas");
     setBusqueda("");
   };
 
   const tieneFiltros =
+    soloDisponibles ||
     Boolean(busqueda) ||
     estado !== "Activo" ||
     tipo !== "Todos" ||
+    operacion !== "Todos" ||
     actividad !== "Todas";
 
   return (
-    <main className="min-h-screen bg-[#f5f7fa] p-6 lg:p-8">
+    <main className="min-h-screen bg-[#f7f7f5] p-6 lg:p-8">
       <div className="mx-auto max-w-[1550px]">
         {/* CABECERA */}
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-slate-400">
-              <span>Fase 1</span>
-              <span className="text-slate-300">/</span>
-              <span>Cartera</span>
-            </div>
-
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
-              Cartera de inmuebles
-            </h1>
-
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              Control operativo de los inmuebles activos,
-              sus posiciones y las actividades que requieren
-              atención.
-            </p>
-          </div>
+          <PageHeading href="/cartera" />
 
           <Link
             href="/registrar-inmueble"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#c80000] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#a90000]"
           >
             + Registrar inmueble
           </Link>
         </div>
 
+        <p className="mt-4 text-sm text-slate-600">Consulta los inmuebles en la lista compacta y abre su ficha para ver todos los datos. La vista de tarjetas permite revisar las posiciones ocupadas y disponibles.</p>
         {/* INDICADORES */}
         <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           {[
@@ -508,9 +516,9 @@ export default function CarteraPage() {
               icon: "camera" as const,
             },
             {
-              label: "Negociación",
-              value: resumen.negociaciones,
-              detail: "en curso",
+              label: "Publicados",
+              value: inmuebles.filter(item => item.actividades.publicacion.publicado).length,
+              detail: "en cartera",
               icon: "handshake" as const,
             },
           ].map((item) => (
@@ -523,7 +531,7 @@ export default function CarteraPage() {
                   <Icon name={item.icon} />
                 </span>
 
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   {item.detail}
                 </span>
               </div>
@@ -539,210 +547,27 @@ export default function CarteraPage() {
           ))}
         </div>
 
-        {/* ATENCIÓN OPERATIVA */}
-        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-center xl:justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                Atención operativa
-              </p>
 
-              <h2 className="mt-1 text-lg font-bold text-slate-900">
-                {totalPendientes === 0
-                  ? "La cartera no tiene actividades pendientes."
-                  : `${totalPendientes} actividad${
-                      totalPendientes === 1 ? "" : "es"
-                    } requiere${
-                      totalPendientes === 1 ? "" : "n"
-                    } atención.`}
-              </h2>
 
-              <p className="mt-1 text-xs leading-5 text-slate-500">
-                Las actividades son independientes. Un inmueble
-                puede tener más de una tarea pendiente al mismo
-                tiempo.
-              </p>
-            </div>
+        {error && <Feedback tone="error" className="mt-5">{error}<button type="button" onClick={() => void cargarDatos()} className="ml-3 font-semibold underline">Reintentar</button></Feedback>}
+        {cargando && <LoadingCards label="Cargando cartera y posiciones…" count={6} />}
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  setActividad("Visita pendiente")
-                }
-                className="rounded-xl border border-slate-200 bg-[#fafafa] px-4 py-2 text-left transition hover:border-slate-300"
-              >
-                <p className="text-[10px] font-semibold text-slate-400">
-                  Visitas
-                </p>
-                <p className="mt-1 text-lg font-bold text-slate-900">
-                  {resumen.visitasPendientes}
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setActividad("Tasación pendiente")
-                }
-                className="rounded-xl border border-slate-200 bg-[#fafafa] px-4 py-2 text-left transition hover:border-slate-300"
-              >
-                <p className="text-[10px] font-semibold text-slate-400">
-                  Tasaciones
-                </p>
-                <p className="mt-1 text-lg font-bold text-slate-900">
-                  {resumen.tasacionesPendientes}
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setActividad("Material pendiente")
-                }
-                className="rounded-xl border border-slate-200 bg-[#fafafa] px-4 py-2 text-left transition hover:border-slate-300"
-              >
-                <p className="text-[10px] font-semibold text-slate-400">
-                  Material
-                </p>
-                <p className="mt-1 text-lg font-bold text-slate-900">
-                  {resumen.materialPendiente}
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setActividad("Negociación")
-                }
-                className="rounded-xl border border-slate-200 bg-[#fafafa] px-4 py-2 text-left transition hover:border-slate-300"
-              >
-                <p className="text-[10px] font-semibold text-slate-400">
-                  Negociación
-                </p>
-                <p className="mt-1 text-lg font-bold text-slate-900">
-                  {resumen.negociaciones}
-                </p>
-              </button>
+        <section aria-label="Buscar y filtrar cartera" className="aa-card mt-5 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <label className="relative min-w-0 flex-1"><span className="sr-only">Buscar inmueble</span><span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"><Icon name="search" /></span><input value={busqueda} onChange={event => setBusqueda(event.target.value)} placeholder="Código, inmueble, ubicación o propietario…" className="aa-input w-full pl-10" /></label>
+            <div aria-label="Vista de la cartera" className="grid shrink-0 grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <button type="button" aria-pressed={vista === "posiciones"} onClick={() => setVista("posiciones")} className={`rounded-lg px-4 py-2 text-sm font-semibold ${vista === "posiciones" ? "bg-[#c80000] text-white" : "text-slate-600"}`}>Tarjetas</button>
+              <button type="button" aria-pressed={vista === "lista"} onClick={() => { setVista("lista"); setSoloDisponibles(false); }} className={`rounded-lg px-4 py-2 text-sm font-semibold ${vista === "lista" ? "bg-[#c80000] text-white" : "text-slate-600"}`}>Lista compacta</button>
             </div>
           </div>
-        </section>
-
-        {/* ERROR */}
-        {error && (
-          <div className="mt-5 rounded-2xl border border-[#eadede] bg-[#fff5f5] p-4 text-sm text-[#a90000]">
-            {error}
-          </div>
-        )}
-
-        {cargando && (
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
-            Cargando cartera desde la base de datos…
-          </div>
-        )}
-
-        {/* FILTROS */}
-        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center">
-            <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                <Icon name="search" />
-              </span>
-
-              <input
-                value={busqueda}
-                onChange={(e) =>
-                  setBusqueda(e.target.value)
-                }
-                placeholder="Buscar por posición, ID, inmueble, ubicación o propietario..."
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
-              />
+          <div className="mt-3"><ResponsiveFilters active={tieneFiltros}>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="text-xs font-semibold text-slate-600">Estado<select value={estado} onChange={event => { setEstado(event.target.value as "Todos" | Estado); setSoloDisponibles(false); }} className="aa-input mt-2 w-full"><option>Activo</option><option>Todos</option><option>Histórico</option></select></label>
+              <label className="text-xs font-semibold text-slate-600">Operación<OperationSelect filter value={operacion} onChange={setOperacion} className="aa-input mt-2 w-full" /></label><label className="text-xs font-semibold text-slate-600">Tipo de inmueble<PropertyTypeSelect filter value={tipo} onChange={setTipo} className="aa-input mt-2 w-full" /></label>
+              <label className="text-xs font-semibold text-slate-600">Actividad<select value={actividad} onChange={event => setActividad(event.target.value as FiltroActividad)} className="aa-input mt-2 w-full">{["Todas", "Visita pendiente", "Tasación pendiente", "Material pendiente"].map(value => <option key={value}>{value}</option>)}</select></label>
             </div>
-
-            <select
-              value={estado}
-              onChange={(e) =>
-                setEstado(
-                  e.target.value as "Todos" | Estado
-                )
-              }
-              className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 outline-none"
-            >
-              <option>Activo</option>
-              <option>Todos</option>
-              <option>Histórico</option>
-            </select>
-
-            <select
-              value={tipo}
-              onChange={(e) =>
-                setTipo(e.target.value)
-              }
-              className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 outline-none"
-            >
-              <option>Todos</option>
-              <option>Casa</option>
-              <option>Departamento</option>
-              <option>Terreno</option>
-              <option>Local</option>
-              <option>Oficina</option>
-              <option>Otros</option>
-            </select>
-
-            <select
-              value={actividad}
-              onChange={(e) =>
-                setActividad(
-                  e.target.value as FiltroActividad
-                )
-              }
-              className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 outline-none"
-            >
-              <option>Todas</option>
-              <option>Visita pendiente</option>
-              <option>Tasación pendiente</option>
-              <option>Material pendiente</option>
-              <option>Negociación</option>
-            </select>
-
-            <div className="flex rounded-xl border border-slate-200 p-1">
-              <button
-                type="button"
-                onClick={() =>
-                  setVista("posiciones")
-                }
-                className={`rounded-lg px-3 py-2 text-xs font-semibold ${
-                  vista === "posiciones"
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-500"
-                }`}
-              >
-                Posiciones
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setVista("lista")}
-                className={`rounded-lg px-3 py-2 text-xs font-semibold ${
-                  vista === "lista"
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-500"
-                }`}
-              >
-                Lista
-              </button>
-            </div>
-
-            {tieneFiltros && (
-              <button
-                type="button"
-                onClick={limpiarFiltros}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-900"
-              >
-                Limpiar
-              </button>
-            )}
-          </div>
+          </ResponsiveFilters></div>
+          {tieneFiltros && <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3"><p className="text-xs text-slate-600">{soloDisponibles ? "Mostrando solamente posiciones libres" : `${estado} · ${tipo} · ${actividad}`}</p><button type="button" onClick={limpiarFiltros} className="text-sm font-semibold text-[#c80000]">Limpiar filtros</button></div>}
         </section>
 
         {/* RESULTADOS */}
@@ -755,15 +580,15 @@ export default function CarteraPage() {
             </h2>
 
             <p className="mt-1 text-xs text-slate-500">
-              Mostrando {filtrados.length} registro
+              Mostrando {soloDisponibles ? posiciones.filter(pos => pos.disponible).length : filtrados.length} registro
               {filtrados.length === 1 ? "" : "s"} con los
               filtros actuales.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-slate-600">
-            {[["Visita", "bg-amber-400"], ["Tasación", "bg-blue-400"], ["Publicación", "bg-violet-400"], ["Publicado", "bg-emerald-400"]].map(([label, color]) => <span key={label} className="inline-flex items-center gap-1.5"><span aria-hidden="true" className={`h-2 w-2 rounded-full ${color}`} />{label}</span>)}
-            <span className="text-slate-400">{cargandoPosiciones ? "Consultando posiciones…" : `${posiciones.length || resumen.capacidad} posiciones`}</span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600">
+            {[["Pendiente", "bg-amber-400"], ["En proceso", "bg-blue-400"], ["Completado", "bg-emerald-400"]].map(([label, color]) => <span key={label} className="inline-flex items-center gap-1.5"><span aria-hidden="true" className={`h-2 w-2 rounded-full ${color}`} />{label}</span>)}
+            <span className="text-slate-500">{cargandoPosiciones ? "Consultando posiciones…" : `${posiciones.length || resumen.capacidad} posiciones`}</span>
           </div>
         </div>
 
@@ -781,12 +606,7 @@ export default function CarteraPage() {
                   pos.numero
                 );
 
-                const visible =
-                  !x ||
-                  filtrados.some(
-                    (item) =>
-                      item.inmuebleId === x.inmuebleId
-                  );
+                const visible = soloDisponibles ? !x : x ? filtrados.some(item => item.inmuebleId === x.inmuebleId) : !tieneFiltros;
 
                 if (!visible) {
                   return null;
@@ -805,30 +625,30 @@ export default function CarteraPage() {
                     <div aria-hidden="true" className={`h-1.5 w-full ${theme?.stripe ?? "bg-slate-100"}`} />
                     <div className="flex w-full flex-1 flex-col p-3.5 sm:p-4">
                       <div className="flex items-center justify-between gap-2">
-                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-mono text-xl font-bold tracking-tight ${theme?.position ?? "bg-slate-100 text-slate-400"}`}>{String(pos.numero).padStart(2, "0")}</span>
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-mono text-xl font-bold tracking-tight ${theme?.position ?? "bg-slate-100 text-slate-500"}`}>{String(pos.numero).padStart(2, "0")}</span>
                         <span className={x ? "text-slate-300" : "text-slate-300 text-2xl font-light"}>{x ? <Icon name="home" /> : "+"}</span>
                       </div>
                       {x && theme ? <>
-                        <span className={`mt-3 inline-flex self-start rounded-lg px-2 py-1 text-[10px] font-semibold ring-1 ring-inset ${theme.badge}`}>{theme.label}</span>
-                        <h3 className="mt-3 min-h-10 line-clamp-2 break-words text-sm font-bold leading-5 text-slate-900" title={x.nombre}>{x.nombre}</h3>
-                        <p className="mt-1 text-[11px] text-slate-500">{x.tipo}</p>
-                        <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-4 text-slate-500"><span aria-hidden="true" className="shrink-0"><Icon name="map" /></span><span className="min-h-8 min-w-0 line-clamp-2 break-words" title={x.ubicacion}>{x.ubicacion}</span></p>
+                        <span className={`mt-3 inline-flex self-start rounded-lg px-2 py-1 text-xs font-semibold ring-1 ring-inset ${theme.badge}`}>{theme.label}</span>
+                        <h3 className="mt-3 min-h-10 line-clamp-2 break-words text-sm font-bold leading-5 text-slate-900" title={x.nombre}>{x.nombre}{x.datosPrueba&&<span className="ml-2 text-xs font-bold text-amber-800">DATOS DE PRUEBA</span>}</h3>
+                        <p className="mt-1 break-words font-mono text-xs text-slate-500">{propertyDisplayId(x)}</p>
+                        <p className="mt-2 flex items-start gap-1.5 text-xs leading-4 text-slate-500"><span aria-hidden="true" className="shrink-0"><Icon name="map" /></span><span className="min-h-8 min-w-0 line-clamp-2 break-words" title={x.ubicacion}>{x.ubicacion}</span></p>
                         <div className="mt-3 flex min-h-12 content-start flex-wrap gap-1.5">
-                          {x.visitaPendiente && <span className="rounded-md bg-amber-50 px-1.5 py-1 text-[9px] font-semibold text-amber-800">Visita pendiente</span>}
-                          {x.tasacionPendiente && <span className="rounded-md bg-blue-50 px-1.5 py-1 text-[9px] font-semibold text-blue-800">Tasación pendiente</span>}
-                          {x.materialPendiente && <span className="rounded-md bg-violet-50 px-1.5 py-1 text-[9px] font-semibold text-violet-800">Material pendiente</span>}
-                          {x.negociacionEnCurso && <span className="rounded-md bg-slate-100 px-1.5 py-1 text-[9px] font-semibold text-slate-700">En negociación</span>}
+                          {x.visitaPendiente && <span className="rounded-md bg-amber-50 px-1.5 py-1 text-xs font-semibold text-amber-800">Visita pendiente</span>}
+                          {x.tasacionPendiente && <span className="rounded-md bg-amber-50 px-1.5 py-1 text-xs font-semibold text-amber-900">Tasación pendiente</span>}
+                          {x.materialPendiente && <span className="rounded-md bg-amber-50 px-1.5 py-1 text-xs font-semibold text-amber-900">Material pendiente</span>}
+
                         </div>
                         <div className="mt-auto pt-4">
-                          <div className="border-t border-slate-100 pt-3"><p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Precio de venta</p><p className={`mt-1 break-words text-base font-bold tracking-tight ${x.precioVenta ? "text-slate-900" : "text-slate-400"}`}>{salePrice(x.precioVenta)}</p></div>
-                          <p className="mt-3 text-[11px] font-semibold text-[#c80000] group-hover:text-[#a90000]">Ver detalle <span aria-hidden="true">→</span></p>
+                          <div className="border-t border-slate-100 pt-3"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{priceLabel(x.operacion)}</p><p className={`mt-1 break-words text-base font-bold tracking-tight ${x.precioVenta ? "text-slate-900" : "text-slate-500"}`}>{salePrice(x.precioVenta)}{x.operacion === "alquiler" ? " / mes" : ""}</p></div>
+                          <p className="mt-3 text-xs font-semibold text-[#c80000] group-hover:text-[#a90000]">Ver detalle <span aria-hidden="true">→</span></p>
                         </div>
-                      </> : <div className="flex flex-1 flex-col items-center justify-center py-6 text-center"><p className="text-xs font-semibold text-slate-400">Disponible</p><p className="mt-1 text-[10px] leading-4 text-slate-400">Lista para un nuevo inmueble</p></div>}
+                      </> : <div className="flex flex-1 flex-col items-center justify-center py-6 text-center"><p className="text-xs font-semibold text-slate-500">Disponible</p><p className="mt-1 text-xs leading-4 text-slate-500">Lista para un nuevo inmueble</p></div>}
                     </div>
                   </button>
                   {x && <div className="mx-4 mb-4 grid gap-2">
-                    <button type="button" onClick={() => setGaleria(x)} aria-label={`Ver fotos de ${x.nombre}`} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-[#c80000] hover:bg-red-100"><Icon name="camera" />Ver fotos</button>
-                    <button type="button" onClick={() => setMapa(x)} aria-label={`Ver ubicación de ${x.nombre}`} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"><Icon name="map" />{locationPoint(x.latitud, x.longitud) ? "Ver ubicación" : "Ubicación pendiente"}</button>
+                    <button type="button" onClick={() => setGaleria(x)} disabled={!x.tieneFotos} aria-label={`${x.tieneFotos ? "Ver fotos" : "Fotos pendientes"} de ${x.nombre}`} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-[#c80000] enabled:hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-500"><Icon name="camera" />{x.tieneFotos ? "Ver fotos" : "Fotos pendientes"}</button>
+                    <button type="button" onClick={() => setMapa(x)} aria-label={`${x.direccion?.trim() ? "Consultar dirección" : "Consultar zona aproximada"} de ${x.nombre}`} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 enabled:hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500"><Icon name="map" />{x.direccion?.trim() ? "Consultar dirección" : "Consultar zona aproximada"}</button>
                   </div>}
                   </article>
                 );
@@ -840,178 +660,24 @@ export default function CarteraPage() {
             )}
           </div>
         ) : (
-          /* LISTA */
-          <section className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1250px] text-left">
-                <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  <tr>
-                    <th className="px-5 py-3">
-                      Pos.
-                    </th>
-                    <th className="px-5 py-3">
-                      Inmueble
-                    </th>
-                    <th className="px-5 py-3">
-                      Ubicación
-                    </th>
-                    <th className="px-5 py-3">
-                      Propietario
-                    </th>
-                    <th className="px-5 py-3">
-                      Visita
-                    </th>
-                    <th className="px-5 py-3">
-                      Tasación
-                    </th>
-                    <th className="px-5 py-3">
-                      Material
-                    </th>
-                    <th className="px-5 py-3">
-                      Negociación
-                    </th>
-                    <th className="px-5 py-3">
-                      Estado
-                    </th>
-                    <th className="px-5 py-3" />
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-                  {filtrados.map((x) => (
-                    <tr
-                      key={`${x.id}-${x.posicion ?? "sin-posicion"}`}
-                      className="hover:bg-slate-50"
-                    >
-                      <td className="px-5 py-4 font-mono text-sm font-bold text-slate-700">
-                        {x.posicion
-                          ? String(x.posicion).padStart(
-                              2,
-                              "0"
-                            )
-                          : "—"}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <p className="text-sm font-semibold text-slate-800">
-                          {x.nombre}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-400">
-                          {x.id} · {x.tipo}
-                        </p>
-                        <p className="mt-2 text-xs font-semibold text-slate-700">Venta: {salePrice(x.precioVenta)}</p>
-                        <div className="mt-2 flex flex-wrap gap-3"><button type="button" onClick={() => setGaleria(x)} className="min-h-11 text-xs font-semibold text-[#c80000]">Ver fotos</button><button type="button" onClick={() => setMapa(x)} aria-label={`Ver ubicación de ${x.nombre}`} className="min-h-11 text-xs font-semibold text-slate-700">{locationPoint(x.latitud, x.longitud) ? "Ver ubicación" : "Ubicación pendiente"}</button></div>
-                      </td>
-
-                      <td className="px-5 py-4 text-sm text-slate-600">
-                        {x.ubicacion}
-                      </td>
-
-                      <td className="px-5 py-4 text-sm text-slate-600">
-                        {x.propietario}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <EstadoActividad
-                          estado={
-                            x.actividades.visita.estado
-                          }
-                          pendiente={
-                            x.visitaPendiente
-                          }
-                          icon={
-                            x.visitaPendiente
-                              ? "clock"
-                              : "check"
-                          }
-                        />
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <EstadoActividad
-                          estado={
-                            x.actividades.tasacion
-                              .estado
-                          }
-                          pendiente={
-                            x.tasacionPendiente
-                          }
-                          icon="chart"
-                        />
-                      </td>
-
-   <td className="px-5 py-4">
-  <div className="flex flex-col gap-1">
-    {x.actividades.tasacion.estado !== "aprobado" ? (
-      <span className="text-[10px] font-semibold text-slate-400">
-        Aún no corresponde
-      </span>
-    ) : (
-      <>
-        {x.fotosPendientes && (
-          <span className="text-[10px] font-semibold text-slate-500">
-            📷 Fotos pendientes
-          </span>
-        )}
-
-        {x.textoPendiente && (
-          <span className="text-[10px] font-semibold text-slate-500">
-            Texto pendiente
-          </span>
-        )}
-
-        {!x.materialPendiente && (
-          <span className="text-[10px] font-semibold text-slate-500">
-            Completo
-          </span>
-        )}
-      </>
-    )}
-  </div>
-</td>
-
-                      <td className="px-5 py-4">
-                        <EstadoActividad
-                          estado={
-                            x.actividades.negociacion
-                              .estado
-                          }
-                          pendiente={
-                            x.negociacionEnCurso
-                          }
-                          icon="handshake"
-                        />
-                      </td>
-
-                      <td className="px-5 py-4 text-xs font-semibold text-slate-600">
-                        {x.estado}
-                      </td>
-
-                      <td className="px-5 py-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSeleccionado(x)
-                          }
-                          className="text-xs font-semibold text-slate-600 hover:text-slate-950"
-                        >
-                          Ver detalle →
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <section aria-label="Lista compacta de inmuebles" className="mt-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:hidden">
+              {filtrados.map(x => <article key={x.id} className="aa-card min-w-0 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-xs font-bold text-slate-600">{propertyDisplayId(x)}{x.posicion ? ` · Pos. ${String(x.posicion).padStart(2, "0")}` : ""}</span><StatusBadge tone={x.estado === "Activo" ? "progress" : "neutral"}>{x.estado}</StatusBadge></div>
+                <h3 className="mt-3 break-words text-base font-bold text-slate-900">{x.nombre}{x.datosPrueba&&<span className="ml-2 text-xs font-bold text-amber-800">DATOS DE PRUEBA</span>}</h3><p className="mt-1 break-words text-sm text-slate-600">{x.ubicacion}</p><p className="mt-3 text-lg font-bold text-slate-900">{salePrice(x.precioVenta)}{x.operacion === "alquiler" ? " / mes" : ""}</p><div className="mt-3"><StatusBadge tone={primaryTone(x)}>{cardTheme(x).label}</StatusBadge></div>
+                <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => setSeleccionado(x)} className="aa-button aa-button-secondary">Ver detalle</button><Link href={`/datos-inmuebles?codigo=${encodeURIComponent(x.id)}`} className="aa-button aa-button-primary">Abrir ficha</Link></div>
+              </article>)}
             </div>
+            <div className="aa-card hidden overflow-hidden xl:block"><table className="w-full table-fixed text-left text-sm"><caption className="sr-only">Cartera: código, inmueble, precio, estado y actividad principal</caption><thead className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-600"><tr><th scope="col" className="w-[16%] px-4 py-3">ID / Pos.</th><th scope="col" className="w-[27%] px-4 py-3">Inmueble</th><th scope="col" className="w-[17%] px-4 py-3">Precio / renta mensual</th><th scope="col" className="w-[23%] px-4 py-3">Estado / Actividad</th><th scope="col" className="w-[17%] px-4 py-3"><span className="sr-only">Acciones</span></th></tr></thead><tbody className="divide-y divide-slate-100">{filtrados.map(x => <tr key={x.id} className="align-top hover:bg-slate-50"><td className="break-words px-4 py-4"><p className="font-mono text-xs font-bold text-slate-700">{propertyDisplayId(x)}</p><p className="mt-1 text-xs text-slate-600">{x.posicion ? `Posición ${String(x.posicion).padStart(2, "0")}` : "Sin posición"}</p></td><td className="px-4 py-4"><p className="break-words font-semibold text-slate-900">{x.nombre}{x.datosPrueba&&<span className="ml-2 text-xs font-bold text-amber-800">DATOS DE PRUEBA</span>}</p><p className="mt-1 break-words text-xs leading-5 text-slate-600">{operationLabel(x.operacion)} · {x.tipo} · {x.ubicacion}</p></td><td className="break-words px-4 py-4 font-semibold text-slate-900">{salePrice(x.precioVenta)}{x.operacion === "alquiler" ? " / mes" : ""}</td><td className="px-4 py-4"><p className="mb-2 text-xs text-slate-600">{x.estado}</p><StatusBadge tone={primaryTone(x)}>{cardTheme(x).label}</StatusBadge></td><td className="px-4 py-3"><button type="button" onClick={() => setSeleccionado(x)} className="w-full text-left text-xs font-semibold text-slate-700">Ver detalle →</button><Link href={`/datos-inmuebles?codigo=${encodeURIComponent(x.id)}`} className="inline-flex min-h-11 items-center text-xs font-semibold text-[#c80000]">Abrir ficha →</Link></td></tr>)}</tbody></table></div>
           </section>
         )}
 
-        {filtrados.length === 0 && !cargando && (
+        {filtrados.length === 0 && !cargando && !soloDisponibles && (
           <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
             <p className="font-semibold text-slate-700">
               No encontramos inmuebles
             </p>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm text-slate-500">
               Prueba cambiando los filtros o la búsqueda.
             </p>
           </div>
@@ -1031,7 +697,7 @@ export default function CarteraPage() {
                 </p>
 
                 <p className="mt-1 text-xs text-slate-500">
-                  {resumen.enCartera} de{" "}
+                  {resumen.capacidad - resumen.disponibles} de{" "}
                   {resumen.capacidad} posiciones ocupadas ·{" "}
                   {resumen.disponibles} disponibles para
                   reutilización.
@@ -1048,10 +714,10 @@ export default function CarteraPage() {
               />
             </div>
 
-            <div className="mt-2 flex justify-between text-[10px] text-slate-400">
+            <div className="mt-2 flex justify-between text-xs text-slate-500">
               <span>0%</span>
               <span>
-                {porcentajeOcupacion.toFixed(0)}% ocupación
+                {porcentajeOcupacion.toLocaleString("es-PE",{maximumFractionDigits:1})}% ocupadas · {(100-porcentajeOcupacion).toLocaleString("es-PE",{maximumFractionDigits:1})}% disponibles
               </span>
               <span>100%</span>
             </div>
@@ -1067,7 +733,7 @@ export default function CarteraPage() {
         </div>
 
         <dialog ref={galleryDialog} onCancel={event => { event.preventDefault(); setGaleria(null); }} aria-labelledby="property-gallery-title" className="fixed inset-0 m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-4xl overflow-auto rounded-3xl bg-white p-5 shadow-2xl backdrop:bg-slate-950/50 sm:p-6">
-          {galeria && <><div className="mb-5 flex items-start justify-between gap-3"><div className="min-w-0 break-words"><h2 id="property-gallery-title" className="text-lg font-bold text-slate-900">{galeria.nombre}</h2><p className="mt-1 text-xs text-slate-500">{galeria.id} · {galeria.posicion ? `Posición ${galeria.posicion}` : 'Sin posición'}</p></div><button type="button" autoFocus onClick={() => setGaleria(null)} className="min-h-11 shrink-0 rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold">Cerrar</button></div><PhotoGallery key={galeria.inmuebleId} propertyId={galeria.inmuebleId} /></>}
+          {galeria && <><div className="mb-5 flex items-start justify-between gap-3"><div className="min-w-0 break-words"><h2 id="property-gallery-title" className="text-lg font-bold text-slate-900">{galeria.nombre}</h2><p className="mt-1 text-xs text-slate-500">{propertyDisplayId(galeria)} · {galeria.posicion ? `Posición ${galeria.posicion}` : 'Sin posición'}</p></div><button type="button" autoFocus onClick={() => setGaleria(null)} className="min-h-11 shrink-0 rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold">Cerrar</button></div><PhotoGallery key={galeria.inmuebleId} propertyId={galeria.inmuebleId} /></>}
         </dialog>
         {mapa && <PropertyMapDialog key={mapa.inmuebleId} property={mapa} onClose={() => setMapa(null)} />}
         {/* MODAL */}
@@ -1092,7 +758,7 @@ export default function CarteraPage() {
                     </span>
 
                     <span
-                      className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                         seleccionado.estado === "Activo"
                           ? "bg-[#f1f5f2] text-[#3f684c]"
                           : "bg-slate-100 text-slate-600"
@@ -1107,7 +773,7 @@ export default function CarteraPage() {
                   </h3>
 
                   <p className="mt-1 text-sm text-slate-500">
-                    {seleccionado.tipo} ·{" "}
+                    {operationLabel(seleccionado.operacion)} · {seleccionado.tipo} ·{" "}
                     {seleccionado.ubicacion}
                   </p>
                 </div>
@@ -1118,24 +784,24 @@ export default function CarteraPage() {
                     setSeleccionado(null)
                   }
                   aria-label="Cerrar detalle del inmueble"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
                 >
                   <Icon name="close" />
                 </button>
               </div>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl bg-[#f5f7fa] p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <div className="rounded-2xl bg-[#f7f7f5] p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
                     ID del inmueble
                   </p>
                   <p className="mt-1 font-mono text-sm font-semibold text-slate-700">
-                    {seleccionado.id}
+                    {propertyDisplayId(seleccionado)}
                   </p>
                 </div>
 
-                <div className="rounded-2xl bg-[#f5f7fa] p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <div className="rounded-2xl bg-[#f7f7f5] p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
                     Propietario
                   </p>
                   <p className="mt-1 text-sm font-medium text-slate-700">
@@ -1145,7 +811,7 @@ export default function CarteraPage() {
               </div>
 
               <div className="mt-4">
-                <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
                   Seguimiento operativo
                 </p>
 
@@ -1197,16 +863,16 @@ export default function CarteraPage() {
 
   {seleccionado.actividades.tasacion.estado !==
   "aprobado" ? (
-    <p className="mt-2 text-xs font-medium text-slate-400">
+    <p className="mt-2 text-xs font-medium text-slate-500">
       Aún no corresponde
     </p>
   ) : (
     <div className="mt-2 flex flex-wrap gap-1.5">
       <span
-        className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
+        className={`rounded-full px-2 py-1 text-xs font-semibold ${
           seleccionado.fotosPendientes
-            ? "bg-[#fff5f5] text-[#a90000]"
-            : "bg-slate-100 text-slate-500"
+            ? "bg-amber-50 text-amber-900"
+            : "bg-emerald-50 text-emerald-800"
         }`}
       >
         {seleccionado.fotosPendientes
@@ -1215,10 +881,10 @@ export default function CarteraPage() {
       </span>
 
       <span
-        className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
+        className={`rounded-full px-2 py-1 text-xs font-semibold ${
           seleccionado.textoPendiente
-            ? "bg-[#fff5f5] text-[#a90000]"
-            : "bg-slate-100 text-slate-500"
+            ? "bg-amber-50 text-amber-900"
+            : "bg-emerald-50 text-emerald-800"
         }`}
       >
         {seleccionado.textoPendiente
@@ -1229,29 +895,12 @@ export default function CarteraPage() {
   )}
 </div>
 
-                  <div className="rounded-2xl border border-slate-200 p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-slate-700">
-                        Negociación
-                      </span>
-
-                      <EstadoActividad
-                        estado={
-                          seleccionado.actividades
-                            .negociacion.estado
-                        }
-                        pendiente={
-                          seleccionado.negociacionEnCurso
-                        }
-                        icon="handshake"
-                      />
-                    </div>
-                  </div>
+                  <PublicationChecklist data={seleccionado.expediente} code={seleccionado.id} />
                 </div>
               </div>
 
-              <div className="mt-4 rounded-2xl bg-[#f5f7fa] p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <div className="mt-4 rounded-2xl bg-[#f7f7f5] p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
                   Publicación
                 </p>
 
@@ -1266,8 +915,8 @@ export default function CarteraPage() {
                 </p>
               </div>
 
-              <button type="button" onClick={() => setMapa(seleccionado)} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-100"><Icon name="map" />Ver ubicación del inmueble</button>
-              <button type="button" onClick={() => setGaleria(seleccionado)} className="mt-3 w-full rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-semibold text-[#c80000]">Ver fotos del inmueble</button>
+              <button type="button" onClick={() => setMapa(seleccionado)} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-700 enabled:hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-500"><Icon name="map" />{seleccionado.direccion?.trim() ? "Consultar dirección" : "Consultar zona aproximada"}</button>
+              <button type="button" onClick={() => setGaleria(seleccionado)} disabled={!seleccionado.tieneFotos} className="mt-3 w-full rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-semibold text-[#c80000] disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-500">{seleccionado.tieneFotos ? "Ver fotos del inmueble" : "Fotos pendientes"}</button>
               <div className="mt-5 grid grid-cols-2 gap-2">
                 <Link
                   href={
@@ -1286,7 +935,7 @@ export default function CarteraPage() {
                   onClick={() =>
                     setSeleccionado(null)
                   }
-                  className="rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white"
+                  className="rounded-xl bg-[#c80000] px-4 py-2.5 text-xs font-semibold text-white"
                 >
                   Cerrar
                 </button>

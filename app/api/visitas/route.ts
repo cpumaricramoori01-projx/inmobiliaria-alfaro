@@ -1,3 +1,4 @@
+import { databaseInstant } from '@/lib/business-time';
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -10,10 +11,13 @@ import {
   inmPropietarios,
   inmTimeline,
   inmVisitas,
+  inmSeguimiento,
+  inmConfigAlertas,
+  inmUsuarios,
 } from "@/db/schema";
 
 
-import { parseBusinessDate } from "@/lib/calendar.mjs";
+import { parseBusinessDate, todayInPeru } from "@/lib/calendar.mjs";
 import { visitPhotoIds } from '@/lib/visit-photos.mjs';
 
 class VisitInputError extends Error {}
@@ -31,6 +35,7 @@ export async function GET() {
         id: inmInmuebles.id,
         codigo: inmInmuebles.codigo,
         tipo: inmInmuebles.tipo,
+        operacion: inmInmuebles.operacion,
         referencia: inmInmuebles.referencia,
         direccion: inmInmuebles.direccion,
         distrito: inmInmuebles.distrito,
@@ -50,7 +55,7 @@ export async function GET() {
         `,
         dni: inmPropietarios.dni,
         posicion: inmPosiciones.numero,
-        fechaRegistro: inmInmuebles.fechaRegistro,
+        fechaRegistro: databaseInstant(inmInmuebles.fechaRegistro),
       })
       .from(inmInmuebles)
       .leftJoin(
@@ -90,6 +95,8 @@ export async function GET() {
       eq(inmArchivos.tipoDocumento, "FOTO_INMUEBLE"), eq(inmArchivos.almacenamiento, "hosting"), isNull(inmArchivos.visitaId),
     )) : [];
 
+    const [config] = await db.select({dias:inmConfigAlertas.dias}).from(inmConfigAlertas).where(and(eq(inmConfigAlertas.tipo,'visita'),eq(inmConfigAlertas.activo,true))).limit(1);
+    const seguimiento=rows.length ? await db.select({inmuebleId:inmSeguimiento.inmuebleId,fechaLimite:inmSeguimiento.fechaLimite,responsable:inmUsuarios.nombre}).from(inmSeguimiento).leftJoin(inmUsuarios,eq(inmUsuarios.id,inmSeguimiento.responsableId)).where(and(inArray(inmSeguimiento.inmuebleId,rows.map(row=>row.id)),eq(inmSeguimiento.actividad,'visita'))) : [];
     const ahora = Date.now();
 
     const items = rows.map((row) => {
@@ -103,6 +110,7 @@ export async function GET() {
         id: row.id,
         codigo: row.codigo,
         tipo: row.tipo,
+    operacion: row.operacion,
         nombre: row.referencia,
         ubicacion:
           [row.direccion, row.distrito, row.provincia, row.departamento]
@@ -112,6 +120,9 @@ export async function GET() {
         dni: row.dni || "",
         posicion: String(row.posicion),
         dias,
+        responsable:seguimiento.find(item=>item.inmuebleId===row.id)?.responsable??null,
+        fechaLimite:seguimiento.find(item=>item.inmuebleId===row.id)?.fechaLimite??null,
+        vencida:seguimiento.find(item=>item.inmuebleId===row.id)?.fechaLimite ? seguimiento.find(item=>item.inmuebleId===row.id)!.fechaLimite! < todayInPeru() : dias>(config?.dias??2),
         fotos: drafts.filter(photo => photo.inmuebleId === row.id).map(photo => ({
           id: photo.id, nombre: photo.nombre, enlace: `/api/inmuebles/${row.id}/archivos/${photo.id}`,
         })),
@@ -140,7 +151,7 @@ export async function POST(request: Request) {
     try { body = await request.json(); } catch { return NextResponse.json({ error: 'Solicitud no válida.' }, { status: 400 }); }
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 });
     let photoIds: number[];
-    try { photoIds = visitPhotoIds(body.fotoIds); }
+    try { photoIds = visitPhotoIds(body.fotoIds, body.pendienteEvidencia === true); }
     catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Adjunta fotos de la visita.' }, { status: 400 }); }
 
     const inmuebleId = Number(body.inmuebleId);
@@ -215,11 +226,11 @@ export async function POST(request: Request) {
 
       const user = auth.user;
 
-      const photos = await tx.select({ id: inmArchivos.id, tipoMime: inmArchivos.tipoMime }).from(inmArchivos).where(and(
+      const photos = photoIds.length ? await tx.select({ id: inmArchivos.id, tipoMime: inmArchivos.tipoMime }).from(inmArchivos).where(and(
         inArray(inmArchivos.id, photoIds), eq(inmArchivos.inmuebleId, inmuebleId),
         eq(inmArchivos.tipoDocumento, 'FOTO_INMUEBLE'), eq(inmArchivos.almacenamiento, 'hosting'),
         eq(inmArchivos.usuarioId, user.id), isNull(inmArchivos.visitaId),
-      )).for('update');
+      )).for('update') : [];
       if (photos.length !== photoIds.length || photos.some(photo => !photo.tipoMime?.startsWith('image/'))) {
         throw new VisitInputError('Las fotos deben pertenecer a este inmueble y estar subidas por ti para esta visita.');
       }
@@ -233,7 +244,7 @@ export async function POST(request: Request) {
         observaciones: observaciones || null,
         usuarioId: user.id,
       }).$returningId();
-      await tx.update(inmArchivos).set({ visitaId: visit.id }).where(inArray(inmArchivos.id, photoIds));
+      if (photoIds.length) await tx.update(inmArchivos).set({ visitaId: visit.id }).where(inArray(inmArchivos.id, photoIds));
 
       await tx.insert(inmTimeline).values({
         inmuebleId,
@@ -249,13 +260,14 @@ export async function POST(request: Request) {
         codigo: property.codigo,
         referencia: property.referencia,
         estadoVisita: "realizada",
+        pendienteEvidencia: photoIds.length === 0,
       };
     });
 
     return NextResponse.json(
       {
         ok: true,
-        message: "Visita registrada correctamente.",
+        message: photoIds.length ? "Visita registrada correctamente." : "Visita registrada como pendiente de evidencia. Agrega al menos una foto en Información de inmuebles → Visitas.",
         ...result,
         fotos: photoIds.length,
       },

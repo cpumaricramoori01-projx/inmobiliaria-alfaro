@@ -1,3 +1,5 @@
+import { rentalResult } from "@/lib/rental-result.mjs";
+import { saleResult } from "@/lib/sale-result.mjs";
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
@@ -17,6 +19,7 @@ function clean(value: unknown) {
 
 const MOTIVOS = new Set([
   "vendido",
+  "alquilado",
   "cancelacion_propietario",
   "cancelacion_externa",
   "otro",
@@ -32,6 +35,7 @@ export async function GET() {
         inmuebleId: inmInmuebles.id,
         codigo: inmInmuebles.codigo,
         tipo: inmInmuebles.tipo,
+        operacion: inmInmuebles.operacion,
         referencia: inmInmuebles.referencia,
         direccion: inmInmuebles.direccion,
         distrito: inmInmuebles.distrito,
@@ -90,6 +94,7 @@ export async function GET() {
             .filter(Boolean)
             .join(", ") || "Sin ubicación registrada",
         tipo: row.tipo,
+    operacion: row.operacion,
         propietario:
           [
             row.propietarioNombres,
@@ -164,6 +169,16 @@ export async function POST(request: Request) {
       );
     }
 
+    let venta: ReturnType<typeof saleResult> | null = null;
+    if (motivo === "vendido") {
+      try { venta = saleResult(body); }
+      catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Resultado de venta no válido." }, { status: 400 }); }
+    }
+
+    let alquiler: ReturnType<typeof rentalResult> | null = null;
+    if (motivo === 'alquilado') {
+      try { alquiler = rentalResult(body); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Revisa los datos del alquiler.' }, { status: 400 }); }
+    }
     const result = await db.transaction(async (tx) => {
       const [property] = await tx
         .select()
@@ -175,6 +190,7 @@ export async function POST(request: Request) {
         throw new Error("El inmueble no existe.");
       }
 
+      if ((motivo === 'vendido' && property.operacion !== 'venta') || (motivo === 'alquilado' && property.operacion !== 'alquiler')) throw new Error('El motivo de cierre no corresponde al tipo de operación del inmueble.');
       if (property.estado !== "activo") {
         throw new Error(
           "El inmueble ya no está activo."
@@ -210,6 +226,8 @@ export async function POST(request: Request) {
       await tx.insert(inmLiberaciones).values({
         inmuebleId,
         motivo,
+        ...(venta ?? {}),
+        ...(alquiler ?? {}),
         detalleOtro:
           motivo === "otro" ? detalleOtro : null,
         usuarioRegistroId: user.id,
@@ -264,6 +282,7 @@ export async function POST(request: Request) {
 
       const motivoLabel = {
         vendido: "Vendido",
+        alquilado: "Alquilado",
         cancelacion_propietario:
           "Cancelación del propietario",
         cancelacion_externa: "Cancelación externa",
@@ -275,6 +294,8 @@ export async function POST(request: Request) {
         evento: "inmueble_liberado",
         observacion:
           `Inmueble liberado. Motivo: ${motivoLabel}.` +
+          (venta ? ` Fecha de venta: ${body.fechaVenta}; precio final: S/ ${venta.precioFinal}; comisión: S/ ${venta.comision}.` : "") +
+          (alquiler ? ` Alquiler cerrado el ${alquiler.fechaAlquiler}; renta mensual: S/ ${alquiler.rentaMensual}; comisión: S/ ${alquiler.comision}.` : "") +
           (motivo === "otro"
             ? ` Detalle: ${detalleOtro}`
             : ""),
@@ -302,7 +323,7 @@ export async function POST(request: Request) {
         : "No fue posible liberar el inmueble.";
 
     const status =
-      /no existe|ya no está|ya tiene/i.test(message)
+      /no existe|ya no está|ya tiene|no corresponde/i.test(message)
         ? 409
         : 500;
 

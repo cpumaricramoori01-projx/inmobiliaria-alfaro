@@ -1,12 +1,13 @@
 "use client";
 
+import { Feedback } from "./InterfaceFeedback";
 import Image from 'next/image';
 import { useRef, useState } from 'react';
 import { compressImage, IMAGE_ACCEPT } from '@/lib/client-images';
 export type UploadedPhoto = { id: number; nombre: string; enlace: string };
 
-export default function PhotoUploader({ propertyId, photos, onUploaded, onBusyChange, disabled = false, showPreviews = true }: {
-  propertyId: number | string; photos: UploadedPhoto[]; onUploaded: (photo: UploadedPhoto) => void;
+export default function PhotoUploader({ propertyId, visitaId, photos, onUploaded, onBusyChange, disabled = false, showPreviews = true }: {
+  propertyId: number | string; visitaId?: number; photos: UploadedPhoto[]; onUploaded: (photo: UploadedPhoto) => void;
   onBusyChange?: (busy: boolean) => void; disabled?: boolean; showPreviews?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
@@ -24,6 +25,7 @@ export default function PhotoUploader({ propertyId, photos, onUploaded, onBusyCh
         const image = await compressImage(files[i]);
         const form = new FormData();
         form.set('archivo', image); form.set('tipoDocumento', 'FOTO_INMUEBLE');
+        if (visitaId !== undefined) form.set('visitaId', String(visitaId));
         form.set('nombre', files[i].name.replace(/\.[^.]+$/, '').slice(0, 255));
         const response = await fetch(`/api/inmuebles/${encodeURIComponent(propertyId)}/archivos`, { method: 'POST', body: form });
         const data = await response.json();
@@ -44,8 +46,8 @@ export default function PhotoUploader({ propertyId, photos, onUploaded, onBusyCh
       <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">JPG, PNG o WebP. Hasta 25 MB por imagen original y 20 fotos por carga. Se comprimen automáticamente.</span>
       <input ref={input} type="file" multiple accept={IMAGE_ACCEPT} disabled={busy || disabled} onChange={event => { void upload(Array.from(event.target.files || [])); }} className="mt-3 block w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:font-semibold file:text-red-700 disabled:opacity-50" />
     </label>
-    {progress && <p role="status" className="text-xs text-emerald-700">{progress}</p>}
-    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs text-red-700">{error} Las fotos que ya se guardaron siguen disponibles.</p>}
-    {showPreviews && photos.length > 0 && <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-4">{photos.map(photo => <a key={photo.id} href={photo.enlace} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-slate-200 bg-white"><Image unoptimized src={photo.enlace} alt={photo.nombre} width={240} height={180} className="aspect-[4/3] w-full object-cover" /><p className="truncate px-2 py-2 text-[10px] text-slate-600">{photo.nombre}</p></a>)}</div>}
+    {progress && <Feedback tone={busy ? "info" : "success"}>{progress}</Feedback>}
+    {error && <Feedback tone="error">{error} Las fotos que ya se guardaron siguen disponibles.</Feedback>}
+    {showPreviews && photos.length > 0 && <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-4">{photos.map(photo => <a key={photo.id} href={photo.enlace} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-slate-200 bg-white"><Image unoptimized src={photo.enlace} alt={photo.nombre} width={240} height={180} className="aspect-[4/3] w-full object-cover" /><p className="truncate px-2 py-2 text-xs text-slate-600">{photo.nombre}</p></a>)}</div>}
   </div>;
 }

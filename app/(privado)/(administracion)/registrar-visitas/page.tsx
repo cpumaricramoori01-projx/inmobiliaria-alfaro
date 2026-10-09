@@ -1,5 +1,13 @@
 "use client";
 
+import { propertyDisplayId } from "@/lib/property-display-id";
+
+import DraftRecovery from "@/app/components/DraftRecovery";
+import PageHeading from "@/app/components/PageHeading";
+
+
+import { Feedback, LoadingCards } from "@/app/components/InterfaceFeedback";
+
 import Link from "next/link";
 import { todayInPeru } from "@/lib/calendar.mjs";
 import PhotoUploader, { type UploadedPhoto } from "@/app/components/PhotoUploader";
@@ -22,6 +30,7 @@ export default function Page() {
   const [items, setItems] = useState<Visita[]>([]);
   const [fechas, setFechas] = useState<Record<number, string>>({});
   const [observaciones, setObservaciones] = useState<Record<number, string>>({});
+  const [pendienteEvidencia, setPendienteEvidencia] = useState<Record<number, boolean>>({});
   const [fotos, setFotos] = useState<Record<number, UploadedPhoto[]>>({});
   const [subiendoFotos, setSubiendoFotos] = useState<Record<number, boolean>>({});
   const [cargando, setCargando] = useState(true);
@@ -80,7 +89,7 @@ export default function Page() {
     if (procesando !== null || subiendoFotos[item.id]) return;
     if (!fechas[item.id]) { setError('Indica la fecha de la visita.'); return; }
     if ((fotos[item.id]?.length ?? 0) > 20) { setError("Selecciona hasta 20 fotos para esta visita."); return; }
-    if (!fotos[item.id]?.length) { setError('Debes subir al menos una foto para registrar la visita.'); return; }
+    if (!fotos[item.id]?.length && !pendienteEvidencia[item.id]) { setError('Sube una foto o confirma que regularizarás la evidencia después.'); return; }
     setProcesando(item.id);
     setMensaje(null);
     setError(null);
@@ -95,6 +104,7 @@ export default function Page() {
           inmuebleId: item.id,
           fechaVisita: fechas[item.id],
           observaciones: observaciones[item.id] ?? "",
+          pendienteEvidencia: pendienteEvidencia[item.id] === true,
           fotoIds: (fotos[item.id] || []).map(foto => foto.id),
         }),
       });
@@ -128,8 +138,10 @@ export default function Page() {
         actuales.filter((actual) => actual.id !== item.id)
       );
 
+      setFechas(current=>{const next={...current};delete next[item.id];return next;});
+      setObservaciones(current=>{const next={...current};delete next[item.id];return next;});
       setMensaje(
-        `Visita de “${item.nombre}” registrada correctamente. El inmueble permanece activo en cartera.`
+        body.message || `Visita de “${item.nombre}” registrada correctamente.`
       );
     } catch (err) {
       setError(
@@ -145,51 +157,10 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-[#f7f7f5] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
+      <DraftRecovery draftKey="visitas:actual" data={{fechas,observaciones}} dirty={Object.values(fechas).some(Boolean)||Object.values(observaciones).some(Boolean)} onRestore={draft=>{if(draft.fechas)setFechas(draft.fechas as Record<number,string>);if(draft.observaciones)setObservaciones(draft.observaciones as Record<number,string>);}}/>
         {/* Encabezado */}
         <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-[#c80000]">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className="h-5 w-5"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M8 6h8M8 10h8M8 14h5M6 3.75h12A1.25 1.25 0 0 1 19.25 5v14A1.25 1.25 0 0 1 18 20.25H6A1.25 1.25 0 0 1 4.75 19V5A1.25 1.25 0 0 1 6 3.75Z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="m8.5 17 1.5 1.5 3-3"
-                  />
-                </svg>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
-                  Fase 1 · Gestión de cartera
-                </p>
-                <p className="mt-0.5 text-sm font-medium text-slate-500">
-                  Registro de actividad
-                </p>
-              </div>
-            </div>
-
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-950">
-              Registrar visitas realizadas
-            </h1>
-
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-              Confirma las visitas que realmente se realizaron. Al registrar
-              una visita, el inmueble continúa activo en cartera y su actividad
-              queda registrada para el seguimiento posterior.
-            </p>
-          </div>
+          <PageHeading href="/registrar-visitas" />
 
           <Link
             href="/visitas-pendientes"
@@ -204,7 +175,7 @@ export default function Page() {
         <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
                 Flujo de trabajo
               </p>
               <h2 className="mt-1 text-base font-bold text-slate-900">
@@ -248,34 +219,14 @@ export default function Page() {
         </section>
 
         {/* Mensajes */}
-        {mensaje && (
-          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700">
-              ✓
-            </div>
-            <div>
-              <p className="font-bold">Visita registrada</p>
-              <p className="mt-0.5 text-emerald-700">{mensaje}</p>
-            </div>
-          </div>
-        )}
+        {mensaje && <Feedback tone="success" className="my-5">{mensaje}</Feedback>}
 
-        {error && (
-          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-800">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-100 font-bold text-red-700">
-              !
-            </div>
-            <div>
-              <p className="font-bold">No se pudo completar el registro</p>
-              <p className="mt-0.5 text-red-700">{error}</p>
-            </div>
-          </div>
-        )}
+        {error && <Feedback tone="error" className="my-5">{error}</Feedback>}
 
         {/* Resumen */}
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Visitas pendientes
             </p>
             <p className="mt-2 text-3xl font-bold text-slate-950">
@@ -330,12 +281,7 @@ export default function Page() {
           </div>
 
           {cargando ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 border-slate-200 border-t-[#c80000] animate-spin" />
-              <p className="mt-4 text-sm font-medium text-slate-500">
-                Cargando visitas pendientes...
-              </p>
-            </div>
+            <LoadingCards label="Cargando visitas pendientes…" />
           ) : items.length > 0 ? (
             <div className="space-y-5">
               {items.map((item) => (
@@ -357,13 +303,13 @@ export default function Page() {
                               {item.nombre}
                             </h3>
 
-                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
                               {item.tipo}
                             </span>
                           </div>
 
                           <p className="mt-1 text-xs text-slate-500">
-                            {item.codigo}
+                            {propertyDisplayId(item)}
                           </p>
 
                           <p className="mt-1 text-sm text-slate-600">
@@ -406,7 +352,7 @@ export default function Page() {
                           Fecha de visita realizada *
                         </label>
 
-                        <p className="mt-1 text-[11px] text-slate-400">
+                        <p className="mt-1 text-xs text-slate-500">
                           Indica el día en que efectivamente se realizó la
                           visita.
                         </p>
@@ -422,13 +368,13 @@ export default function Page() {
                               [item.id]: e.target.value,
                             }))
                           }
-                          className="mt-2 w-full rounded-xl border border-slate-200 bg-[#fafafa] px-3 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#c80000] focus:bg-white focus:ring-2 focus:ring-red-100"
+                          className="mt-2 w-full rounded-xl border border-slate-200 bg-[#fafafa] px-3 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-500 focus:border-[#c80000] focus:bg-white focus:ring-2 focus:ring-red-100"
                         />
                       </div>
 
                       <div>
-                        <p className="text-xs font-bold text-slate-700">Fotografías de la visita *</p>
-                        <p className="mb-3 mt-1 text-[11px] text-slate-400">Sube al menos una foto. También aparecerá en la ficha y en la galería del inmueble.</p>
+                        <p className="text-xs font-bold text-slate-700">Fotografías de la visita</p>
+                        <p className="mb-3 mt-1 text-xs text-slate-500">Recomendamos al menos una foto como constancia. Puedes registrar sin fotos y regularizarlas en Información de inmuebles → Visitas.</p>
                         <PhotoUploader propertyId={item.id} photos={fotos[item.id] || []}
                           disabled={procesando !== null}
                           onUploaded={photo => {
@@ -438,7 +384,7 @@ export default function Page() {
                           onBusyChange={busy => setSubiendoFotos(current => ({ ...current, [item.id]: busy }))} />
                         {item.fotos?.length > 0 && <fieldset disabled={procesando !== null || subiendoFotos[item.id]} className="mt-3 space-y-2 rounded-xl bg-slate-50 p-3">
                           <legend className="text-xs font-semibold text-slate-600">Fotos seleccionadas: {fotos[item.id]?.length || 0} / 20</legend>
-                          <p className="text-[11px] text-slate-500">Puedes usar tus fotos ya guardadas y elegir cuáles corresponden a esta visita.</p>
+                          <p className="text-xs text-slate-500">Puedes usar tus fotos ya guardadas y elegir cuáles corresponden a esta visita.</p>
                           <div className="max-h-40 space-y-2 overflow-auto">{item.fotos.map(photo => {
                             const checked = (fotos[item.id] || []).some(selected => selected.id === photo.id);
                             return <label key={photo.id} className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={checked} disabled={!checked && (fotos[item.id]?.length || 0) >= 20} onChange={event => setFotos(current => ({ ...current, [item.id]: event.target.checked ? [...(current[item.id] || []), photo] : (current[item.id] || []).filter(selected => selected.id !== photo.id) }))} /><span className="truncate">{photo.nombre}</span></label>;
@@ -455,7 +401,7 @@ export default function Page() {
                         Observaciones de la visita
                       </label>
 
-                      <p className="mt-1 text-[11px] text-slate-400">
+                      <p className="mt-1 text-xs text-slate-500">
                         Opcional. Puedes dejar constancia de lo observado,
                         medidas, fotografías tomadas u otra información útil.
                       </p>
@@ -471,10 +417,11 @@ export default function Page() {
                           }))
                         }
                         placeholder="Ej.: Se realizó la visita, se tomaron medidas y fotografías del inmueble..."
-                        className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-[#fafafa] px-3 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#c80000] focus:bg-white focus:ring-2 focus:ring-red-100"
+                        className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-[#fafafa] px-3 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-500 focus:border-[#c80000] focus:bg-white focus:ring-2 focus:ring-red-100"
                       />
                     </div>
 
+                    {!fotos[item.id]?.length && <label className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900"><input type="checkbox" checked={pendienteEvidencia[item.id] || false} disabled={procesando !== null || subiendoFotos[item.id]} onChange={event => setPendienteEvidencia(current => ({ ...current, [item.id]: event.target.checked }))} /><span>La visita se realizó. Registrar como «Pendiente de evidencia» y agregar al menos una foto después en Información de inmuebles → Visitas.</span></label>}
                     {/* Acción */}
                     <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-[#f7f7f5] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
                       <div>
@@ -489,7 +436,7 @@ export default function Page() {
 
                       <button
                         type="button"
-                        disabled={procesando !== null || subiendoFotos[item.id] || !fotos[item.id]?.length || !fechas[item.id]}
+                        disabled={procesando !== null || subiendoFotos[item.id] || (!fotos[item.id]?.length && !pendienteEvidencia[item.id]) || !fechas[item.id]}
                         onClick={() => marcarRealizada(item)}
                         className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#c80000] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#a90000] disabled:cursor-not-allowed disabled:opacity-60"
                       >
