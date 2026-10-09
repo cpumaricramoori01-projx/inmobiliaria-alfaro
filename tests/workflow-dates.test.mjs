@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {appraisalAfterVisit} from '../lib/workflow-dates.mjs';
+test('appraisal may follow or share a visit date but cannot precede it',()=>{assert.equal(appraisalAfterVisit('2026-10-01',new Date('2026-10-01T00:00:00Z')),true);assert.equal(appraisalAfterVisit('2026-10-02','2026-10-01'),true);assert.equal(appraisalAfterVisit('2026-09-30','2026-10-01'),false);assert.equal(appraisalAfterVisit('2026-10-01',null),false);});

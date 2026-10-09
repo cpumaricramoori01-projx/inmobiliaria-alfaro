@@ -28,7 +28,6 @@ export async function findSession(token?: string) {
     nombre: inmUsuarios.nombre,
     usuario: inmUsuarios.usuario,
     rol: inmUsuarios.rol,
-    mfaSecret: inmUsuarios.mfaSecret,
     lastSeen: inmSesiones.lastSeen,
   }).from(inmSesiones).innerJoin(inmUsuarios, eq(inmUsuarios.id, inmSesiones.usuarioId))
     .where(and(
@@ -36,7 +35,7 @@ export async function findSession(token?: string) {
       gt(inmSesiones.expira, new Date()),
       eq(inmUsuarios.activo, true),
     )).limit(1);
-  if (!record || (record.rol === 'administrador' && !record.mfaSecret) || record.lastSeen < new Date(Date.now()-30*60*1000)) return null;
+  if (!record || record.lastSeen < new Date(Date.now()-30*60*1000)) return null;
   await db.update(inmSesiones).set({ lastSeen: new Date() }).where(and(eq(inmSesiones.tokenHash,hashSessionToken(token)),gt(inmSesiones.lastSeen,new Date(Date.now()-30*60*1000))));
   return {id:record.id,nombre:record.nombre,usuario:record.usuario,rol:record.rol};
 }

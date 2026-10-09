@@ -1,0 +1,1 @@
+ALTER TABLE `inm_anuncios` ADD `revision_texto` bigint unsigned DEFAULT 0 NOT NULL;

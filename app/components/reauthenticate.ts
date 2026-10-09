@@ -7,10 +7,9 @@ export function reauthenticate(): Promise<void> {
     const form=document.createElement('form');
     const heading=document.createElement('h2');heading.textContent='Confirma tu identidad';heading.className='text-lg font-bold';
     const inputs: HTMLInputElement[]=[];
-    for(const [title,name,type] of [['Tu contraseña','password','password'],['Código de autenticación','code','text']]) {
+    for(const [title,name,type] of [['Tu contraseña','password','password']]) {
       const label=document.createElement('label');label.textContent=title;label.className='mt-4 block text-sm font-semibold';
-      const input=document.createElement('input');input.name=name;input.type=type;input.required=true;input.maxLength=name==='code'?6:256;input.autocomplete=name==='code'?'one-time-code':'current-password';
-      if(name==='code'){input.inputMode='numeric';input.pattern='[0-9]{6}';}
+      const input=document.createElement('input');input.name=name;input.type=type;input.required=true;input.maxLength=256;input.autocomplete='current-password';
       input.className='mt-2 w-full rounded-xl border border-slate-200 p-3';label.append(input);inputs.push(input);form.append(label);
     }
     form.prepend(heading);
@@ -24,9 +23,9 @@ export function reauthenticate(): Promise<void> {
     form.onsubmit=async event=>{
       event.preventDefault();if(submit.disabled)return;submit.disabled=true;cancel.disabled=true;
       try {
-        const response=await fetch('/api/auth/reauth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:inputs[0].value,code:inputs[1].value})});
+        const response=await fetch('/api/auth/reauth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:inputs[0].value})});
         const body=await response.json();if(!response.ok)throw new Error(body.error||'No se pudo confirmar.');cleanup();resolve();
-      } catch(failure){error.textContent=failure instanceof Error?failure.message:'No se pudo confirmar.';inputs[0].value='';inputs[1].value='';submit.disabled=false;cancel.disabled=false;inputs[0].focus();}
+      } catch(failure){error.textContent=failure instanceof Error?failure.message:'No se pudo confirmar.';inputs[0].value='';submit.disabled=false;cancel.disabled=false;inputs[0].focus();}
     };
     dialog.showModal();inputs[0].focus();
   });

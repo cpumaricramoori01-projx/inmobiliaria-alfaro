@@ -1,11 +1,24 @@
-import PageHeading from "@/app/components/PageHeading";
-import { desc } from 'drizzle-orm';
+import { databaseBusinessDay, databaseInstant } from '@/lib/business-time';
+import Link from 'next/link';
+import PageHeading from '@/app/components/PageHeading';
+import { and, desc, eq, gte, like, lte, or } from 'drizzle-orm';
 import { authorizeApi } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { securityAudit } from '@/db/schema';
-export default async function SecurityPage() {
-  const auth=await authorizeApi();
-  if(auth.response)return <p>Acceso restringido.</p>;
-  const events=await db.select().from(securityAudit).orderBy(desc(securityAudit.id)).limit(100);
-  return <main className="min-h-screen p-4 sm:p-6 lg:p-8"><div className="mx-auto max-w-5xl"><PageHeading href="/seguridad" /><p className="mt-2 text-sm text-slate-500">Últimos 100 eventos de acceso y cambios sensibles. Fechas en UTC.</p><div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead><tr>{['Fecha UTC','Usuario ID','Acción','Recurso','Resultado'].map(label=><th key={label} className="whitespace-nowrap p-3">{label}</th>)}</tr></thead><tbody>{events.map(event=><tr key={event.id} className="border-t border-slate-100"><td className="whitespace-nowrap p-3">{event.createdAt.toISOString().replace('T',' ').slice(0,19)}</td><td className="p-3">{event.actorId??'Sistema'}</td><td className="p-3">{event.action}</td><td className="p-3">{event.resource}</td><td className="p-3">{event.outcome==='success'?'Correcto':'Denegado'}</td></tr>)}</tbody></table></div></div></main>;
+import { securityAudit, inmUsuarios } from '@/db/schema';
+import { validCalendarDate } from '@/lib/report-period.mjs';
+const actions:Record<string,string>={'login':'Inicio de sesión','logout':'Cierre de sesión','property.update':'Ficha modificada','file.upload':'Archivo subido','file.delete':'Archivo eliminado','file.link':'Enlace registrado','photo.update':'Foto modificada','deadline.update':'Plazo de alerta modificado','user.create':'Usuario creado','user.update':'Usuario modificado','login.failed':'Acceso fallido'};
+export default async function SecurityPage({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}){
+ const auth=await authorizeApi();if(auth.response)return <p>Acceso restringido.</p>;
+ const params=await searchParams;const text=(key:string)=>typeof params[key]==='string'?params[key] as string:'';
+ const user=text('usuario'),action=text('accion'),resource=text('recurso'),from=text('desde'),to=text('hasta');const page=Math.max(1,Math.min(10000,Number(text('pagina'))||1));
+ const valid=(!from||validCalendarDate(from))&&(!to||validCalendarDate(to))&&(!from||!to||from<=to);
+ const conditions=[];
+ if(user)conditions.push(or(like(inmUsuarios.nombre,`%${user}%`),like(inmUsuarios.usuario,`%${user}%`)));
+ if(action)conditions.push(eq(securityAudit.action,action));
+ if(resource)conditions.push(like(securityAudit.resource,`%${resource}%`));
+ if(from&&valid)conditions.push(gte(databaseBusinessDay(securityAudit.createdAt),from));
+ if(to&&valid)conditions.push(lte(databaseBusinessDay(securityAudit.createdAt),to));
+ const events=valid?await db.select({id:securityAudit.id,fecha:databaseInstant(securityAudit.createdAt),usuario:inmUsuarios.nombre,action:securityAudit.action,resource:securityAudit.resource,outcome:securityAudit.outcome}).from(securityAudit).leftJoin(inmUsuarios,eq(inmUsuarios.id,securityAudit.actorId)).where(and(...conditions)).orderBy(desc(securityAudit.id)).limit(51).offset((Math.floor(page)-1)*50):[];
+ const link=(next:number)=>`/seguridad?${new URLSearchParams({usuario:user,accion:action,recurso:resource,desde:from,hasta:to,pagina:String(next)})}`;
+ return <main className="min-h-screen p-4 sm:p-6 lg:p-8"><div className="mx-auto max-w-6xl"><PageHeading href="/seguridad"/><p className="mt-2 text-sm text-slate-600">Accesos y cambios sensibles. Fechas y filtros en hora de Perú.</p><form className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-2 lg:grid-cols-3">{[['usuario','Nombre o usuario',user,'text'],['recurso','Recurso (por ejemplo property:12)',resource,'text'],['desde','Desde',from,'date'],['hasta','Hasta',to,'date']].map(([key,label,value,type])=><label key={key} className="text-xs font-semibold">{label}<input name={key} type={type} defaultValue={value} className="mt-2 w-full rounded-lg border border-slate-200 p-3"/></label>)}<label className="text-xs font-semibold">Acción<select name="accion" defaultValue={action} className="mt-2 w-full rounded-lg border border-slate-200 p-3"><option value="">Todas</option>{Object.entries(actions).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label><div className="flex flex-wrap items-end gap-3"><button className="aa-button aa-button-primary">Aplicar filtros</button><Link href="/seguridad" className="aa-button aa-button-secondary">Limpiar</Link></div></form>{!valid&&<p role="alert" className="mt-4 text-sm text-red-700">Indica un período válido.</p>}<div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200 bg-white"><table className="w-full text-left text-xs"><thead className="bg-slate-50"><tr>{['Fecha de Perú','Usuario','Acción','Recurso','Resultado'].map(label=><th key={label} scope="col" className="whitespace-nowrap p-3">{label}</th>)}</tr></thead><tbody>{events.slice(0,50).map(event=><tr key={event.id} className="border-t border-slate-100"><td className="whitespace-nowrap p-3">{new Date(event.fecha).toLocaleString('es-PE',{timeZone:'America/Lima'})}</td><td className="p-3">{event.usuario??'Sistema o usuario anterior'}</td><td className="p-3">{actions[event.action]??event.action}</td><td className="p-3">{event.resource}</td><td className="p-3">{event.outcome==='success'?'Correcto':'Denegado'}</td></tr>)}</tbody></table>{!events.length&&<p className="p-5 text-sm text-slate-600">No hay eventos para estos filtros.</p>}</div><nav aria-label="Páginas de auditoría" className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm">Página {Math.floor(page)}</p><div className="flex gap-3">{page>1&&<Link href={link(Math.floor(page)-1)} className="aa-button aa-button-secondary">Anterior</Link>}{events.length>50&&<Link href={link(Math.floor(page)+1)} className="aa-button aa-button-secondary">Siguiente</Link>}</div></nav></div></main>;
 }

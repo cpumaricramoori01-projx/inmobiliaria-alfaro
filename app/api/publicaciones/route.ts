@@ -1,9 +1,9 @@
+import { publicationReadiness, requirePublicationReadiness } from "@/lib/publication-readiness";
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
-  inmArchivos,
   inmAsignacionesPosicion,
   inmInmuebles,
   inmPosiciones,
@@ -34,6 +34,7 @@ const mapPending = (row: Awaited<ReturnType<typeof approved>>[number]) => ({
       .filter(Boolean)
       .join(", ") || "Sin ubicación registrada",
   tipo: row.tipo,
+    operacion: row.operacion,
   propietario:
     [row.propietarioNombres, row.propietarioApellidos]
       .filter(Boolean)
@@ -50,6 +51,7 @@ async function approved() {
       inmuebleId: inmInmuebles.id,
       codigo: inmInmuebles.codigo,
       tipo: inmInmuebles.tipo,
+        operacion: inmInmuebles.operacion,
       referencia: inmInmuebles.referencia,
       direccion: inmInmuebles.direccion,
       distrito: inmInmuebles.distrito,
@@ -118,6 +120,7 @@ async function published() {
       inmuebleId: inmInmuebles.id,
       codigo: inmInmuebles.codigo,
       tipo: inmInmuebles.tipo,
+        operacion: inmInmuebles.operacion,
       referencia: inmInmuebles.referencia,
       posicion: inmPosiciones.numero,
       publicado: inmPublicaciones.publicado,
@@ -164,6 +167,7 @@ async function ready() {
       inmuebleId: inmInmuebles.id,
       codigo: inmInmuebles.codigo,
       tipo: inmInmuebles.tipo,
+        operacion: inmInmuebles.operacion,
       referencia: inmInmuebles.referencia,
       posicion: inmPosiciones.numero,
       publicado: inmPublicaciones.publicado,
@@ -210,12 +214,15 @@ export async function GET() {
     const rows = await approved();
     const listos = await ready();
     const publicadas = await published();
+    const expedientes = await publicationReadiness();
+    const withChecklist = <T extends { inmuebleId: number }>(item: T) => ({ ...item, expediente: expedientes.get(item.inmuebleId) });
 
     return NextResponse.json({
       ok: true,
-      pendientes: rows.map(mapPending),
-      listos,
-      publicadas,
+      pendientes: rows.map(mapPending).map(withChecklist),
+      listos: listos.filter(item => expedientes.get(item.inmuebleId)?.complete).map(withChecklist),
+      incompletos: listos.filter(item => !expedientes.get(item.inmuebleId)?.complete).map(withChecklist),
+      publicadas: publicadas.map(withChecklist),
     });
   } catch (error) {
     console.error("Operación fallida: publicaciones", (error as { code?: string; cause?: { code?: string } }).cause?.code ?? (error as { code?: string }).code ?? "ERROR");
@@ -303,11 +310,7 @@ export async function POST(request: Request) {
         );
       }
 
-      const [photo] = await tx.select({ id: inmArchivos.id }).from(inmArchivos).where(and(
-        eq(inmArchivos.inmuebleId, inmuebleId), eq(inmArchivos.tipoDocumento, "FOTO_INMUEBLE"),
-        eq(inmArchivos.almacenamiento, "hosting"), sql`${inmArchivos.tipoMime} LIKE 'image/%'`,
-      )).limit(1);
-      if (!photo) throw new Error("El inmueble no tiene fotos en su galería. Agrega al menos una foto antes de preparar la publicación.");
+      await requirePublicationReadiness(tx, inmuebleId, texto);
 
       const [existingPublication] = await tx
         .select({
@@ -371,7 +374,7 @@ export async function POST(request: Request) {
       },
       {
         status:
-          /no está activo|no tiene|ya tiene/i.test(
+          /no está activo|no tiene|ya tiene|Expediente incompleto/i.test(
             message
           )
             ? 409
@@ -457,7 +460,7 @@ export async function PUT(request: Request) {
           );
         }
 
-        if (publication.publicado) {
+        if (publication.publicado && !editarMaterial) {
           throw new Error(
             "La publicación ya figura como publicada."
           );
@@ -488,14 +491,13 @@ export async function PUT(request: Request) {
           await tx.insert(inmTimeline).values({
             inmuebleId,
             evento: "publicacion_actualizada",
-            observacion:
-              "Se actualizó el texto de la publicación.",
+            observacion: JSON.stringify({ anterior: publication.texto, nuevo: texto, anuncioExternoPendiente: publication.publicado }),
             usuarioId: user.id,
           });
 
           return {
             codigo: property.codigo,
-            situacion: "listo_para_publicar",
+            situacion: publication.publicado ? "publicado" : "listo_para_publicar",
           };
         }
 
@@ -504,11 +506,7 @@ export async function PUT(request: Request) {
          * el PUT mantiene su función original:
          * marcar la publicación como realizada.
          */
-        const [photo] = await tx.select({ id: inmArchivos.id }).from(inmArchivos).where(and(
-          eq(inmArchivos.inmuebleId, inmuebleId), eq(inmArchivos.tipoDocumento, "FOTO_INMUEBLE"),
-          eq(inmArchivos.almacenamiento, "hosting"), sql`${inmArchivos.tipoMime} LIKE 'image/%'`,
-        )).limit(1);
-        if (!photo || !publication.texto.trim()) throw new Error("El inmueble no tiene texto y fotos completos para publicar.");
+        await requirePublicationReadiness(tx, inmuebleId);
 
         const ahora = new Date();
 
@@ -559,7 +557,7 @@ export async function PUT(request: Request) {
       },
       {
         status:
-          /no está activo|no tiene|ya figura/i.test(
+          /no está activo|no tiene|ya figura|Expediente incompleto/i.test(
             message
           )
             ? 409

@@ -15,7 +15,7 @@ CREATE TABLE inm_usuarios (
 
 CREATE TABLE inm_propietarios (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  dni VARCHAR(20) NOT NULL,
+  dni VARCHAR(20) NULL,
   nombres VARCHAR(120) NOT NULL,
   apellidos VARCHAR(160) NOT NULL,
   telefono VARCHAR(40) NULL,
@@ -30,10 +30,15 @@ CREATE TABLE inm_propietarios (
 CREATE TABLE inm_inmuebles (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   codigo VARCHAR(30) NOT NULL,
+  datos_prueba BOOLEAN NOT NULL DEFAULT FALSE,
+  datos_validados BOOLEAN NOT NULL DEFAULT FALSE,
   propietario_id BIGINT UNSIGNED NOT NULL,
   tipo VARCHAR(30) NOT NULL,
+  operacion VARCHAR(10) NOT NULL DEFAULT 'venta',
   referencia VARCHAR(255) NOT NULL,
   direccion VARCHAR(255) NULL,
+  numero_direccion VARCHAR(30) NULL,
+  inmueble_origen_id BIGINT UNSIGNED NULL,
   distrito VARCHAR(100) NULL,
   provincia VARCHAR(100) NULL,
   departamento VARCHAR(100) NULL,
@@ -145,6 +150,16 @@ CREATE TABLE inm_liberaciones (
   inmueble_id BIGINT UNSIGNED NOT NULL,
   motivo VARCHAR(40) NOT NULL,
   detalle_otro VARCHAR(500) NULL,
+  fecha_alquiler DATE NULL,
+  renta_mensual DECIMAL(15,2) NULL,
+  garantia DECIMAL(15,2) NULL,
+  adelanto DECIMAL(15,2) NULL,
+  fecha_inicio_alquiler DATE NULL,
+  fecha_fin_alquiler DATE NULL,
+  fecha_venta DATE NULL,
+  precio_final DECIMAL(15,2) NULL,
+  comision DECIMAL(15,2) NULL,
+  datos_simulados BOOLEAN NOT NULL DEFAULT FALSE,
   fecha_registro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   usuario_registro_id BIGINT UNSIGNED NOT NULL,
   confirmado BOOLEAN NOT NULL DEFAULT FALSE,
@@ -239,3 +254,63 @@ FROM (
   UNION ALL SELECT 86 UNION ALL SELECT 87 UNION ALL SELECT 88 UNION ALL SELECT 89 UNION ALL SELECT 90
 ) posiciones
 ON DUPLICATE KEY UPDATE numero = VALUES(numero);
+
+CREATE TABLE IF NOT EXISTS inm_seguimiento (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ inmueble_id BIGINT UNSIGNED NOT NULL,
+ actividad VARCHAR(30) NOT NULL,
+ responsable_id BIGINT UNSIGNED NULL,
+ fecha_limite DATE NULL,
+ observacion VARCHAR(500) NULL,
+ actualizado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ UNIQUE KEY uq_seguimiento_actividad(inmueble_id, actividad),
+ FOREIGN KEY (inmueble_id) REFERENCES inm_inmuebles(id),
+ FOREIGN KEY (responsable_id) REFERENCES inm_usuarios(id)
+);
+CREATE TABLE IF NOT EXISTS inm_anuncios (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ inmueble_id BIGINT UNSIGNED NOT NULL,
+ canal VARCHAR(80) NOT NULL,
+ revision_texto BIGINT UNSIGNED NOT NULL DEFAULT 0,
+ enlace VARCHAR(1000) NOT NULL,
+ fecha_publicacion DATE NOT NULL,
+ precio_publicado DECIMAL(15,2) NOT NULL,
+ actualizado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ FOREIGN KEY (inmueble_id) REFERENCES inm_inmuebles(id),
+ INDEX idx_anuncios_inmueble(inmueble_id)
+);
+CREATE TABLE IF NOT EXISTS inm_borradores (
+ usuario_id BIGINT UNSIGNED NOT NULL,
+ clave VARCHAR(120) NOT NULL,
+ contenido MEDIUMTEXT NOT NULL,
+ actualizado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ PRIMARY KEY(usuario_id,clave),
+ FOREIGN KEY(usuario_id) REFERENCES inm_usuarios(id) ON DELETE CASCADE
+);
+
+CREATE TABLE inm_tipos_inmueble (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(30) NOT NULL,
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  UNIQUE KEY uq_tipos_inmueble_nombre (nombre)
+);
+INSERT IGNORE INTO inm_tipos_inmueble (nombre)
+SELECT defaults.nombre FROM (
+  SELECT 'Casa' nombre UNION ALL SELECT 'Departamento' UNION ALL SELECT 'Terreno'
+  UNION ALL SELECT 'Local' UNION ALL SELECT 'Oficina' UNION ALL SELECT 'Otros'
+) defaults WHERE NOT EXISTS (SELECT 1 FROM inm_tipos_inmueble);
+INSERT IGNORE INTO inm_tipos_inmueble (nombre)
+SELECT DISTINCT TRIM(tipo) FROM inm_inmuebles WHERE TRIM(tipo) <> '';
+
+CREATE TABLE IF NOT EXISTS `inm_ubicaciones` (
+	`id` bigint unsigned AUTO_INCREMENT NOT NULL,
+	`nivel` varchar(20) NOT NULL,
+	`nombre` varchar(100) NOT NULL,
+	`padre_id` bigint unsigned,
+	`activo` boolean NOT NULL DEFAULT true,
+	CONSTRAINT `inm_ubicaciones_id` PRIMARY KEY(`id`),
+	CONSTRAINT `uq_ubicaciones_nombre` UNIQUE(`nivel`,`padre_id`,`nombre`)
+);
+
+
+CREATE INDEX `idx_ubicaciones_padre` ON `inm_ubicaciones` (`padre_id`);

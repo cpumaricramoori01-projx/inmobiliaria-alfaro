@@ -42,6 +42,10 @@ La prueba de navegador simula un documento con `Referrer-Policy: no-referrer`, v
 
 ## Acceso desde cartera
 
-Las tarjetas de posición, la vista de lista y el detalle incluyen un acceso a la ubicación. Un diálogo muestra el mapa con las coordenadas de la ficha y los enlaces de Google Maps, sin cambiar de página. Si faltan coordenadas, la tarjeta indica «Ubicación pendiente» y el diálogo ofrece registrar la ubicación; no se deduce un punto a partir de la zona. La API de cartera entrega latitud y longitud desde `inm_inmuebles`.
+Las tarjetas de posición, la vista de lista y el detalle incluyen un acceso a la ubicación. Un diálogo muestra el mapa con las coordenadas de la ficha y los enlaces de Google Maps, sin cambiar de página. Si faltan coordenadas pero existe una dirección, la tarjeta ofrece «Consultar dirección» y el diálogo precarga una búsqueda en Google Maps con la dirección y la zona guardadas. Con la clave de Embed configurada, también muestra el resultado dentro del diálogo. La búsqueda no guarda coordenadas ni confirma un punto exacto. Sin dirección, el diálogo ofrece registrar la ubicación; no se deduce un punto a partir de la zona. La API de cartera entrega latitud y longitud desde `inm_inmuebles`.
 
 El enlace de registro/edición abre directamente la pestaña Inmueble mediante `pestana=inmueble`. Se verificaron en navegador las acciones en las tres vistas, las coordenadas procedentes de BD, el estado pendiente, la navegación a la ficha, cierre con Escape, conservación de la galería de fotos y el tamaño del diálogo a 320–1536 píxeles. Las capturas de demostración están en `output/location/tarjetas-con-mapa.png` y `output/location/mapa-desde-tarjeta.png`; se eliminaron los registros temporales usados para comprobarlas.
+
+## Referencia aproximada por zona
+
+Sin coordenadas confirmadas, el diálogo identifica la búsqueda como «Ubicación aproximada». «Mostrar zona aproximada» cambia la consulta al distrito, provincia y departamento guardados; permite volver a la dirección. Si falta dirección, utiliza la zona directamente. Google Maps Embed no informa si encontró una dirección: el cambio a zona es manual cuando hay dirección. Sin clave de Embed, la consulta se abre mediante un enlace de Google Maps. No se asignan ni guardan coordenadas a partir de esta referencia.

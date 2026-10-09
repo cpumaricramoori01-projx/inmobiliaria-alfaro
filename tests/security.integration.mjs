@@ -5,7 +5,6 @@ import {randomBytes} from 'node:crypto';
 import mysql from 'mysql2/promise';
 import {readFile} from 'node:fs/promises';
 import {hashPassword,hashSessionToken} from '../lib/password.mjs';
-import {totp} from '../lib/mfa.mjs';
 try{loadEnvFile('.env.local');}catch{}
 const origin=process.env.SECURITY_TEST_ORIGIN;
 if(!origin||!/^https?:\/\//.test(origin))throw new Error('Set SECURITY_TEST_ORIGIN to the deployment being verified.');
@@ -23,14 +22,9 @@ try{
  assert.equal((await request('/api/inmuebles')).status,401);
  assert.equal((await request('/api/auth/login','POST',{usuario:'invalid',password:'invalid'},undefined,'https://evil.invalid')).status,403);
  const login=await request('/api/auth/login','POST',{usuario:`test_secure_administrador_${suffix}`,password});assert.equal(login.status,200);
- const challenge=await login.json();assert.equal(challenge.mfaRequired,true);assert.equal(challenge.setup,true);assert.match(challenge.secret,/^[A-Z2-7]{32}$/);
- const challengeCookie=cookie(login,'aa_mfa');
- assert.equal((await request('/api/usuarios','GET',undefined,challengeCookie)).status,401,'Password alone cannot access administrator APIs');
- assert.equal((await request('/api/auth/mfa','POST',{code:'bad'},challengeCookie)).status,401);
- const step=Math.floor(Date.now()/30000);
- const verified=await request('/api/auth/mfa','POST',{code:totp(challenge.secret,step)},challengeCookie);assert.equal(verified.status,200);
- const adminCookie=cookie(verified,'aa_session');
- assert.equal((await request('/api/auth/mfa','POST',{code:totp(challenge.secret,step)},challengeCookie)).status,401,'MFA challenge is single use');
+ const result=await login.json();assert.equal(result.ok,true);assert.equal(result.mfaRequired,undefined);
+ const adminCookie=cookie(login,'aa_session');
+ assert.equal((await request('/api/auth/mfa','POST',{code:'000000'})).status,410);
  assert.equal((await request('/api/usuarios','GET',undefined,adminCookie)).status,200);
  const page=await request('/datos-inmuebles','GET',undefined,adminCookie);assert.equal(page.status,200);
  assert.equal(page.headers.get('x-frame-options'),'DENY');assert.equal(page.headers.get('x-content-type-options'),'nosniff');
@@ -47,12 +41,11 @@ try{
  await db.execute('UPDATE inm_sesiones SET authenticated_at=? WHERE token_hash=?',[new Date(Date.now()-6*60*1000),hash]);
  const update={...managed,password:'',confirmacion:'',nombre:'Security updated test'};
  assert.equal((await request(`/api/usuarios/${ids[2]}`,'PUT',update,adminCookie)).status,428,'Sensitive mutations require recent authentication');
- assert.equal((await request('/api/auth/reauth','POST',{password:'incorrect',code:'000000'},adminCookie)).status,401);
- const reauth=await request('/api/auth/reauth','POST',{password,code:totp(challenge.secret,step+1)},adminCookie);assert.equal(reauth.status,200);
+ assert.equal((await request('/api/auth/reauth','POST',{password:'incorrect'},adminCookie)).status,401);
+ const reauth=await request('/api/auth/reauth','POST',{password},adminCookie);assert.equal(reauth.status,200);
  assert.equal((await request(`/api/usuarios/${ids[2]}`,'PUT',update,adminCookie)).status,200);
- const [[stored]]=await db.execute('SELECT mfa_secret FROM inm_usuarios WHERE id=?',[ids[0]]);assert.notEqual(stored.mfa_secret,challenge.secret);
  const [events]=await db.execute('SELECT action FROM inm_security_audit WHERE actor_id=?',[ids[0]]);
- for(const action of ['mfa.enroll','login','reauth','user.create','user.update'])assert.ok(events.some(event=>event.action===action),`Audit event: ${action}`);
+ for(const action of ['login','reauth','user.create','user.update'])assert.ok(events.some(event=>event.action===action),`Audit event: ${action}`);
  await db.execute('UPDATE inm_sesiones SET last_seen=? WHERE token_hash=?',[new Date(Date.now()-31*60*1000),hash]);
  assert.equal((await request('/api/usuarios','GET',undefined,adminCookie)).status,401,'Inactive sessions expire');
  const unknown='test_limit_'+suffix;
@@ -60,7 +53,7 @@ try{
   const response=await request('/api/auth/login','POST',{usuario:unknown,password});
   assert.equal(response.status,n<15?401:429,'Rate limit applies to nonexistent usernames');
  }
- console.log('PASS: MFA enrollment and login, replay rejection, encrypted secrets, role restrictions, reauthentication, idle expiration, audit events, CSP nonce and persistent login limiting.');
+ console.log('PASS: Password login without MFA, role restrictions, reauthentication, idle expiration, audit events, CSP nonce and persistent login limiting.');
 }finally{
  for(const id of ids){await db.execute('DELETE FROM inm_auth_challenges WHERE user_id=?',[id]);await db.execute('DELETE FROM inm_sesiones WHERE usuario_id=?',[id]);await db.execute('DELETE FROM inm_security_audit WHERE actor_id=?',[id]);await db.execute('DELETE FROM inm_usuarios WHERE id=?',[id]);}
  await db.end();

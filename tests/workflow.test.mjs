@@ -22,6 +22,8 @@ test('partial property edits preserve omitted fields and reject invalid dimensio
 test('owners are optional until filled, then require consistent identification', () => {
   assert.equal(ownerInput({}), null);
   assert.throws(() => ownerInput({ telefono: '999999999' }));
+  assert.deepEqual(ownerInput({ nombres: 'Ana', telefono: '999999999' }), { dni: null, nombres: 'Ana', apellidos: '', telefono: '999999999', email: null, referenciaContacto: null });
+  assert.equal(ownerInput({ dni: '12345678', nombres: 'Ana' }).apellidos, '');
   assert.throws(() => ownerInput({ dni: '123', nombres: 'Ana', apellidos: 'Pérez' }));
   assert.throws(() => ownerInput({ dni: '12345678', nombres: 'Ana', apellidos: 'Pérez', email: 'invalid' }));
   assert.equal(ownerInput({ dni: '12345678', nombres: 'Ana', apellidos: 'Pérez' }).dni, '12345678');

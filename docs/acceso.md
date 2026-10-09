@@ -2,6 +2,8 @@
 
 La entrada `/` requiere una sesión y redirige a `/login` cuando no la hay. Las cuentas se validan en `inm_usuarios` mediante `usuario` y `password_hash`. El sistema admite varias cuentas. El rol `administrador` accede a todos los módulos. Los demás usuarios, incluyendo `operador` y el rol anterior `usuario`, solo acceden a Información de inmuebles (`/datos-inmuebles`), donde pueden consultar y completar la ficha, datos del propietario y documentación. Inician sesión directamente en ese módulo. El menú oculta los demás apartados; sus páginas redirigen a Información de inmuebles y sus APIs rechazan el acceso con HTTP 403. Los permisos se verifican en el servidor para cada solicitud.
 
+El acceso utiliza únicamente usuario y contraseña, también para administradores. La verificación en dos pasos está desactivada. Los cambios sensibles en usuarios requieren confirmar nuevamente la contraseña si han pasado cinco minutos desde la última autenticación. No es necesario borrar las claves de autenticación antiguas de la base de datos.
+
 ## Preparar una base existente
 
 El administrador puede gestionar las cuentas desde **Administración → Usuarios y accesos** (`/usuarios`): crear usuarios, editar nombre, usuario y correo, asignar el rol Administrador u Operador, cambiar contraseñas de al menos 8 caracteres, desbloquear intentos y activar o desactivar accesos. Los operadores no ven este módulo y sus solicitudes a `/api/usuarios` se rechazan en el servidor.

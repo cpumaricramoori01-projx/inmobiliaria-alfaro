@@ -1,20 +1,30 @@
 "use client";
 
+import { propertyDisplayId } from "@/lib/property-display-id";
+
+import DraftRecovery from "@/app/components/DraftRecovery";
 import PageHeading from "@/app/components/PageHeading";
+
+
+import { Feedback, LoadingCards } from "@/app/components/InterfaceFeedback";
 
 import { requestJson } from "@/lib/client-request";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
+import PublicationChecklist, { type Checklist } from "@/app/components/PublicationChecklist";
 import SalePriceEditor from "@/app/components/SalePriceEditor";
 
 type Item = {
+  expediente?: Checklist;
+  texto?: string | null;
   inmuebleId: number;
   codigo: string;
   posicion: string;
   nombre: string;
   ubicacion: string;
   tipo: string;
+  operacion: string;
   propietario: string;
   valorReferencia?: string | null;
   precioObjetivo?: string | null;
@@ -25,9 +35,11 @@ type Item = {
 };
 
 type Publicada = {
+  expediente?: Checklist;
   inmuebleId: number;
   codigo: string;
   tipo: string;
+  operacion: string;
   referencia: string;
   posicion: number | null;
   publicado: boolean;
@@ -36,6 +48,7 @@ type Publicada = {
 };
 
 export default function TasacionesTextosPendientesPage() {
+  const materialBase=useRef<Record<number,string>>({});
   const [registradas, setRegistradas] = useState<Item[]>([]);
   const [aprobadas, setAprobadas] = useState<Item[]>([]);
 
@@ -76,15 +89,20 @@ export default function TasacionesTextosPendientesPage() {
   const cargar = useCallback((signal?: AbortSignal) => {
     return Promise.all([
       requestJson<{ registradas: Item[] }>("/api/tasaciones", { signal }),
-      requestJson<{ pendientes: Item[]; listos: Publicada[]; publicadas: Publicada[] }>("/api/publicaciones", { signal }),
+      requestJson<{ pendientes: Item[]; listos: Publicada[]; incompletos?: Publicada[]; publicadas: Publicada[] }>("/api/publicaciones", { signal }),
     ]).then(data => {
       if (signal?.aborted) return;
       const [tasaciones, publicaciones] = data;
-      setRegistradas((tasaciones.registradas ?? []).filter(item => item.situacion === "aprobado"));
-      setAprobadas(publicaciones.pendientes ?? []);
-      setListos(publicaciones.listos ?? []);
-      setPublicadas(publicaciones.publicadas ?? []);
-      setTextosListos(Object.fromEntries((publicaciones.listos ?? []).map(item => [item.inmuebleId, item.texto ?? ""])));
+      const selected = new URLSearchParams(window.location.search).get('inmueble');
+      const matches = (item: {inmuebleId:number})=>!selected||String(item.inmuebleId)===selected;
+      setRegistradas((tasaciones.registradas ?? []).filter(item => item.situacion === "aprobado" && matches(item)));
+      setAprobadas((publicaciones.pendientes ?? []).filter(matches));
+      setListos([...(publicaciones.listos ?? []), ...(publicaciones.incompletos ?? [])].filter(matches));
+      setPublicadas((publicaciones.publicadas ?? []).filter(matches));
+      const newBase=Object.fromEntries([...(publicaciones.listos??[]),...(publicaciones.incompletos??[]),...(publicaciones.publicadas??[])].filter(matches).map(item=>[item.inmuebleId,item.texto??'']));
+      const oldBase=materialBase.current;
+      setTextosListos(previous=>Object.fromEntries(Object.entries(newBase).map(([id,value])=>[id,previous[Number(id)]!==undefined&&previous[Number(id)]!==oldBase[Number(id)]?previous[Number(id)]:value])));
+      materialBase.current=newBase;
     }).catch(error => {
       if (!signal?.aborted) setError(error instanceof Error ? error.message : "No se pudo cargar la bandeja.");
     }).finally(() => {
@@ -142,6 +160,7 @@ export default function TasacionesTextosPendientesPage() {
         `${item.codigo} quedó listo para publicar.`
       );
 
+      setTextos(current=>{const next={...current};delete next[item.inmuebleId];return next;});
       setCargando(true);
       await cargar();
     } catch (err) {
@@ -277,19 +296,11 @@ export default function TasacionesTextosPendientesPage() {
   return (
     <main className="min-h-screen bg-[#f7f7f5] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
+      <DraftRecovery draftKey="textos:actual" data={{textos,textosListos}} dirty={Object.values(textos).some(Boolean)||[...listos,...publicadas].some(item=>textosListos[item.inmuebleId]!==undefined&&textosListos[item.inmuebleId]!==item.texto)} onRestore={draft=>{if(draft.textos)setTextos(draft.textos as Record<number,string>);if(draft.textosListos)setTextosListos(draft.textosListos as Record<number,string>);}}/>
         {/* ENCABEZADO */}
 
         <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <PageHeading href="/tasaciones-textos-pendientes" />
-
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              Bandeja central para continuar el inmueble
-              después de acordar el precio de venta: tasación negociada,
-              texto, material, publicación y seguimiento
-              comercial.
-            </p>
-          </div>
+          <PageHeading href="/tasaciones-textos-pendientes" />
 
           <a
             href="/registrar-tasaciones"
@@ -301,23 +312,15 @@ export default function TasacionesTextosPendientesPage() {
 
         {/* MENSAJES */}
 
-        {mensaje && (
-          <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-            {mensaje}
-          </div>
-        )}
+        {mensaje && <Feedback tone="success" className="my-5">{mensaje}</Feedback>}
 
-        {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-            {error}
-          </div>
-        )}
+        {error && <Feedback tone="error" className="my-5">{error}</Feedback>}
 
         {/* RESUMEN */}
 
         <section className="mb-7 rounded-3xl bg-[#171717] p-5 text-white shadow-sm sm:p-6">
           <div className="mb-5">
-            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">
+            <div className="text-xs font-bold uppercase tracking-[0.18em] text-white/75">
               Bandeja de seguimiento
             </div>
 
@@ -325,31 +328,29 @@ export default function TasacionesTextosPendientesPage() {
               Qué necesita atención ahora
             </h2>
 
-            <p className="mt-1 text-sm text-white/55">
+            <p className="mt-1 text-sm text-white/80">
               El inmueble avanza por actividades reales,
               no por una etapa artificial.
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[["Tasaciones negociadas", registradas.length], ["Texto pendiente", aprobadas.length], ["Listos para publicar", listos.length], ["Publicados", publicadas.length]].map(([label, count]) => <div key={label} className="rounded-2xl bg-white/[0.07] p-4"><p className="text-xs text-white/45">{label}</p><p className="mt-2 text-2xl font-bold">{count}</p></div>)}
+            {[["Tasaciones negociadas", registradas.length], ["Texto pendiente", aprobadas.length], ["Listos para publicar", listos.filter(item=>item.expediente?.complete).length], ["Publicados", publicadas.length]].map(([label, count]) => <div key={label} className="rounded-2xl bg-white/[0.07] p-4"><p className="text-xs text-white/75">{label}</p><p className="mt-2 text-2xl font-bold">{count}</p></div>)}
           </div>
         </section>
 
         {cargando ? (
-          <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-            Cargando bandeja de seguimiento...
-          </div>
-        ) : (
+            <LoadingCards label="Cargando inmuebles…" />
+          ) : (
           <div className="space-y-7">
-            <section>
+            <section id="tasaciones">
               <div className="mb-3 flex items-end justify-between">
-                <div><h2 className="text-lg font-bold text-slate-900">Tasaciones negociadas</h2><p className="mt-1 text-sm text-slate-500">Precios acordados con el propietario. Puedes actualizar el precio de venta y la observación incluso después de publicar.</p></div>
+                <div><h2 className="text-lg font-bold text-slate-900">Tasaciones negociadas</h2><p className="mt-1 text-sm text-slate-500">Precios acordados con el propietario. Puedes actualizar el precio o renta mensual y la observación incluso después de publicar.</p></div>
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 ring-1 ring-slate-200">{registradas.length}</span>
               </div>
               {registradas.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">Todavía no hay tasaciones negociadas.</div> : <div className="space-y-3">{registradas.map(item => <article key={item.inmuebleId} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-[#fff1f1] px-2.5 py-1 text-[11px] font-bold text-[#c80000]">Pos. {item.posicion}</span><span className="text-xs font-semibold text-slate-400">{item.codigo} · Inmueble {item.inmuebleId}</span></div>
-                <h3 className="mt-2 text-base font-bold text-slate-900">{item.nombre}</h3><p className="mt-1 text-sm text-slate-500">{item.tipo} · {item.ubicacion}</p><p className="mt-2 text-xs text-slate-400">Propietario: {item.propietario}</p>
+                <div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-[#fff1f1] px-2.5 py-1 text-xs font-bold text-[#c80000]">Pos. {item.posicion}</span><span className="text-xs font-semibold text-slate-500">{propertyDisplayId(item)} · Inmueble {item.inmuebleId}</span></div>
+                <h3 className="mt-2 text-base font-bold text-slate-900">{item.nombre}</h3><p className="mt-1 text-sm text-slate-500">{item.tipo} · {item.ubicacion}</p><p className="mt-2 text-xs text-slate-500">Propietario: {item.propietario}</p>
                 <SalePriceEditor item={item} onSaved={cargar} />
               </article>)}</div>}
             </section>
@@ -358,7 +359,7 @@ export default function TasacionesTextosPendientesPage() {
                 02 · TEXTO Y MATERIAL
                ===================================================== */}
 
-            <section>
+            <section id="material">
               <div className="mb-3">
                 <h2 className="text-lg font-bold text-slate-900">
                   02 · Texto y material
@@ -385,12 +386,12 @@ export default function TasacionesTextosPendientesPage() {
                     >
                       <div className="mb-4">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                          <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
                             Pos. {item.posicion}
                           </span>
 
-                          <span className="text-xs font-semibold text-slate-400">
-                            {item.codigo}
+                          <span className="text-xs font-semibold text-slate-500">
+                            {propertyDisplayId(item)}
                           </span>
                         </div>
 
@@ -402,7 +403,7 @@ export default function TasacionesTextosPendientesPage() {
                           {item.tipo} · {item.ubicacion}
                         </p>
 
-                        <p className="mt-2 text-xs text-slate-400">
+                        <p className="mt-2 text-xs text-slate-500">
                           Propietario: {item.propietario}
                         </p>
                       </div>
@@ -430,12 +431,12 @@ export default function TasacionesTextosPendientesPage() {
                             }
                             rows={7}
                             placeholder="Redacta aquí el texto comercial del inmueble..."
-                            className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-[#c80000]"
+                            className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none placeholder:text-slate-500 focus:border-[#c80000]"
                           />
                         </div>
 
                         <div>
-                          <p className="text-xs font-semibold text-slate-600">Fotos de la publicación</p>
+                          <PublicationChecklist data={item.expediente ? { ...item.expediente, items: item.expediente.items.map(entry => entry.key === "texto" ? { ...entry, complete: Boolean((textos[item.inmuebleId] ?? item.texto ?? "").trim()) } : entry) } : undefined} code={item.codigo} /><p className="mt-3 text-xs font-semibold text-slate-600">Fotos de la publicación</p>
                           <p className="mt-2 text-xs leading-5 text-slate-500">Usa las fotos de las visitas y de la ficha. Puedes revisarlas y actualizarlas en la galería.</p>
                           <Link href={`/datos-inmuebles?codigo=${encodeURIComponent(item.codigo)}&pestana=fotos`} className="mt-3 inline-flex rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-red-700">Ver y editar fotos →</Link>
                           <button
@@ -444,8 +445,7 @@ export default function TasacionesTextosPendientesPage() {
                               guardarTexto(item)
                             }
                             disabled={
-                              guardando ===
-                              item.inmuebleId
+                              guardando === item.inmuebleId || !textos[item.inmuebleId]?.trim() || !item.expediente?.items.filter(entry => entry.key !== "texto").every(entry => entry.complete)
                             }
                             className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-xl bg-[#c80000] px-4 text-xs font-bold text-white transition hover:bg-[#a90000] disabled:cursor-not-allowed disabled:opacity-50"
                           >
@@ -466,10 +466,10 @@ export default function TasacionesTextosPendientesPage() {
                 03 · LISTOS PARA PUBLICAR
                ===================================================== */}
 
-            <section>
+            <section id="listos">
               <div className="mb-3">
                 <h2 className="text-lg font-bold text-slate-900">
-                  03 · Listos para publicar
+                  03 · Textos preparados y publicación
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
@@ -499,7 +499,7 @@ export default function TasacionesTextosPendientesPage() {
                         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-lg bg-[#fff1f1] px-2.5 py-1 text-[11px] font-bold text-[#c80000]">
+                              <span className="rounded-lg bg-[#fff1f1] px-2.5 py-1 text-xs font-bold text-[#c80000]">
                                 Pos.{" "}
                                 {item.posicion
                                   ? String(
@@ -508,12 +508,12 @@ export default function TasacionesTextosPendientesPage() {
                                   : "—"}
                               </span>
 
-                              <span className="text-xs font-semibold text-slate-400">
-                                {item.codigo}
+                              <span className="text-xs font-semibold text-slate-500">
+                                {propertyDisplayId(item)}
                               </span>
 
-                              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
-                                Listo para publicar
+                              <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${item.expediente?.complete ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                                {item.expediente?.complete ? "Listo para publicar" : "Expediente pendiente"}
                               </span>
                             </div>
 
@@ -545,12 +545,12 @@ export default function TasacionesTextosPendientesPage() {
                                 )
                               }
                               rows={7}
-                              className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-[#c80000]"
+                              className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none placeholder:text-slate-500 focus:border-[#c80000]"
                             />
                           </div>
 
                           <div>
-                            <p className="text-xs font-semibold text-slate-600">Fotos de la publicación</p>
+                            <PublicationChecklist data={item.expediente ? { ...item.expediente, items: item.expediente.items.map(entry => entry.key === "texto" ? { ...entry, complete: Boolean((textos[item.inmuebleId] ?? item.texto ?? "").trim()) } : entry) } : undefined} code={item.codigo} /><p className="mt-3 text-xs font-semibold text-slate-600">Fotos de la publicación</p>
                           <p className="mt-2 text-xs leading-5 text-slate-500">Usa las fotos de las visitas y de la ficha. Puedes revisarlas y actualizarlas en la galería.</p>
                           <Link href={`/datos-inmuebles?codigo=${encodeURIComponent(item.codigo)}&pestana=fotos`} className="mt-3 inline-flex rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-red-700">Ver y editar fotos →</Link>
                             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -581,10 +581,9 @@ export default function TasacionesTextosPendientesPage() {
                                   )
                                 }
                                 disabled={
-                                  publicando ===
-                                  item.inmuebleId
+                                  publicando === item.inmuebleId || !item.expediente?.complete || (textosListos[item.inmuebleId]??item.texto)!==item.texto
                                 }
-                                className="inline-flex h-10 flex-1 items-center justify-center rounded-xl bg-[#171717] px-4 text-xs font-bold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                                className="inline-flex h-10 flex-1 items-center justify-center rounded-xl bg-[#c80000] px-4 text-xs font-bold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 Marcar como publicado
                               </button>
@@ -647,7 +646,7 @@ export default function TasacionesTextosPendientesPage() {
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-lg bg-[#fff1f1] px-2.5 py-1 text-[11px] font-bold text-[#c80000]">
+                  <span className="rounded-lg bg-[#fff1f1] px-2.5 py-1 text-xs font-bold text-[#c80000]">
                     Pos.{" "}
                     {item.posicion
                       ? String(item.posicion).padStart(
@@ -657,11 +656,11 @@ export default function TasacionesTextosPendientesPage() {
                       : "—"}
                   </span>
 
-                  <span className="text-xs font-semibold text-slate-400">
-                    {item.codigo}
+                  <span className="text-xs font-semibold text-slate-500">
+                    {propertyDisplayId(item)}
                   </span>
 
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-bold text-emerald-700">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                     Publicado
                   </span>
@@ -677,7 +676,7 @@ export default function TasacionesTextosPendientesPage() {
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl bg-emerald-50/60 p-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">
+                    <div className="text-xs font-bold uppercase tracking-wide text-emerald-600">
                       Fecha de publicación
                     </div>
 
@@ -687,7 +686,7 @@ export default function TasacionesTextosPendientesPage() {
                   </div>
 
                   <div className="rounded-xl bg-slate-50 p-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                    <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
                       Estado
                     </div>
 
@@ -701,11 +700,11 @@ export default function TasacionesTextosPendientesPage() {
 
               <div className="w-full lg:max-w-xs">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                  <div className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
                     Material publicado
                   </div>
 
-                  <p className="text-xs font-semibold text-slate-600">Fotos de la publicación</p>
+                  <PublicationChecklist data={item.expediente ? { ...item.expediente, items: item.expediente.items.map(entry => entry.key === "texto" ? { ...entry, complete: Boolean((textos[item.inmuebleId] ?? item.texto ?? "").trim()) } : entry) } : undefined} code={item.codigo} /><p className="mt-3 text-xs font-semibold text-slate-600">Fotos de la publicación</p>
                           <p className="mt-2 text-xs leading-5 text-slate-500">Usa las fotos de las visitas y de la ficha. Puedes revisarlas y actualizarlas en la galería.</p>
                           <Link href={`/datos-inmuebles?codigo=${encodeURIComponent(item.codigo)}&pestana=fotos`} className="mt-3 inline-flex rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-red-700">Ver y editar fotos →</Link>
 
@@ -723,6 +722,8 @@ export default function TasacionesTextosPendientesPage() {
                   <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">
                     {item.texto}
                   </p>
+                  <label className="mt-4 block text-xs font-semibold">Corregir texto publicado<textarea value={textosListos[item.inmuebleId]??item.texto??''} onChange={event=>setTextosListos(current=>({...current,[item.inmuebleId]:event.target.value}))} rows={5} className="mt-2 w-full rounded-xl border border-slate-200 p-3"/></label><button type="button" disabled={actualizandoMaterial!==null} onClick={()=>void actualizarMaterial(item)} className="aa-button aa-button-primary mt-3">Guardar corrección con historial</button><p className="mt-2 text-xs text-slate-600">Luego actualiza los anuncios externos y confirma sus datos en la ficha.</p>
+
                 </div>
               </details>
             )}
@@ -795,7 +796,7 @@ export default function TasacionesTextosPendientesPage() {
 
               <div className="mt-5 rounded-2xl bg-slate-50 p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-lg bg-[#fff1f1] px-2.5 py-1 text-[11px] font-bold text-[#c80000]">
+                  <span className="rounded-lg bg-[#fff1f1] px-2.5 py-1 text-xs font-bold text-[#c80000]">
                     Pos.{" "}
                     {confirmarPublicacion.posicion
                       ? String(
@@ -804,7 +805,7 @@ export default function TasacionesTextosPendientesPage() {
                       : "—"}
                   </span>
 
-                  <span className="text-xs font-semibold text-slate-400">
+                  <span className="text-xs font-semibold text-slate-500">
                     {confirmarPublicacion.codigo}
                   </span>
                 </div>
@@ -818,7 +819,7 @@ export default function TasacionesTextosPendientesPage() {
                 </div>
               </div>
 
-              <p className="mt-4 text-xs leading-5 text-slate-400">
+              <p className="mt-4 text-xs leading-5 text-slate-500">
                 Esta acción registrará la fecha de publicación
                 y moverá el inmueble fuera de la bandeja
                 “Listos para publicar”.
@@ -841,7 +842,7 @@ export default function TasacionesTextosPendientesPage() {
                 type="button"
                 onClick={confirmarMarcarPublicado}
                 disabled={publicando !== null}
-                className="inline-flex h-10 items-center justify-center rounded-xl bg-[#171717] px-5 text-xs font-bold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-[#c80000] px-5 text-xs font-bold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {publicando !== null
                   ? "Confirmando..."

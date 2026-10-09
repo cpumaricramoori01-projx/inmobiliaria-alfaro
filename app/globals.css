@@ -71,3 +71,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   html { scroll-behavior: auto; }
   .mobile-page-shell *, .mobile-page-shell *::before, .mobile-page-shell *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Consistent keyboard focus and readable text on dark operational cards. */
+:where(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid #c80000; outline-offset: 3px; }
+.bg-slate-900 .text-slate-500 { color: #cbd5e1; }

@@ -12,15 +12,16 @@ export const menuGroups = [
   {
     label: "Seguimiento",
     items: [
-      { href: "/registrar-visitas", label: "Registrar visitas", icon: "visit" },
       { href: "/visitas-pendientes", label: "Visitas pendientes", icon: "clock" },
+      { href: "/registrar-visitas", label: "Registrar visitas", icon: "visit" },
+      { href: "/tasaciones-textos-pendientes", label: "Tasaciones y textos pendientes", icon: "clipboard" },
       { href: "/registrar-tasaciones", label: "Registrar tasaciones", icon: "valuation" },
-      { href: "/tasaciones-textos-pendientes", label: "Tasaciones y textos", icon: "clipboard" },
     ],
   },
   {
     label: "Cierre e información",
     items: [
+      { href: "/alquileres", label: "Contratos de alquiler", icon: "clipboard" },
       { href: "/liberar-inmuebles", label: "Liberar inmueble", icon: "release" },
       { href: "/reportes", label: "Reportes", icon: "report" },
     ],
@@ -28,6 +29,8 @@ export const menuGroups = [
   {
     label: "Administración",
     items: [
+      { href: "/ubicaciones", label: "Ubicaciones", icon: "map" },
+      { href: "/tipos-inmueble", label: "Tipos de inmueble", icon: "home" },
       { href: "/usuarios", label: "Usuarios y accesos", icon: "users" },
       { href: "/seguridad", label: "Registro de seguridad", icon: "clipboard" },
     ],

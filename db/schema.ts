@@ -12,6 +12,8 @@ import {
   uniqueIndex,
   varchar,
   bigint,
+  primaryKey,
+  mediumtext,
 } from "drizzle-orm/mysql-core";
 
 export const inmUsuarios = mysqlTable("inm_usuarios", {
@@ -65,7 +67,7 @@ export const authChallenges = mysqlTable("inm_auth_challenges", {
 });
 export const inmPropietarios = mysqlTable("inm_propietarios", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
-  dni: varchar("dni", { length: 20 }).notNull(),
+  dni: varchar("dni", { length: 20 }),
   nombres: varchar("nombres", { length: 120 }).notNull(),
   apellidos: varchar("apellidos", { length: 160 }).notNull(),
   telefono: varchar("telefono", { length: 40 }),
@@ -80,10 +82,15 @@ export const inmPropietarios = mysqlTable("inm_propietarios", {
 export const inmInmuebles = mysqlTable("inm_inmuebles", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   codigo: varchar("codigo", { length: 30 }).notNull(),
+  datosPrueba: boolean("datos_prueba").notNull().default(false),
+  datosValidados: boolean("datos_validados").notNull().default(false),
   propietarioId: bigint("propietario_id", { mode: "number", unsigned: true }).references(() => inmPropietarios.id),
   tipo: varchar("tipo", { length: 30 }).notNull(),
+  operacion: varchar("operacion", { length: 10 }).notNull().default("venta"),
   referencia: varchar("referencia", { length: 255 }).notNull(),
   direccion: varchar("direccion", { length: 255 }),
+  numeroDireccion: varchar("numero_direccion", { length: 30 }),
+  inmuebleOrigenId: bigint("inmueble_origen_id", {mode:"number",unsigned:true}),
   distrito: varchar("distrito", { length: 100 }),
   provincia: varchar("provincia", { length: 100 }),
   departamento: varchar("departamento", { length: 100 }),
@@ -180,6 +187,16 @@ export const inmLiberaciones = mysqlTable("inm_liberaciones", {
   inmuebleId: bigint("inmueble_id", { mode: "number", unsigned: true }).notNull().references(() => inmInmuebles.id),
   motivo: varchar("motivo", { length: 40 }).notNull(),
   detalleOtro: varchar("detalle_otro", { length: 500 }),
+  fechaVenta: date("fecha_venta"),
+  fechaAlquiler: date("fecha_alquiler", { mode: "string" }),
+  rentaMensual: decimal("renta_mensual", { precision: 15, scale: 2 }),
+  garantia: decimal("garantia", { precision: 15, scale: 2 }),
+  adelanto: decimal("adelanto", { precision: 15, scale: 2 }),
+  fechaInicioAlquiler: date("fecha_inicio_alquiler", { mode: "string" }),
+  fechaFinAlquiler: date("fecha_fin_alquiler", { mode: "string" }),
+  precioFinal: decimal("precio_final", { precision: 15, scale: 2 }),
+  comision: decimal("comision", { precision: 15, scale: 2 }),
+  datosSimulados: boolean("datos_simulados").notNull().default(false),
   fechaRegistro: timestamp("fecha_registro", { mode: "date" }).defaultNow().notNull(),
   usuarioRegistroId: bigint("usuario_registro_id", { mode: "number", unsigned: true }).notNull().references(() => inmUsuarios.id),
   confirmado: boolean("confirmado").notNull().default(false),
@@ -227,3 +244,44 @@ export const inmConfigAlertas = mysqlTable("inm_config_alertas", {
 }, (table) => ({
   tipoIdx: uniqueIndex("uq_inm_config_alertas_tipo").on(table.tipo),
 }));
+
+export const inmSeguimiento = mysqlTable("inm_seguimiento", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  inmuebleId: bigint("inmueble_id", { mode: "number", unsigned: true }).notNull().references(() => inmInmuebles.id),
+  actividad: varchar("actividad", {length: 30}).notNull(),
+  responsableId: bigint("responsable_id", {mode: "number", unsigned: true}).references(() => inmUsuarios.id),
+  fechaLimite: date("fecha_limite", {mode: "string"}),
+  observacion: varchar("observacion", {length: 500}),
+  actualizado: timestamp("actualizado", {mode: "date"}).defaultNow().onUpdateNow().notNull(),
+}, table => ({actividadIdx: uniqueIndex("uq_seguimiento_actividad").on(table.inmuebleId,table.actividad)}));
+export const inmAnuncios = mysqlTable("inm_anuncios", {
+  id: bigint("id", {mode: "number",unsigned: true}).autoincrement().primaryKey(),
+  inmuebleId: bigint("inmueble_id", {mode: "number",unsigned: true}).notNull().references(() => inmInmuebles.id),
+  canal: varchar("canal", {length: 80}).notNull(),
+  revisionTexto: bigint("revision_texto", {mode:"number",unsigned:true}).notNull().default(0),
+  enlace: varchar("enlace", {length: 1000}).notNull(),
+  fechaPublicacion: date("fecha_publicacion", {mode: "string"}).notNull(),
+  precioPublicado: decimal("precio_publicado", {precision:15,scale:2}).notNull(),
+  actualizado: timestamp("actualizado", {mode: "date"}).defaultNow().onUpdateNow().notNull(),
+}, table => ({inmuebleIdx:index("idx_anuncios_inmueble").on(table.inmuebleId)}));
+
+export const inmBorradores = mysqlTable('inm_borradores', {
+  usuarioId: bigint('usuario_id',{mode:'number',unsigned:true}).notNull().references(()=>inmUsuarios.id,{onDelete:'cascade'}),
+  clave: varchar('clave',{length:120}).notNull(),
+  contenido: mediumtext('contenido').notNull(),
+  actualizado: timestamp('actualizado',{mode:'date'}).defaultNow().onUpdateNow().notNull(),
+},table=>({clavePk:primaryKey({columns:[table.usuarioId,table.clave]})}));
+
+export const inmTiposInmueble = mysqlTable('inm_tipos_inmueble', {
+  id: bigint('id', { mode: 'number', unsigned: true }).autoincrement().primaryKey(),
+  nombre: varchar('nombre', { length: 30 }).notNull(),
+  activo: boolean('activo').notNull().default(true),
+}, table => ({ nombreIdx: uniqueIndex('uq_tipos_inmueble_nombre').on(table.nombre) }));
+
+export const inmUbicaciones = mysqlTable('inm_ubicaciones', {
+ id: bigint('id',{mode:'number',unsigned:true}).autoincrement().primaryKey(),
+ nivel: varchar('nivel',{length:20}).notNull(),
+ nombre: varchar('nombre',{length:100}).notNull(),
+ padreId: bigint('padre_id',{mode:'number',unsigned:true}),
+ activo: boolean('activo').notNull().default(true),
+},t=>({parentIdx:index('idx_ubicaciones_padre').on(t.padreId),nameIdx:uniqueIndex('uq_ubicaciones_nombre').on(t.nivel,t.padreId,t.nombre)}));

@@ -1,17 +1,15 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { authChallenges, inmUsuarios } from "@/db/schema";
-import { sameOrigin, sessionCookieOptions } from "@/lib/auth";
-import { createSessionToken, hashSessionToken, verifyPassword } from "@/lib/password.mjs";
+import { inmUsuarios } from "@/db/schema";
+import { sameOrigin } from "@/lib/auth";
+import { verifyPassword } from "@/lib/password.mjs";
 import { homeForUser } from "@/lib/access.mjs";
 
 class LoginChangedError extends Error {}
 
 import { authLimited } from '@/lib/auth-limits';
 import { audit } from '@/lib/security-audit';
-import { newSecret, encryptSecret } from '@/lib/mfa.mjs';
 import { startSession } from '@/lib/auth-session';
 
 export async function POST(request: Request) {
@@ -52,21 +50,10 @@ export async function POST(request: Request) {
       const [current] = await tx.select().from(inmUsuarios).where(eq(inmUsuarios.id,user.id)).limit(1).for('update');
       if (!current?.activo || current.passwordHash !== user.passwordHash || current.usuario?.toLowerCase() !== usuario) throw new LoginChangedError();
       await tx.update(inmUsuarios).set({intentosFallidos:0,bloqueoHasta:null}).where(eq(inmUsuarios.id,user.id));
-      if (current.rol === 'administrador') {
-        const token=createSessionToken();
-        const secret=current.mfaSecret ? null : newSecret();
-        await tx.insert(authChallenges).values({tokenHash:hashSessionToken(token),userId:current.id,passwordHash:current.passwordHash!,secret:secret ? encryptSecret(secret):null,expires:new Date(Date.now()+5*60*1000)});
-        return {current,token,secret};
-      }
-      return {current,token:null,secret:null};
+      return current;
     });
-    if (authenticatedUser.token) {
-      (await cookies()).set('aa_mfa',authenticatedUser.token,{...sessionCookieOptions,maxAge:300});
-      const secret=authenticatedUser.secret;
-      return NextResponse.json({mfaRequired:true,setup:Boolean(secret),secret,otpauth:secret ? `otpauth://totp/${encodeURIComponent('Alberto Alfaro:'+usuario)}?secret=${secret}&issuer=Alberto%20Alfaro` : undefined},{headers:{'Cache-Control':'no-store'}});
-    }
     await startSession(user.id,user.passwordHash!);
-    return NextResponse.json({ok:true,redirectTo:homeForUser(authenticatedUser.current)},{headers:{'Cache-Control':'no-store'}});
+    return NextResponse.json({ok:true,redirectTo:homeForUser(authenticatedUser)},{headers:{'Cache-Control':'no-store'}});
   } catch (error) {
     if (error instanceof LoginChangedError) return NextResponse.json({ error: "Usuario o contraseña incorrectos." }, { status: 401 });
     console.error("Error al iniciar sesión:", (error as {code?:string}).code || "AUTH_ERROR");

@@ -1,10 +1,10 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { inmInmuebles, inmPropietarios, inmPublicaciones } from '@/db/schema';
 import { publicationChecklist } from '@/lib/publication-checklist.mjs';
 
 // Shared by publication writes, the ficha and portfolio indicators.
-export async function publicationReadiness(executor: Pick<typeof db, 'select'> = db, propertyId?: number) {
+export async function publicationReadiness(executor: Pick<typeof db, 'select'> = db, propertyId?: number | number[]) {
   const rows = await executor.select({
     id: inmInmuebles.id,
     dni: inmPropietarios.dni,
@@ -15,7 +15,7 @@ export async function publicationReadiness(executor: Pick<typeof db, 'select'> =
   }).from(inmInmuebles)
     .leftJoin(inmPropietarios, eq(inmPropietarios.id, inmInmuebles.propietarioId))
     .leftJoin(inmPublicaciones, eq(inmPublicaciones.inmuebleId, inmInmuebles.id))
-    .where(propertyId === undefined ? undefined : eq(inmInmuebles.id, propertyId));
+    .where(propertyId === undefined ? undefined : Array.isArray(propertyId) ? propertyId.length ? inArray(inmInmuebles.id,propertyId) : sql`0=1` : eq(inmInmuebles.id, propertyId));
   return new Map(rows.map(row => [row.id, { ...row, ...publicationChecklist(row) }]));
 }
 export async function requirePublicationReadiness(executor: Pick<typeof db, 'select'>, propertyId: number, texto?: string) {

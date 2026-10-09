@@ -1,0 +1,32 @@
+CREATE TABLE IF NOT EXISTS inm_seguimiento (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ inmueble_id BIGINT UNSIGNED NOT NULL,
+ actividad VARCHAR(30) NOT NULL,
+ responsable_id BIGINT UNSIGNED NULL,
+ fecha_limite DATE NULL,
+ observacion VARCHAR(500) NULL,
+ actualizado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ UNIQUE KEY uq_seguimiento_actividad(inmueble_id, actividad),
+ FOREIGN KEY (inmueble_id) REFERENCES inm_inmuebles(id),
+ FOREIGN KEY (responsable_id) REFERENCES inm_usuarios(id)
+);
+CREATE TABLE IF NOT EXISTS inm_anuncios (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ inmueble_id BIGINT UNSIGNED NOT NULL,
+ canal VARCHAR(80) NOT NULL,
+ revision_texto BIGINT UNSIGNED NOT NULL DEFAULT 0,
+ enlace VARCHAR(1000) NOT NULL,
+ fecha_publicacion DATE NOT NULL,
+ precio_publicado DECIMAL(15,2) NOT NULL,
+ actualizado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ FOREIGN KEY (inmueble_id) REFERENCES inm_inmuebles(id),
+ INDEX idx_anuncios_inmueble(inmueble_id)
+);
+CREATE TABLE IF NOT EXISTS inm_borradores (
+ usuario_id BIGINT UNSIGNED NOT NULL,
+ clave VARCHAR(120) NOT NULL,
+ contenido MEDIUMTEXT NOT NULL,
+ actualizado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ PRIMARY KEY(usuario_id,clave),
+ FOREIGN KEY(usuario_id) REFERENCES inm_usuarios(id) ON DELETE CASCADE
+);

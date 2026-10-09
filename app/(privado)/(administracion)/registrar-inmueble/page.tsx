@@ -1,21 +1,21 @@
-"use client";
 
+"use client";
+import GeographySelect from "@/app/components/GeographySelect";
+
+import { propertyDisplayId } from "@/lib/property-display-id";
+
+import OperationSelect from "@/app/components/OperationSelect";
+import PropertyTypeSelect from "@/app/components/PropertyTypeSelect";
+import DraftRecovery from "@/app/components/DraftRecovery";
 import PageHeading from "@/app/components/PageHeading";
 
 
+import { Feedback } from "@/app/components/InterfaceFeedback";
 
 import { requestJson } from "@/lib/client-request";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-
-type Tipo =
-  | "Casa"
-  | "Departamento"
-  | "Terreno"
-  | "Local"
-  | "Oficina"
-  | "Otros";
 
 type Posicion = {
   numero: number;
@@ -29,11 +29,16 @@ export default function RegistrarInmueblePage() {
   );
   const [posiciones, setPosiciones] = useState<Posicion[]>([]);
   const [cargandoPosiciones, setCargandoPosiciones] = useState(true);
-  const [tipo, setTipo] = useState<Tipo | "">("");
+  const [operacion, setOperacion] = useState("venta");
+  const [tipo, setTipo] = useState<string>("");
+  const [nombresPropietario,setNombresPropietario]=useState("");
+  const [numeroDireccion,setNumeroDireccion]=useState("");
+  const [distrito,setDistrito]=useState("");
+  const [provincia,setProvincia]=useState("");
+  const [departamento,setDepartamento]=useState("");
   const [nombre, setNombre] = useState("");
   const [ubicacion, setUbicacion] = useState("");
   const [dni, setDni] = useState("");
-  const [nombres, setNombres] = useState("");
   const [apellidos, setApellidos] = useState("");
   const [telefono, setTelefono] = useState("");
   const [buscando, setBuscando] = useState(false);
@@ -80,7 +85,7 @@ export default function RegistrarInmueblePage() {
       }
 
       if (data.propietario) {
-        setNombres(data.propietario.nombres);
+        setNombresPropietario(data.propietario.nombres);
         setApellidos(data.propietario.apellidos);
         setTelefono(data.propietario.telefono ?? "");
         setPropietarioEncontrado(true);
@@ -100,9 +105,9 @@ export default function RegistrarInmueblePage() {
     setError("");
     setMensaje("");
 
-    if (!posicion || !tipo || !nombre.trim()) {
+    if (!posicion || !tipo || !nombre.trim() || !ubicacion.trim()) {
       setError(
-        "Completa posición, tipo y nombre o referencia del inmueble."
+        "Completa tipo de inmueble, nombre del propietario y ubicación."
       );
       return;
     }
@@ -118,10 +123,12 @@ export default function RegistrarInmueblePage() {
         body: JSON.stringify({
           posicion: Number(posicion),
           tipo,
+          operacion,
           referencia: nombre,
           ubicacion,
           dni,
-          nombres,
+          nombres: nombresPropietario,
+          numeroDireccion,distrito,provincia,departamento,
           apellidos,
           telefono,
         }),
@@ -136,17 +143,18 @@ export default function RegistrarInmueblePage() {
       }
 
       setMensaje(
-        `Inmueble ${data.codigo} registrado correctamente en la posición ${String(
+        `Inmueble ${propertyDisplayId({ posicion: data.posicion, tipo, propietarioNombres: nombresPropietario, propietarioApellidos: apellidos })} registrado correctamente en la posición ${String(
           data.posicion
         ).padStart(2, "0")} y enviado a Visita pendiente.`
       );
 
       setPosicion("");
       setTipo("");
+      setOperacion("venta");
       setNombre("");
+      setNombresPropietario("");setNumeroDireccion("");setDistrito("");setProvincia("");setDepartamento("");
       setUbicacion("");
       setDni("");
-      setNombres("");
       setApellidos("");
       setTelefono("");
       setPropietarioEncontrado(false);
@@ -179,31 +187,19 @@ export default function RegistrarInmueblePage() {
       : String(disponibles[0]?.numero ?? "");
 
   const dniValido = /^\d{8}$/.test(dni);
-  const propietarioCompleto =
-    dniValido && Boolean(nombres.trim()) && Boolean(apellidos.trim());
-
   const puedeRegistrar = Boolean(
-    posicion && tipo && nombre.trim() && !guardando
+    posicion && tipo && nombre.trim() && ubicacion.trim() && !guardando
   );
-
-  const pasoPosicion = Boolean(posicion);
-  const pasoInmueble = Boolean(tipo && nombre.trim());
-  const pasoPropietario = propietarioCompleto;
 
   return (
     <main className="min-h-screen bg-[#f7f7f5] p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-[1380px]">
+      <DraftRecovery draftKey="registro:actual" data={{seleccionPosicion,tipo,operacion,nombre,ubicacion,dni,apellidos,telefono,nombresPropietario,numeroDireccion,distrito,provincia,departamento}} dirty={!!(tipo||nombre||ubicacion||dni||apellidos||telefono)} onRestore={draft=>{setNombresPropietario(String(draft.nombresPropietario??""));setNumeroDireccion(String(draft.numeroDireccion??""));setDistrito(String(draft.distrito??""));setProvincia(String(draft.provincia??""));setDepartamento(String(draft.departamento??""));setOperacion(draft.operacion === 'alquiler' ? 'alquiler' : 'venta');setPosicion(String(draft.seleccionPosicion??''));setTipo(draft.tipo as string||'');setNombre(String(draft.nombres||draft.nombre||''));setUbicacion(String(draft.ubicacion??''));setDni(String(draft.dni??''));setApellidos(String(draft.apellidos??''));setTelefono(String(draft.telefono??''));}}/>
+
         {/* ENCABEZADO */}
         <header className="mb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <PageHeading href="/registrar-inmueble" />
-
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                Registra el inmueble con los datos mínimos para incorporarlo a
-                la cartera. El resto puede completarse después.
-              </p>
-            </div>
+            <PageHeading href="/registrar-inmueble" />
 
             <Link
               href="/cartera"
@@ -214,90 +210,6 @@ export default function RegistrarInmueblePage() {
             </Link>
           </div>
         </header>
-
-        {/* PROGRESO */}
-        <section className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                  Registro en preparación
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">
-                  Completa lo esencial. El resto puede hacerse después.
-                </p>
-              </div>
-
-              <span
-                className={`w-fit rounded-full px-3 py-1.5 text-[10px] font-bold ${
-                  puedeRegistrar
-                    ? "bg-[#fff1f1] text-[#a90000]"
-                    : "bg-slate-100 text-slate-500"
-                }`}
-              >
-                {puedeRegistrar
-                  ? "Listo para registrar"
-                  : "En preparación"}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-3">
-            {[
-              {
-                numero: "01",
-                titulo: "Posición",
-                completo: pasoPosicion,
-                detalle: pasoPosicion ? "Completo" : "Pendiente",
-              },
-              {
-                numero: "02",
-                titulo: "Inmueble",
-                completo: pasoInmueble,
-                detalle: pasoInmueble ? "Completo" : "Pendiente",
-              },
-              {
-                numero: "03",
-                titulo: "Propietario",
-                completo: pasoPropietario,
-                detalle: pasoPropietario ? "Registrado" : "Opcional",
-              },
-            ].map((paso, index) => (
-              <div
-                key={paso.numero}
-                className={`flex items-center gap-3 px-5 py-4 ${
-                  index > 0 ? "border-t border-slate-100 sm:border-l sm:border-t-0" : ""
-                }`}
-              >
-                <span
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                    paso.completo
-                      ? "bg-[#c80000] text-white"
-                      : "bg-slate-100 text-slate-400"
-                  }`}
-                >
-                  {paso.completo ? "✓" : paso.numero}
-                </span>
-
-                <div className="min-w-0">
-                  <p
-                    className={`text-xs font-bold ${
-                      paso.completo
-                        ? "text-[#a90000]"
-                        : "text-slate-700"
-                    }`}
-                  >
-                    {paso.titulo}
-                  </p>
-
-                  <p className="mt-0.5 text-[11px] text-slate-400">
-                    {paso.detalle}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
           {/* FORMULARIO PRINCIPAL */}
@@ -328,7 +240,7 @@ export default function RegistrarInmueblePage() {
                     <span className="text-[#c80000]">*</span>
                   </label>
 
-                  <span className="w-fit rounded-full bg-[#fff1f1] px-2.5 py-1 text-[10px] font-bold text-[#a90000]">
+                  <span className="w-fit rounded-full bg-[#fff1f1] px-2.5 py-1 text-xs font-bold text-[#a90000]">
                     {cargandoPosiciones
                       ? "Consultando..."
                       : `${disponibles.length} disponibles`}
@@ -358,7 +270,7 @@ export default function RegistrarInmueblePage() {
                   ))}
                 </select>
 
-                <p className="mt-2 text-xs leading-5 text-slate-400">
+                <p className="mt-2 text-xs leading-5 text-slate-500">
                   La primera posición disponible se selecciona
                   automáticamente. Puedes cambiarla antes de guardar.
                 </p>
@@ -372,100 +284,72 @@ export default function RegistrarInmueblePage() {
                       Datos básicos del inmueble
                     </h2>
 
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold uppercase tracking-wide text-slate-500">
                       Requeridos
                     </span>
                   </div>
 
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Solo información inicial. Los datos completos pertenecen
-                    a la Fase 2.
+                    El nombre identifica al inmueble; el propietario se registra por separado. Puedes completar los demás datos después.
                   </p>
                 </div>
 
                 <div className="grid gap-5 sm:grid-cols-2">
                   <div>
+                    <label className="mb-4 block text-sm font-semibold text-slate-700">Tipo de operación *<OperationSelect value={operacion} onChange={setOperacion} disabled={guardando} className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-normal" /></label>
                     <label className="mb-2 block text-sm font-semibold text-slate-700">
                       Tipo de inmueble{" "}
                       <span className="text-[#c80000]">*</span>
                     </label>
 
-                    <select
-                      value={tipo}
-                      onChange={(e) =>
-                        setTipo(e.target.value as Tipo)
-                      }
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-700 outline-none transition focus:border-[#c80000] focus:ring-2 focus:ring-[#f5dede]"
-                    >
-                      <option value="">Seleccionar tipo</option>
-                      <option>Casa</option>
-                      <option>Departamento</option>
-                      <option>Terreno</option>
-                      <option>Local</option>
-                      <option>Oficina</option>
-                      <option>Otros</option>
-                    </select>
+                    <PropertyTypeSelect value={tipo} onChange={setTipo} disabled={guardando} className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-700 outline-none transition focus:border-[#c80000]" />
                   </div>
 
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-slate-700">
-                      Nombre o referencia{" "}
+                      Nombre del inmueble{" "}
                       <span className="text-[#c80000]">*</span>
                     </label>
 
                     <input
+                      required
+                      maxLength={120}
                       value={nombre}
                       onChange={(e) => setNombre(e.target.value)}
-                      placeholder="Ej. Casa Los Pinos"
-                      className="w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none placeholder:text-slate-400 transition focus:border-[#c80000] focus:ring-2 focus:ring-[#f5dede]"
+                      placeholder="Nombre o referencia del inmueble"
+                      className="w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none placeholder:text-slate-500 transition focus:border-[#c80000] focus:ring-2 focus:ring-[#f5dede]"
                     />
                   </div>
                 </div>
 
                 <div className="mt-5">
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Ubicación{" "}
-                    <span className="font-normal text-slate-400">
-                      (opcional)
-                    </span>
+                    Calle / avenida{" "}
+                    <span className="text-[#c80000]">*</span>
                   </label>
 
                   <input
+                    required
+                    maxLength={255}
                     value={ubicacion}
                     onChange={(e) => setUbicacion(e.target.value)}
-                    placeholder="Ej. Chimbote · Urbanización Buenos Aires"
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none placeholder:text-slate-400 transition focus:border-[#c80000] focus:ring-2 focus:ring-[#f5dede]"
+                    placeholder="Calle o avenida"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none placeholder:text-slate-500 transition focus:border-[#c80000] focus:ring-2 focus:ring-[#f5dede]"
                   />
                 </div>
               </div>
 
-              {/* PROPIETARIO */}
-              <div className="border-t border-slate-100 pt-7">
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-base font-bold text-slate-900">
-                        Propietario
-                      </h2>
+              <label className="block text-sm font-semibold">Número / lote<input value={numeroDireccion} maxLength={30} onChange={e=>setNumeroDireccion(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3 text-sm"/></label>
+              <GeographySelect disabled={guardando} value={{departamento,provincia,distrito}} onChange={next=>{setDepartamento(next.departamento||'');setProvincia(next.provincia||'');setDistrito(next.distrito||'');}}/>
 
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">
-                        Opcional
-                      </span>
-                    </div>
-
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Puedes registrarlo ahora o completar sus datos
-                      posteriormente.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-[#faf9f7] p-4 sm:p-5">
-                  <div className="grid gap-4 sm:grid-cols-[180px_minmax(0,1fr)]">
+              <details className="border-t border-slate-100 pt-5">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-700">Datos del propietario (opcionales)</summary>
+                <div className="mt-4"><label className="mb-4 block text-sm font-semibold">Nombres del propietario<input value={nombresPropietario} maxLength={120} onChange={e=>setNombresPropietario(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3" /></label>
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-2 block text-xs font-semibold text-slate-600">
                         DNI{" "}
-                        <span className="font-normal text-slate-400">
+                        <span className="font-normal text-slate-500">
                           (opcional)
                         </span>
                       </label>
@@ -498,28 +382,13 @@ export default function RegistrarInmueblePage() {
                       </div>
                     </div>
 
-                    <div>
-                      <label className="mb-2 block text-xs font-semibold text-slate-600">
-                        Nombres{" "}
-                        <span className="font-normal text-slate-400">
-                          (opcional)
-                        </span>
-                      </label>
-
-                      <input
-                        value={nombres}
-                        onChange={(e) => setNombres(e.target.value)}
-                        placeholder="Nombres del propietario"
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-[#c80000] focus:ring-2 focus:ring-[#f5dede]"
-                      />
-                    </div>
                   </div>
 
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-2 block text-xs font-semibold text-slate-600">
                         Apellidos{" "}
-                        <span className="font-normal text-slate-400">
+                        <span className="font-normal text-slate-500">
                           (opcional)
                         </span>
                       </label>
@@ -535,7 +404,7 @@ export default function RegistrarInmueblePage() {
                     <div>
                       <label className="mb-2 block text-xs font-semibold text-slate-600">
                         Teléfono / contacto{" "}
-                        <span className="font-normal text-slate-400">
+                        <span className="font-normal text-slate-500">
                           (opcional)
                         </span>
                       </label>
@@ -556,8 +425,7 @@ export default function RegistrarInmueblePage() {
                       </p>
 
                       <p className="mt-1 text-xs leading-5 text-[#a90000]">
-                        Se reutilizará el propietario registrado y se
-                        actualizarán sus datos de contacto.
+                        Se vinculará el propietario existente con sus datos registrados.
                       </p>
                     </div>
                   )}
@@ -577,47 +445,26 @@ export default function RegistrarInmueblePage() {
 
                   {!dni && (
                     <div className="mt-4 flex gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                      <span className="mt-0.5 text-sm text-slate-400">ⓘ</span>
+                      <span className="mt-0.5 text-sm text-slate-500">ⓘ</span>
 
                       <div>
                         <p className="text-xs font-bold text-slate-600">
-                          Propietario opcional
+                          Datos adicionales opcionales
                         </p>
 
                         <p className="mt-1 text-xs leading-5 text-slate-500">
-                          Puedes registrar el inmueble sin propietario. Estos
-                          datos podrán completarse posteriormente.
+                          El propietario es opcional. Si completas DNI o contacto, indica también sus nombres.
                         </p>
                       </div>
                     </div>
                   )}
                 </div>
-              </div>
+              </details>
 
               {/* MENSAJES */}
-              {error && (
-                <div className="rounded-xl border border-[#ead1d1] bg-[#fff7f7] p-4">
-                  <p className="text-sm font-semibold text-[#a90000]">
-                    No se pudo completar el registro
-                  </p>
+              {error && <Feedback tone="error" className="my-5">{error}</Feedback>}
 
-                  <p className="mt-1 text-xs leading-5 text-[#a90000]">
-                    {error}
-                  </p>
-                </div>
-              )}
-
-              {mensaje && (
-                <div className="rounded-xl border border-[#d9eadf] bg-[#f3faf5] p-4">
-                  <p className="text-sm font-semibold text-[#18713b]">
-                    Registro realizado
-                  </p>
-
-                  <p className="mt-1 text-xs leading-5 text-[#2f6f48]">
-                    {mensaje}
-                  </p>
-                </div>
-              )}
+              {mensaje && <Feedback tone="success" className="my-5">{mensaje}</Feedback>}
 
               {/* DESPUÉS DEL REGISTRO */}
               <div className="rounded-2xl border border-[#ead1d1] bg-[#fff7f7] p-4 sm:p-5">
@@ -654,7 +501,7 @@ export default function RegistrarInmueblePage() {
                 <button
                   onClick={registrar}
                   disabled={!puedeRegistrar}
-                  className="rounded-xl bg-[#c80000] px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#ad0000] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                  className="rounded-xl bg-[#c80000] px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#ad0000] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
                 >
                   {guardando ? "Registrando..." : "Registrar inmueble"}
                 </button>
@@ -665,7 +512,7 @@ export default function RegistrarInmueblePage() {
           {/* PANEL LATERAL */}
           <aside className="h-fit space-y-5">
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
                 Flujo de ingreso
               </p>
 
@@ -681,8 +528,7 @@ export default function RegistrarInmueblePage() {
                     </p>
 
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Posición + tipo + referencia. El propietario puede
-                      completarse después.
+                      Tipo + nombre del inmueble + dirección. Los demás datos pueden completarse después.
                     </p>
                   </div>
                 </div>
@@ -732,14 +578,14 @@ export default function RegistrarInmueblePage() {
                   Capacidad de cartera
                 </p>
 
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">
                   Máx. 90
                 </span>
               </div>
 
               <p className="mt-3 text-2xl font-bold tracking-tight text-slate-950">
-                90{" "}
-                <span className="text-sm font-medium text-slate-400">
+                {posiciones.length}{" "}
+                <span className="text-sm font-medium text-slate-500">
                   posiciones
                 </span>
               </p>
@@ -750,16 +596,16 @@ export default function RegistrarInmueblePage() {
                   style={{
                     width: `${Math.min(
                       100,
-                      ((90 - disponibles.length) / 90) * 100
+                      posiciones.length ? ((posiciones.length - disponibles.length) / posiciones.length) * 100 : 0
                     )}%`,
                   }}
                 />
               </div>
 
-              <p className="mt-2 text-[11px] leading-5 text-slate-400">
+              <p className="mt-2 text-xs leading-5 text-slate-500">
                 Ocupadas:{" "}
                 <strong className="text-slate-600">
-                  {cargandoPosiciones ? "..." : 90 - disponibles.length}
+                  {cargandoPosiciones ? "..." : posiciones.length - disponibles.length}
                 </strong>{" "}
                 · Disponibles:{" "}
                 <strong className="text-slate-600">
@@ -776,9 +622,9 @@ export default function RegistrarInmueblePage() {
               <p className="mt-2 text-xs leading-5 text-slate-500">
                 Solo necesitas completar{" "}
                 <strong className="text-slate-700">
-                  posición, tipo y referencia
+                  tipo, nombre del inmueble y dirección
                 </strong>
-                . Los datos del propietario y la información detallada pueden
+                . Los demás datos del propietario y la información detallada pueden
                 completarse posteriormente.
               </p>
             </section>

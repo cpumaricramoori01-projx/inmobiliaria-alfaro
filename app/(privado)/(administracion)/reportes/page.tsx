@@ -1,9 +1,15 @@
 "use client";
+import OperationSelect from "@/app/components/OperationSelect";
+import { reportPeriodField } from "@/lib/report-period.mjs";
 
+import PropertyTypeSelect from "@/app/components/PropertyTypeSelect";
 import PageHeading from "@/app/components/PageHeading";
+
 
 import type { ReportRow, ReportSummary } from "@/lib/report-types";
 import { useEffect, useMemo, useState } from "react";
+import ResponsiveFilters from "@/app/components/ResponsiveFilters";
+import { Feedback } from "@/app/components/InterfaceFeedback";
 import Image from "next/image";
 import { reportPDFLayout, reportText } from "@/lib/report-export";
 
@@ -75,27 +81,6 @@ const reportes: Reporte[] = [
     icono: "⌁",
   },
   {
-    nombre: "Aprobaciones pendientes",
-    descripcion:
-      "Tasaciones pendientes de decisión del propietario.",
-    categoria: "Gestión",
-    icono: "◇",
-  },
-  {
-    nombre: "Negociaciones",
-    descripcion:
-      "Inmuebles que actualmente tienen una negociación en curso.",
-    categoria: "Gestión",
-    icono: "⇄",
-  },
-  {
-    nombre: "Aprobaciones y negociación",
-    descripcion:
-      "Seguimiento de aprobaciones, decisiones y negociaciones.",
-    categoria: "Gestión",
-    icono: "◇",
-  },
-  {
     nombre: "Material pendiente",
     descripcion:
       "Inmuebles aprobados que aún requieren registrar material de publicación.",
@@ -117,6 +102,13 @@ const reportes: Reporte[] = [
     icono: "●",
   },
 
+  {
+    nombre: "Alquilados",
+    descripcion:
+      "Inmuebles liberados por alquiler.",
+    categoria: "Salidas",
+    icono: "✓",
+  },
   {
     nombre: "Vendidos",
     descripcion:
@@ -176,16 +168,9 @@ const reportes: Reporte[] = [
     icono: "→",
   },
   {
-    nombre: "Tasación → aprobación",
+    nombre: "Tasación → publicación",
     descripcion:
-      "Seguimiento entre tasación y decisión.",
-    categoria: "Flujo",
-    icono: "→",
-  },
-  {
-    nombre: "Aprobación → publicación",
-    descripcion:
-      "Tiempo desde aprobación hasta registro de publicación.",
+      "Tiempo desde el registro de precios acordados hasta publicación.",
     categoria: "Flujo",
     icono: "→",
   },
@@ -218,8 +203,11 @@ export default function Page() {
     useState("Todos");
 
   const [consulta, setConsulta] = useState({
-    reporte: "Cartera activa", desde: "", hasta: "", situacion: "Todas", estado: "Todos", posicion: "", tipo: "Todos",
+    reporte: "Cartera activa", desde: "", hasta: "", situacion: "Todas", estado: "Todos", posicion: "", tipo: "Todos", operacion: "Todos", pruebas: "0", pagina: "1",
   });
+  const [operacion,setOperacion]=useState("Todos");
+  const [incluirPruebas,setIncluirPruebas]=useState(false);
+  const [paginacion,setPaginacion]=useState({pagina:1,paginas:1,total:0});
   const seleccionado = consulta.reporte;
   const [exportando, setExportando] = useState<"pdf" | "excel" | null>(null);
   const [errorExportacion, setErrorExportacion] = useState("");
@@ -281,7 +269,7 @@ export default function Page() {
     setGenerado(null);
     setError("");
     setErrorExportacion("");
-    setConsulta({ reporte, desde: fechaDesde, hasta: fechaHasta, situacion, estado, posicion, tipo });
+    setConsulta({ reporte, desde: fechaDesde, hasta: fechaHasta, situacion, estado, posicion, tipo,operacion,pruebas:incluirPruebas?"1":"0",pagina:"1" });
   }
 
   function cargar() { solicitarReporte(seleccionado); }
@@ -298,6 +286,7 @@ export default function Page() {
         setGenerado(new Date());
         setRows(data.rows ?? []);
         setResumen(data.resumen ?? null);
+        setPaginacion(data.paginacion??{pagina:1,paginas:1,total:(data.rows??[]).length});
       } catch (err) {
         if (controller.signal.aborted) return;
         setError(err instanceof Error ? err.message : "No se pudo generar el reporte.");
@@ -318,13 +307,15 @@ export default function Page() {
     setEstado("Todos");
     setPosicion("");
     setTipo("Todos");
+    setOperacion("Todos");
     setCargando(true);
     setRows([]);
     setResumen(null);
     setGenerado(null);
     setError("");
     setErrorExportacion("");
-    setConsulta({ reporte: seleccionado, desde: "", hasta: "", situacion: "Todas", estado: "Todos", posicion: "", tipo: "Todos" });
+    setIncluirPruebas(false);
+    setConsulta({ reporte: seleccionado, desde: "", hasta: "", situacion: "Todas", estado: "Todos", posicion: "", tipo: "Todos", operacion: "Todos",pruebas:"0",pagina:"1" });
   };
 
   const columnas =
@@ -338,16 +329,27 @@ export default function Page() {
         "propietario",
         "ubicacion",
         "tipo",
+        "operacion",
+        "rentaMensualSolicitada",
+        "fechaAlquiler",
+        "rentaMensual",
+        "garantia",
+        "adelanto",
+        "fechaInicioAlquiler",
+        "fechaFinAlquiler",
         "estado",
         "situaciones",
         "fechaRegistro",
         "fechaVisita",
         "fechaTasacion",
         "tasacion",
-        "situacionTasacion",
-        "estadoNegociacion",
         "fechaPublicacion",
         "motivoLiberacion",
+        "fechaVenta",
+        "precioFinal",
+        "comision",
+        "datosSimulados",
+        "expedientePendiente",
         "dias",
         "fechaInicioPosicion",
         "fechaFinPosicion",
@@ -365,7 +367,7 @@ export default function Page() {
       );
     }, [rows]);
 
-  const recomendadas = columnas.length <= 6 ? columnas : columnas.filter(key =>
+  const recomendadas = seleccionado === "Alquilados" ? ["codigo", "nombre", "fechaAlquiler", "rentaMensual", "comision", "fechaFinAlquiler"] : seleccionado === "Vendidos" ? ["codigo", "nombre", "fechaVenta", "precioFinal", "comision", "datosSimulados"] : columnas.length <= 6 ? columnas : columnas.filter(key =>
     !["propietario", "ubicacion", "tipo", "fechaRegistro"].includes(key)).slice(0, 6);
   const elegidas = seleccionColumnas[seleccionado] ?? recomendadas;
   const columnasElegidas = columnas.filter(key => elegidas.includes(key));
@@ -378,12 +380,26 @@ export default function Page() {
     string,
     string
   > = {
+    fechaVenta: "Fecha de venta",
+    precioFinal: "Precio final (S/)",
+    comision: "Comisión (S/)",
+    datosSimulados: "Datos ficticios",
+    datosPrueba: "Datos de prueba",
+    expedientePendiente: "Expediente pendiente",
     codigo: "Código",
     posicion: "Pos.",
     nombre: "Inmueble",
     propietario: "Propietario",
     ubicacion: "Ubicación",
     tipo: "Tipo",
+    operacion: "Operación",
+    rentaMensualSolicitada: "Renta mensual solicitada (S/)",
+    fechaAlquiler: "Fecha de cierre del alquiler",
+    rentaMensual: "Renta mensual acordada (S/)",
+    garantia: "Garantía (S/)",
+    adelanto: "Adelanto (S/)",
+    fechaInicioAlquiler: "Inicio del alquiler",
+    fechaFinAlquiler: "Fin del alquiler",
     estado: "Estado",
     situaciones:
       "Situación / actividades",
@@ -416,9 +432,12 @@ export default function Page() {
     consulta.situacion !== "Todas" && `Actividad: ${consulta.situacion}`,
     consulta.estado !== "Todos" && `Estado: ${consulta.estado}`,
     consulta.posicion && `Posición: ${consulta.posicion}`,
+    consulta.operacion !== "Todos" && `Operación: ${consulta.operacion === "alquiler" ? "Alquiler" : "Venta"}`,
     consulta.tipo !== "Todos" && `Tipo: ${consulta.tipo}`,
+    `Fecha utilizada: ${{fechaRegistro:"Registro",fechaVenta:"Venta",fechaSalida:"Salida",fechaVisita:"Visita",fechaTasacion:"Tasación",fechaPublicacion:"Publicación",fechaInicioPosicion:"Inicio de posición",fechaInicioFlujo:"Inicio del recorrido"}[reportPeriodField(seleccionado) as "fechaRegistro"]}`,
+    consulta.pruebas === "1" ? "Incluye datos de prueba" : "Solo datos reales",
   ].filter(Boolean).join(" · ") || "Todos los registros · Sin restricciones";
-  const filtrosPendientes = fechaDesde !== consulta.desde || fechaHasta !== consulta.hasta || situacion !== consulta.situacion || estado !== consulta.estado || posicion !== consulta.posicion || tipo !== consulta.tipo;
+  const filtrosPendientes = operacion !== consulta.operacion || fechaDesde !== consulta.desde || fechaHasta !== consulta.hasta || situacion !== consulta.situacion || estado !== consulta.estado || posicion !== consulta.posicion || tipo !== consulta.tipo || incluirPruebas !== (consulta.pruebas==="1");
 
   async function descargar(formato: "pdf" | "excel") {
     if (cargando || exportando || !rows.length || !generado || !columnasElegidas.length) return;
@@ -426,7 +445,9 @@ export default function Page() {
     setErrorExportacion("");
     try {
       const exports = await import("@/lib/report-export");
-      const report = { title: seleccionado, description: reporteInfo.descripcion, columns: columnasElegidas, labels: etiqueta, rows, summary: resumen, filters: filtrosAplicados, generatedAt: generado };
+      const response=await fetch(`/api/reportes?${new URLSearchParams({...consulta,todos:'1'})}`,{cache:'no-store'});
+      const full=await response.json();if(!response.ok)throw new Error(full.error||'No se pudo preparar el reporte completo.');
+      const report = { title: seleccionado, description: reporteInfo.descripcion, columns: columnasElegidas, labels: etiqueta, rows:full.rows, summary: resumen, filters: filtrosAplicados, generatedAt: generado };
       await (formato === "pdf" ? exports.exportReportPDF(report) : exports.exportReportExcel(report));
     } catch (err) {
       setErrorExportacion(err instanceof Error ? err.message : "No se pudo descargar el archivo. Inténtalo nuevamente.");
@@ -436,7 +457,7 @@ export default function Page() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fa] p-6 lg:p-8">
+    <main className="min-h-screen bg-[#f7f7f5] p-6 lg:p-8">
       <div className="mx-auto max-w-7xl print:max-w-none">
         <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between print:mb-4">
           <div className="flex gap-3">
@@ -444,13 +465,7 @@ export default function Page() {
               <Image src="/branding/logo.png" alt="Inmobiliaria Alberto Alfaro" width={170} height={54} className="h-auto w-[150px]" />
             </div>
 
-            <div>
-              <PageHeading href="/reportes" />
-
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-                Consulta datos reales de la cartera, gestión, salidas, histórico y tiempos del flujo.
-              </p>
-            </div>
+            <PageHeading href="/reportes" />
           </div>
 
           <div className="flex flex-wrap gap-2 print:hidden" aria-busy={!!exportando}>
@@ -459,7 +474,7 @@ export default function Page() {
               {exportando === "pdf" ? "Preparando PDF…" : "Descargar PDF"}
             </button>
             <button onClick={() => void descargar("excel")} disabled={cargando || !!exportando || !rows.length || !columnasElegidas.length}
-              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">
+              className="rounded-xl bg-[#c80000] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#a90000] disabled:cursor-not-allowed disabled:opacity-40">
               {exportando === "excel" ? "Preparando Excel…" : "Descargar Excel"}
             </button>
           </div>
@@ -494,7 +509,8 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          <div className="mt-5"><ResponsiveFilters active={filtrosPendientes || filtrosAplicados !== "Todos los registros · Sin restricciones"}>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
             <label className="text-xs font-semibold text-slate-500">
               Desde
               <input
@@ -544,13 +560,7 @@ export default function Page() {
                   Tasación pendiente
                 </option>
                 <option>
-                  Pendiente de aprobación
-                </option>
-                <option>
                   Material pendiente
-                </option>
-                <option>
-                  En negociación
                 </option>
                 <option>
                   Listo para publicar
@@ -605,54 +615,23 @@ export default function Page() {
 
             <label className="text-xs font-semibold text-slate-500">
               Tipo
-              <select
-                value={tipo}
-                onChange={(e) =>
-                  setTipo(
-                    e.target.value,
-                  )
-                }
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
-              >
-                <option>
-                  Todos
-                </option>
-                <option>
-                  Casa
-                </option>
-                <option>
-                  Departamento
-                </option>
-                <option>
-                  Terreno
-                </option>
-                <option>
-                  Local
-                </option>
-                <option>
-                  Oficina
-                </option>
-                <option>
-                  Otros
-                </option>
-              </select>
+              <OperationSelect filter value={operacion} onChange={setOperacion} className="mb-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm" />
+              <PropertyTypeSelect filter value={tipo} onChange={setTipo} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm" />
             </label>
           </div>
+          </ResponsiveFilters></div>
         </section>
 
+        <div className="mt-3 flex flex-wrap items-center gap-4"><label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={incluirPruebas} onChange={event=>setIncluirPruebas(event.target.checked)}/>Incluir datos de prueba</label><p className="text-xs text-slate-600">El período utiliza la fecha de la actividad del reporte seleccionado. Las descargas incluyen todos los resultados aplicados.</p></div>
         {filtrosPendientes && <p className="mt-3 text-sm font-medium text-amber-700" role="status">Hay filtros pendientes de aplicar. Genera el reporte para actualizar el resultado y las descargas.</p>}
-        {errorExportacion && <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-700">{errorExportacion}</p>}
-        {error && (
-          <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
-            {error}
-          </div>
-        )}
+        {errorExportacion && <Feedback tone="error" className="mt-4">{errorExportacion}</Feedback>}
+        {error && <Feedback tone="error" className="mt-5">{error}</Feedback>}
 
         {resumen && (
           <section className="mt-6 rounded-2xl border border-slate-200 bg-slate-900 p-5 shadow-[0_14px_40px_rgba(15,23,42,0.10)]">
             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
                   Indicadores generales · Sin filtros
                 </p>
 
@@ -661,7 +640,7 @@ export default function Page() {
                 </h2>
               </div>
 
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-500">
                 {rows.length} registros en el reporte seleccionado
               </span>
             </div>
@@ -670,7 +649,7 @@ export default function Page() {
               {[
                 [
                   "Registros del reporte",
-                  resumen.total,
+                  paginacion.total,
                 ],
                 [
                   "Activos",
@@ -708,7 +687,7 @@ export default function Page() {
                     )}
                     className="rounded-xl border border-white/10 bg-white/[0.06] p-3"
                   >
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                       {titulo}
                     </p>
 
@@ -725,7 +704,7 @@ export default function Page() {
         <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.045)] print:hidden">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
                 ¿Qué necesitas revisar?
               </p>
 
@@ -780,11 +759,11 @@ export default function Page() {
                     className={`rounded-xl border px-3 py-2.5 text-left transition ${
                       categoria ===
                       value
-                        ? "border-slate-900 bg-slate-900 text-white"
+                        ? "border-slate-900 bg-[#c80000] text-white"
                         : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
                     }`}
                   >
-                    <p className="text-[10px] font-bold uppercase tracking-wide opacity-60">
+                    <p className="text-xs font-bold uppercase tracking-wide opacity-60">
                       {label}
                     </p>
 
@@ -823,7 +802,7 @@ export default function Page() {
                     className={`rounded-full px-3.5 py-2 text-xs font-bold ${
                       categoria ===
                       grupo
-                        ? "bg-slate-900 text-white"
+                        ? "bg-[#c80000] text-white"
                         : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
@@ -901,7 +880,7 @@ export default function Page() {
             </div>
 
             {cargando && (
-              <span className="text-xs font-semibold text-slate-400">
+              <span className="text-xs font-semibold text-slate-500">
                 Consultando…
               </span>
             )}
@@ -938,10 +917,11 @@ export default function Page() {
               </div>
             </fieldset>
           )}
+          <nav aria-label="Páginas del reporte" className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4"><p className="text-sm text-slate-600">{paginacion.total} resultados · Página {paginacion.pagina} de {Math.max(1,paginacion.paginas)}</p><div className="flex gap-3">{[-1,1].map(direction=><button key={direction} type="button" disabled={cargando||direction===-1&&paginacion.pagina<=1||direction===1&&paginacion.pagina>=paginacion.paginas} className="aa-button aa-button-secondary disabled:opacity-40" onClick={()=>{setCargando(true);setConsulta(current=>({...current,pagina:String(paginacion.pagina+direction)}));}}>{direction===-1?'Anterior':'Siguiente'}</button>)}</div></nav>
           <div className="overflow-x-auto" aria-busy={cargando}>
             {rows.length && columnasElegidas.length ? (
               <table className="w-full text-left">
-                <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-500">
                   <tr>
                     {columnasElegidas.map(
                       (key) => (
@@ -999,7 +979,7 @@ export default function Page() {
                     : rows.length ? "Selecciona las columnas del reporte" : "No hay registros para esta consulta"}
                 </p>
 
-                <p className="mt-1 text-sm text-slate-400">
+                <p className="mt-1 text-sm text-slate-500">
                   {rows.length ? "Marca al menos una columna en las opciones de arriba." : "Prueba con otros filtros o selecciona otro reporte."}
                 </p>
               </div>

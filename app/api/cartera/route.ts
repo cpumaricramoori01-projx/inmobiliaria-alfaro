@@ -1,6 +1,8 @@
+import { isDemoProperty } from '@/lib/demo-data';
+import { publicationReadiness } from "@/lib/publication-readiness";
 import { authorizeApi } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   inmArchivos,
@@ -37,11 +39,14 @@ export async function GET() {
     const inmuebles = await db
       .select({
         id: inmInmuebles.id,
+        datosPrueba: isDemoProperty,
         codigo: inmInmuebles.codigo,
         propietarioId: inmInmuebles.propietarioId,
         tipo: inmInmuebles.tipo,
+        operacion: inmInmuebles.operacion,
         referencia: inmInmuebles.referencia,
         direccion: inmInmuebles.direccion,
+        numeroDireccion: inmInmuebles.numeroDireccion,
         latitud: inmInmuebles.latitud,
         longitud: inmInmuebles.longitud,
         distrito: inmInmuebles.distrito,
@@ -70,7 +75,7 @@ export async function GET() {
         inmPosiciones,
         eq(inmPosiciones.id, inmAsignacionesPosicion.posicionId)
       )
-      .orderBy(desc(inmInmuebles.fechaRegistro));
+      .orderBy(sql`${inmPosiciones.numero} IS NULL`,asc(inmPosiciones.numero),asc(inmInmuebles.id));
 
     const positionAvailability = await db.select({ numero: inmPosiciones.numero, assigned: inmAsignacionesPosicion.id })
       .from(inmPosiciones).leftJoin(inmAsignacionesPosicion, and(
@@ -271,6 +276,7 @@ export async function GET() {
     /*
      * 7. Transformamos cada inmueble a indicadores independientes.
      */
+    const expedientes = await publicationReadiness();
     const resultado = inmuebles.map((row) => {
       const visita = visitasPorInmueble.get(row.id);
       const tasacion = tasacionPorInmueble.get(row.id);
@@ -286,19 +292,20 @@ const tasacionPendiente = row.posicion != null && visitaRealizada && !tasacion?.
 const materialHabilitado = tasacion?.situacion === "aprobado";
 
 const fotosPendientes =
-  materialHabilitado && !fotosPorInmueble.has(row.id);
+  materialHabilitado && !expedientes.get(row.id)?.fotosVisita;
 
 const textoPendiente =
   materialHabilitado && !publicacion?.tieneTexto;
 
 const materialPendiente =
-  materialHabilitado && (fotosPendientes || textoPendiente);
+  materialHabilitado && !expedientes.get(row.id)?.complete;
 
       const estadoNormalizado = row.estado?.toLowerCase() ?? "";
 
       return {
         id: row.codigo,
         inmuebleId: row.id,
+        datosPrueba: Boolean(row.datosPrueba),
 
         posicion: row.posicion ?? undefined,
 
@@ -309,11 +316,13 @@ const materialPendiente =
         nombre: row.referencia,
 
         ubicacion:
-          [row.distrito, row.provincia, row.departamento]
+          [[row.direccion,row.numeroDireccion].filter(Boolean).join(" "), row.distrito, row.provincia, row.departamento]
             .filter(Boolean)
             .join(", ") || "Sin ubicación registrada",
 
-        direccion: row.direccion ?? null,
+        zona: [row.distrito, row.provincia, row.departamento].filter(Boolean).join(", "),
+        operacion: row.operacion,
+        direccion: [row.direccion,row.numeroDireccion].filter(Boolean).join(" ") || null,
         latitud: row.latitud ?? null,
         longitud: row.longitud ?? null,
         precioVenta: tasacion?.precioVenta ?? null,
@@ -378,6 +387,8 @@ const materialPendiente =
         tasacionPendiente,
         materialPendiente,
         fotosPendientes,
+        tieneFotos: fotosPorInmueble.has(row.id),
+        expediente: expedientes.get(row.id),
         textoPendiente,
         negociacionEnCurso: negociacion?.enCurso ?? false,
 
@@ -392,13 +403,15 @@ const materialPendiente =
      * Los KPIs se calculan sobre exactamente los mismos
      * datos que se entregan a la cartera.
      */
-    const activos = resultado.filter((x) => x.estado === "Activo");
+    const ocupados=resultado.filter(x=>x.estado==='Activo');
+    const activos = ocupados;
 
     return NextResponse.json({
       inmuebles: resultado,
 
       resumen: {
-        enCartera: activos.length,
+        enCartera: ocupados.length,
+        pruebas: ocupados.filter(x=>x.datosPrueba).length,
         disponibles,
         visitasPendientes: activos.filter(
           (x) => x.visitaPendiente

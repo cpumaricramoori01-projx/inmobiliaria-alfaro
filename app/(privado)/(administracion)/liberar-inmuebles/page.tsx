@@ -1,9 +1,18 @@
 "use client";
 
+import Link from "next/link";
+import { propertyDisplayId } from "@/lib/property-display-id";
+
 import PageHeading from "@/app/components/PageHeading";
+
+
+import { Feedback, LoadingCards } from "@/app/components/InterfaceFeedback";
 
 import { requestJson } from "@/lib/client-request";
 
+import { rentalResult } from "@/lib/rental-result.mjs";
+import { operationLabel } from "@/lib/operation.mjs";
+import { saleResult } from "@/lib/sale-result.mjs";
 import ConfirmDialog from "@/app/components/ConfirmDialog";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -14,12 +23,14 @@ type Item = {
   nombre: string;
   ubicacion: string;
   tipo: string;
+  operacion: string;
   propietario: string;
   dni: string;
   etapa: string;
 };
 
 const motivos = [
+  { value: "alquilado", label: "Alquilado" },
   { value: "vendido", label: "Vendido" },
   {
     value: "cancelacion_propietario",
@@ -33,6 +44,8 @@ const motivos = [
 ];
 
 export default function Page() {
+  const [alquileres, setAlquileres] = useState<Record<number, Record<string, string>>>({});
+  const [ventas, setVentas] = useState<Record<number, { fechaVenta: string; precioFinal: string; comision: string }>>({});
   const [confirmation, setConfirmation] = useState<Item | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [busqueda, setBusqueda] = useState("");
@@ -100,6 +113,14 @@ export default function Page() {
       return;
     }
 
+    if (motivo === "vendido") {
+      try { saleResult(ventas[item.inmuebleId] ?? {}); }
+      catch (error) { setError(error instanceof Error ? error.message : "Completa el resultado económico."); return; }
+    }
+    if (motivo === "alquilado") {
+      try { rentalResult(alquileres[item.inmuebleId] ?? {}); }
+      catch (error) { setError(error instanceof Error ? error.message : "Completa los datos del alquiler."); return; }
+    }
     if (!confirmed) { setConfirmation(item); return; }
 
     try {
@@ -114,6 +135,7 @@ export default function Page() {
           inmuebleId: item.inmuebleId,
           motivo,
           detalleOtro,
+          ...(motivo === "vendido" ? ventas[item.inmuebleId] : motivo === "alquilado" ? alquileres[item.inmuebleId] : {}),
         }),
       });
 
@@ -148,30 +170,24 @@ export default function Page() {
       {confirmation && <ConfirmDialog title="Confirmar liberación" confirmLabel="Liberar inmueble" busy={guardando !== null} onCancel={() => setConfirmation(null)} onConfirm={() => { void liberar(confirmation, true); }}>
         <p className="break-words font-semibold">{confirmation.nombre} · Posición {confirmation.posicion}</p>
         <p>El inmueble saldrá de la cartera activa y su posición quedará disponible. Su ficha, archivos e historial se conservarán.</p>
+        {selecciones[confirmation.inmuebleId] === "vendido" && <p>Venta: S/ {ventas[confirmation.inmuebleId]?.precioFinal} · Comisión: S/ {ventas[confirmation.inmuebleId]?.comision} · Fecha: {ventas[confirmation.inmuebleId]?.fechaVenta}</p>}
+        {selecciones[confirmation.inmuebleId] === "alquilado" && <p>Renta mensual: S/ {alquileres[confirmation.inmuebleId]?.rentaMensual} · Fecha de cierre: {alquileres[confirmation.inmuebleId]?.fechaAlquiler}</p>}
         {error && <p role="alert" className="text-red-700">{error}</p>}
       </ConfirmDialog>}
       <div className="mx-auto max-w-[1380px]">
         {/* ENCABEZADO */}
         <header className="mb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <PageHeading href="/liberar-inmuebles" />
-
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                Registra la salida de un inmueble de la cartera activa. La
-                posición quedará disponible y el histórico del inmueble se
-                conservará.
-              </p>
-            </div>
+            <PageHeading href="/liberar-inmuebles" />
 
             <div className="w-fit rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
                 Cartera activa
               </p>
 
               <p className="mt-1 text-lg font-bold text-slate-950">
                 {items.length}
-                <span className="ml-1 text-xs font-medium text-slate-400">
+                <span className="ml-1 text-xs font-medium text-slate-500">
                   inmuebles
                 </span>
               </p>
@@ -184,7 +200,7 @@ export default function Page() {
           <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
                   Antes de liberar
                 </p>
 
@@ -194,7 +210,7 @@ export default function Page() {
                 </p>
               </div>
 
-              <span className="w-fit rounded-full bg-[#fff1f1] px-3 py-1.5 text-[10px] font-bold text-[#a90000]">
+              <span className="w-fit rounded-full bg-[#fff1f1] px-3 py-1.5 text-xs font-bold text-[#a90000]">
                 La posición será reutilizable
               </span>
             </div>
@@ -230,7 +246,7 @@ export default function Page() {
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                     index === 0
                       ? "bg-[#c80000] text-white"
-                      : "bg-slate-100 text-slate-400"
+                      : "bg-slate-100 text-slate-500"
                   }`}
                 >
                   {paso.numero}
@@ -241,7 +257,7 @@ export default function Page() {
                     {paso.titulo}
                   </p>
 
-                  <p className="mt-0.5 text-[11px] text-slate-400">
+                  <p className="mt-0.5 text-xs text-slate-500">
                     {paso.detalle}
                   </p>
                 </div>
@@ -251,35 +267,9 @@ export default function Page() {
         </section>
 
         {/* AVISOS */}
-        {mensaje && (
-          <div className="mb-5 flex gap-3 rounded-2xl border border-[#d9eadf] bg-[#f3faf5] p-4">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#18713b] text-sm font-bold text-white">
-              ✓
-            </span>
+        {mensaje && <Feedback tone="success" className="my-5">{mensaje}</Feedback>}
 
-            <div>
-              <p className="text-sm font-bold text-[#18713b]">
-                Liberación realizada
-              </p>
-
-              <p className="mt-1 text-xs leading-5 text-[#2f6f48]">
-                {mensaje}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-5 rounded-2xl border border-[#ead1d1] bg-[#fff7f7] p-4">
-            <p className="text-sm font-bold text-[#a90000]">
-              No se pudo completar la operación
-            </p>
-
-            <p className="mt-1 text-xs leading-5 text-[#a90000]">
-              {error}
-            </p>
-          </div>
-        )}
+        {error && <Feedback tone="error" className="my-5">{error}</Feedback>}
 
         {/* BUSCADOR */}
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -290,11 +280,11 @@ export default function Page() {
               </p>
 
               <p className="mt-1 text-xs text-slate-500">
-                Busca el inmueble que deseas retirar de la cartera.
+                Busca el inmueble y abre «Registrar salida» para completar el cierre.
               </p>
             </div>
 
-            <span className="w-fit rounded-full bg-slate-100 px-3 py-1.5 text-[10px] font-bold text-slate-500">
+            <span className="w-fit rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-500">
               {filtrados.length} resultado
               {filtrados.length === 1 ? "" : "s"}
             </span>
@@ -308,7 +298,7 @@ export default function Page() {
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 placeholder="Código, nombre, propietario, DNI, ubicación o posición..."
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-[#fafafa] px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#c80000] focus:bg-white focus:ring-2 focus:ring-[#f5dede]"
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-[#fafafa] px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-500 focus:border-[#c80000] focus:bg-white focus:ring-2 focus:ring-[#f5dede]"
               />
             </label>
           </div>
@@ -317,9 +307,7 @@ export default function Page() {
         {/* LISTADO */}
         <section>
           {cargando ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500 shadow-sm">
-              Cargando cartera activa...
-            </div>
+            <LoadingCards label="Cargando inmuebles…" />
           ) : filtrados.length === 0 ? (
             <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-xl text-slate-500">
@@ -339,69 +327,14 @@ export default function Page() {
               </p>
             </div>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-2">
               {filtrados.map((item) => {
                 const motivo = selecciones[item.inmuebleId] ?? "";
 
                 return (
-                  <article
-                    key={item.inmuebleId}
-                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
-                  >
-                    {/* IDENTIDAD */}
-                    <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="flex items-start gap-4">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#fff1f1] text-sm font-bold text-[#a90000]">
-                            {item.posicion}
-                          </div>
-
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="font-bold text-slate-900">
-                                {item.nombre}
-                              </h3>
-
-                              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
-                                {item.tipo}
-                              </span>
-
-                              <span className="rounded-full bg-[#edf8f1] px-2.5 py-1 text-[10px] font-bold text-[#18713b]">
-                                Activo
-                              </span>
-                            </div>
-
-                            <p className="mt-1 text-xs text-slate-500">
-                              {item.ubicacion || "Ubicación pendiente"} ·{" "}
-                              {item.codigo}
-                            </p>
-
-                            <p className="mt-1 text-xs text-slate-500">
-                              Propietario:{" "}
-                              <span className="font-medium text-slate-700">
-                                {item.propietario || "Pendiente"}
-                              </span>
-
-                              {item.dni && (
-                                <>
-                                  {" "}
-                                  · DNI {item.dni}
-                                </>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                          <span className="font-semibold text-slate-700">
-                            Posición {item.posicion}
-                          </span>
-                          <br />
-                          quedará disponible
-                        </div>
-                      </div>
-                    </div>
-
+                  <details key={item.inmuebleId} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <summary className="cursor-pointer p-4 transition hover:bg-slate-50"><div className="grid items-center gap-2 sm:grid-cols-[100px_minmax(0,1fr)_minmax(0,1fr)_110px_150px]"><span className="font-mono text-xs font-bold text-slate-700">{propertyDisplayId(item)}<span className="mt-1 block font-sans font-normal">Pos. {item.posicion}</span></span><div className="min-w-0"><p className="break-words text-sm font-bold text-slate-900">{item.nombre}</p><p className="mt-1 text-xs text-slate-500">{item.tipo} · {item.propietario || "Propietario pendiente"}</p></div><p className="break-words text-xs text-slate-600">{item.ubicacion || "Ubicación pendiente"}</p><span className="text-xs font-semibold">{operationLabel(item.operacion)}</span><span className="text-sm font-semibold text-[#c80000]">Registrar salida ↓</span></div></summary>
+                    <div className="border-t border-slate-100 px-5 pt-4"><Link href={`/datos-inmuebles?codigo=${item.inmuebleId}`} className="text-sm font-semibold text-[#c80000]">Abrir ficha completa →</Link></div>
                     {/* MOTIVO */}
                     <div className="p-5 sm:p-6">
                       <div className="grid gap-5 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.2fr)]">
@@ -424,7 +357,7 @@ export default function Page() {
                                 Seleccionar motivo
                               </option>
 
-                              {motivos.map((m) => (
+                              {motivos.filter(m => m.value !== (item.operacion === "alquiler" ? "vendido" : "alquilado")).map((m) => (
                                 <option key={m.value} value={m.value}>
                                   {m.label}
                                 </option>
@@ -450,13 +383,13 @@ export default function Page() {
                                   }))
                                 }
                                 placeholder="Describe brevemente el motivo..."
-                                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#c80000] focus:ring-2 focus:ring-[#f5dede]"
+                                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-500 focus:border-[#c80000] focus:ring-2 focus:ring-[#f5dede]"
                               />
                             </label>
                           </div>
                         ) : (
                           <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-[#faf9f7] p-4">
-                            <span className="mt-0.5 text-sm text-slate-400">
+                            <span className="mt-0.5 text-sm text-slate-500">
                               ⓘ
                             </span>
 
@@ -474,6 +407,10 @@ export default function Page() {
                           </div>
                         )}
                       </div>
+
+                      {motivo === "vendido" && <section className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><h4 className="text-sm font-bold">Resultado económico de la venta</h4><p className="mt-1 text-xs text-slate-600">Registra el importe final y la comisión acordada. La comisión representa ingreso de la inmobiliaria, antes de gastos.</p><div className="mt-3 grid gap-3 sm:grid-cols-3">{([['fechaVenta', 'Fecha de venta', 'date'], ['precioFinal', 'Precio final (S/)', 'number'], ['comision', 'Comisión de la inmobiliaria (S/)', 'number']] as const).map(([key, label, type]) => <label key={key} className="text-xs font-semibold">{label} *<input type={type} min={type === 'number' ? (key === 'comision' ? 0 : 0.01) : undefined} step={type === 'number' ? '0.01' : undefined} disabled={guardando !== null} value={ventas[item.inmuebleId]?.[key] ?? ''} onChange={event => setVentas(previous => ({ ...previous, [item.inmuebleId]: { ...(previous[item.inmuebleId] ?? { fechaVenta: '', precioFinal: '', comision: '' }), [key]: event.target.value } }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>)}</div></section>}
+
+                      {motivo === "alquilado" && <section className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><h4 className="text-sm font-bold">Resultado del alquiler</h4><p className="mt-1 text-xs text-slate-600">Registra la renta mensual acordada. Puedes adjuntar el contrato en la ficha → Documentación (categoría CONTRATO). Garantía, adelanto y fechas del contrato son opcionales; la comisión es el ingreso de la inmobiliaria.</p><div className="mt-3 grid gap-3 sm:grid-cols-3">{[['fechaAlquiler', 'Fecha de cierre', 'date', true], ['rentaMensual', 'Renta mensual (S/)', 'number', true], ['comision', 'Comisión (S/)', 'number', false], ['garantia', 'Garantía (S/)', 'number', false], ['adelanto', 'Adelanto (S/)', 'number', false], ['fechaInicioAlquiler', 'Inicio del alquiler', 'date', false], ['fechaFinAlquiler', 'Fin del alquiler', 'date', false]].map(([key, label, type, required]) => <label key={String(key)} className="text-xs font-semibold">{label}{required ? ' *' : ''}<input type={String(type)} min={type === 'number' ? (key === 'rentaMensual' ? 0.01 : 0) : undefined} step={type === 'number' ? '0.01' : undefined} disabled={guardando !== null} value={alquileres[item.inmuebleId]?.[String(key)] ?? ''} onChange={event => setAlquileres(previous => ({ ...previous, [item.inmuebleId]: { ...previous[item.inmuebleId], [String(key)]: event.target.value } }))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>)}</div></section>}
 
                       {/* CONFIRMACIÓN */}
                       <div className="mt-5 rounded-2xl border border-[#ead1d1] bg-[#fff7f7] p-4 sm:p-5">
@@ -502,7 +439,7 @@ export default function Page() {
                           <button
                             disabled={guardando !== null}
                             onClick={() => liberar(item)}
-                            className="shrink-0 rounded-xl bg-[#c80000] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#ad0000] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                            className="shrink-0 rounded-xl bg-[#c80000] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#ad0000] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
                           >
                             {guardando === item.inmuebleId
                               ? "Liberando..."
@@ -511,7 +448,7 @@ export default function Page() {
                         </div>
                       </div>
                     </div>
-                  </article>
+                  </details>
                 );
               })}
             </div>

@@ -1,3 +1,5 @@
+import { appraisalAfterVisit } from "@/lib/workflow-dates.mjs";
+import { priceLabel } from "@/lib/operation.mjs";
 import { authorizeApi } from "@/lib/auth";
 import { parseBusinessDate } from "@/lib/calendar.mjs";
 import { parsePrice } from "@/lib/prices.mjs";
@@ -23,7 +25,7 @@ function toMoney(value: unknown) {
 }
 
 type TasacionRow = {
-  inmuebleId: number; codigo: string; posicion: number | null; referencia: string; tipo: string;
+  inmuebleId: number; codigo: string; posicion: number | null; referencia: string; tipo: string; operacion: string;
   distrito: string | null; provincia: string | null; departamento: string | null; direccion: string | null;
   propietarioNombres: string | null; propietarioApellidos: string | null; dni: string | null;
   tasacionId?: number; fechaTasacion?: Date | string | null; valorReferencia?: string | null;
@@ -49,6 +51,7 @@ function mapRow(row: TasacionRow) {
         .filter(Boolean)
         .join(", ") || "Sin ubicación registrada",
     tipo: row.tipo,
+    operacion: row.operacion,
     propietario:
       [row.propietarioNombres, row.propietarioApellidos]
         .filter(Boolean)
@@ -72,6 +75,7 @@ export async function GET() {
         inmuebleId: inmInmuebles.id,
         codigo: inmInmuebles.codigo,
         tipo: inmInmuebles.tipo,
+        operacion: inmInmuebles.operacion,
         referencia: inmInmuebles.referencia,
         direccion: inmInmuebles.direccion,
         distrito: inmInmuebles.distrito,
@@ -129,6 +133,7 @@ export async function GET() {
         inmuebleId: inmInmuebles.id,
         codigo: inmInmuebles.codigo,
         tipo: inmInmuebles.tipo,
+        operacion: inmInmuebles.operacion,
         referencia: inmInmuebles.referencia,
         direccion: inmInmuebles.direccion,
         distrito: inmInmuebles.distrito,
@@ -244,10 +249,11 @@ export async function POST(request: Request) {
 
       const [position] = await tx.select({ id: inmAsignacionesPosicion.id }).from(inmAsignacionesPosicion)
         .where(and(eq(inmAsignacionesPosicion.inmuebleId, inmuebleId), eq(inmAsignacionesPosicion.activa, true))).limit(1);
-      const [visit] = await tx.select({ id: inmVisitas.id }).from(inmVisitas)
-        .where(and(eq(inmVisitas.inmuebleId, inmuebleId), eq(inmVisitas.completada, true))).limit(1);
+      const [visit] = await tx.select({ id: inmVisitas.id, fecha: inmVisitas.fechaVisita }).from(inmVisitas)
+        .where(and(eq(inmVisitas.inmuebleId, inmuebleId), eq(inmVisitas.completada, true))).orderBy(inmVisitas.fechaVisita).limit(1);
       if (!position || !visit) throw new Error("El inmueble no tiene una posición activa y una visita completada. Actualiza la pantalla.");
 
+      if (!appraisalAfterVisit(fechaTasacion,visit.fecha)) throw new Error("La fecha de tasación no puede ser anterior a la visita realizada.");
       const [existing] = await tx
         .select({ id: inmTasaciones.id })
         .from(inmTasaciones)
@@ -306,7 +312,7 @@ export async function POST(request: Request) {
         error: message,
       },
       {
-        status:
+        status: message.includes("anterior a la visita") ? 400 :
           /no existe|ya no está|ya tiene|no tiene/i.test(message)
             ? 409
             : 500,
@@ -327,11 +333,11 @@ export async function PATCH(request: Request) {
   const precioVenta = parsePrice(body?.precioVenta);
   if (!Number.isSafeInteger(inmuebleId) || inmuebleId <= 0 || !precioVenta ||
       (body.observacion !== undefined && typeof body.observacion !== "string")) {
-    return NextResponse.json({ ok: false, error: "Ingresa un precio de venta válido, mayor que cero y con hasta dos decimales." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Ingresa un precio válido, mayor que cero y con hasta dos decimales." }, { status: 400 });
   }
   try {
     const result = await db.transaction(async (tx) => {
-      const [property] = await tx.select({ estado: inmInmuebles.estado }).from(inmInmuebles)
+      const [property] = await tx.select({ estado: inmInmuebles.estado, operacion: inmInmuebles.operacion }).from(inmInmuebles)
         .where(eq(inmInmuebles.id, inmuebleId)).limit(1).for("update");
       if (property?.estado !== "activo") throw new Error("El inmueble ya no está activo.");
       const [tasacion] = await tx.select().from(inmTasaciones)
@@ -342,15 +348,15 @@ export async function PATCH(request: Request) {
       await tx.update(inmTasaciones).set({ precioVenta, observacion })
         .where(eq(inmTasaciones.id, tasacion.id));
       await tx.insert(inmTimeline).values({
-        inmuebleId, evento: "precio_venta_actualizado", usuarioId: auth.user.id,
-        observacion: `Precio de venta: S/ ${tasacion.precioVenta ?? "sin registrar"} → S/ ${precioVenta}. Observación: ${observacion ?? "sin observación"}`,
+        inmuebleId, evento: property.operacion === "alquiler" ? "renta_mensual_actualizada" : "precio_venta_actualizado", usuarioId: auth.user.id,
+        observacion: `${priceLabel(property.operacion)}: S/ ${tasacion.precioVenta ?? "sin registrar"} → S/ ${precioVenta}. Observación: ${observacion ?? "sin observación"}`,
       });
       return { precioVenta };
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "No se pudo actualizar el precio de venta.";
-    return NextResponse.json({ ok: false, error: /no tiene|no está activo/.test(message) ? message : "No se pudo actualizar el precio de venta." },
+    const message = error instanceof Error ? error.message : "No se pudo actualizar el precio o la renta mensual.";
+    return NextResponse.json({ ok: false, error: /no tiene|no está activo/.test(message) ? message : "No se pudo actualizar el precio o la renta mensual." },
       { status: /no tiene|no está activo/.test(message) ? 409 : 500 });
   }
 }
