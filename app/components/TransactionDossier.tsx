@@ -202,6 +202,13 @@ export default function TransactionDossier({ propertyId, operation, view, sectio
     <div>{showHeading && <h3 className="text-lg font-bold">{view === 'carpeta' ? status.sections.find(item => item.key === section)?.label || 'Otros archivos conservados' : view === 'estado' ? 'Estado del expediente' : party ? `Documentación del ${party}` : 'Documentación del inmueble'}</h3>}<p className="mt-2 text-sm text-slate-600">{rental ? 'Expediente de alquiler: arrendador, arrendatario, inmueble, contratos, servicios y tasaciones.' : 'Expediente de venta: vendedor, comprador, inmueble, contratos e impuestos.'} Los pendientes se muestran en el seguimiento de esta operación.</p></div>
     {error && !dirty && <p role="alert" className="whitespace-pre-wrap rounded-xl bg-red-50 p-4 text-sm text-red-800">{error}</p>}{message && <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">{message}</p>}
 
+    {!rental && view === 'carpeta' && section === 'impuestos' && (
+      <div className="flex flex-wrap gap-2">
+        <a className={action} href="/modelos/liquidacion-vendedor.xlsx" download>Descargar modelo Excel del vendedor</a>
+        <a className={action} href="/modelos/liquidacion-comprador.xlsx" download>Descargar modelo Excel del comprador</a>
+      </div>
+    )}
+
     {view === 'estado' && <>
       <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm">{closing.complete ? 'Todos los documentos obligatorios aplicables están cargados para el cierre.' : `Para cerrar, completa los documentos obligatorios y sus condiciones. Pendiente: ${closing.missing.join('; ')}. Las notas admitidas durante la preparación no sustituyen los archivos requeridos para cerrar.`}</p>
       <div className={`rounded-2xl border p-5 ${status.complete ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}><p className="text-lg font-bold">{status.complete ? 'Expediente completo' : 'Expediente con pendientes'}</p><p className="mt-2 text-sm">{status.completed} de {status.total} requisitos documentales aplicables completos · {status.percent}%</p><progress aria-label="Avance documental" value={status.completed} max={status.total || 1} className="mt-3 h-3 w-full accent-red-700" />{dirty && <p className="mt-2 text-xs">Vista previa de condiciones sin guardar.</p>}{status.alerts.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">{status.alerts.map(alert => <li key={alert}>{alert}</li>)}</ul>}</div>
