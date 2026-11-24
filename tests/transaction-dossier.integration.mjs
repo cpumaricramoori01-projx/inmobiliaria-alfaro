@@ -197,7 +197,7 @@ try {
   assert.equal(await overview.locator('a,button,input,select,textarea').count(), 0, 'Summary contains information only');
   assert.equal(await folders().getByRole('button', { name: /Resumen del inmueble/ }).count(), 0);
   assert.equal(await overview.evaluate(node => node.compareDocumentPosition(document.querySelector('[aria-label="Carpetas del inmueble"]')) & Node.DOCUMENT_POSITION_FOLLOWING), 4, 'Summary precedes folders');
-  const saleFolderNames = ['1. DNI y poderes','2. Documentos del inmueble','3. Contratos','4. Impuestos y constancias','5. Recibos y pagos de servicios','6. Levantamiento de cargas','7. Tasaciones','Estado del expediente','Visitas y fotos','Valores de tasación','Publicación','Seguimiento e historial','Otros archivos conservados'];
+  const saleFolderNames = ['1. DNI y poderes','2. Documentos del inmueble','3. Contratos','4. Impuestos y constancias','5. Recibos y pagos de servicios','6. Levantamiento de cargas','7. Tasaciones','9. Catálogo y diagnóstico físico legal','Estado del expediente','Visitas y fotos','Valores de tasación','Publicación','Seguimiento e historial','Otros archivos conservados'];
   fs.mkdirSync('output/dossier-local', { recursive: true, mode: 0o700 });
   for (const width of [1440,375]) {
     await page.setViewportSize({ width, height: 900 });
@@ -276,7 +276,7 @@ try {
   await folders().waitFor();
   assert.equal(await folders().getByRole('button', { name: /Impuestos y constancias|Levantamiento de cargas|Otros archivos conservados|Resumen del inmueble/ }).count(), 0);
   await page.getByRole('region', { name: 'Resumen de FASE 1', exact: true }).waitFor();
-  const rentalFolders = ['1. DNI y poderes','2. Documentos del inmueble','3. Contratos','4. Recibos y pagos de servicios','5. Tasaciones','Estado del expediente','Visitas y fotos','Valores de tasación','Publicación','Seguimiento e historial'];
+  const rentalFolders = ['1. DNI y poderes','2. Documentos del inmueble','3. Contratos','4. Recibos y pagos de servicios','5. Tasaciones','9. Catálogo y diagnóstico físico legal','Estado del expediente','Visitas y fotos','Valores de tasación','Publicación','Seguimiento e historial'];
   for (const width of [1440,375]) {
     await page.setViewportSize({ width, height: 900 });
     for (const name of rentalFolders) {

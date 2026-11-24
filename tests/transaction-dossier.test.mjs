@@ -106,10 +106,10 @@ test('configuration rejects malformed input and validates the single buyer type'
   for (const input of [null, [], { ...natural(), compradorTipo: '' }, { ...natural(), renta: 'no' }, { ...natural(), cargas: 'si' }, { ...natural(), vendedorBusquedaNota: 'a'.repeat(2001) }]) assert.throws(() => dossierInput(input));
 });
 
-test('rental has five groups and powers depend independently on representation', () => {
+test('rental includes the technical folder and powers depend independently on representation', () => {
   const base = {...dossierDefaults(),arrendadorTipo:'natural',arrendatarioTipo:'natural',arrendadorRepresentante:'no',arrendatarioRepresentante:'no'};
   const status = dossierStatus(base, [], 'alquiler');
-  assert.deepEqual(status.sections.map(item => item.key), ['identificacion','inmueble','contratos','servicios','tasaciones']);
+  assert.deepEqual(status.sections.map(item => item.key), ['identificacion','inmueble','contratos','servicios','tasaciones','catalogo']);
   assert.deepEqual(status.alerts, []);
   assert.equal(dossierStatus(dossierDefaults(), [], 'alquiler').alerts.length,2);
   for (const party of ['arrendador','arrendatario']) {
@@ -166,10 +166,10 @@ test('assigning the buyer in identification activates taxes for both person type
   }
 });
 
-test('buyer assignment preserves shared documents and seller requirements across all seven folders', () => {
+test('buyer assignment preserves shared documents and seller requirements across all folders', () => {
   const before = dossierStatus({ ...natural(), compradorAsignado: false });
   const after = dossierStatus(natural());
-  assert.equal(after.sections.length, 7);
+  assert.equal(after.sections.length, 8);
   for (const item of before.items.filter(item => item.party !== 'comprador')) {
     assert.deepEqual(after.items.find(next => next.key === item.key), item);
   }

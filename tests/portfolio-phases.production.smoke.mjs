@@ -41,7 +41,7 @@ try {
       await section.getByText('Consultando estado…', { exact: true }).first().waitFor({ state: 'hidden', timeout: 60000 });
       assert.equal(await section.getByRole('alert').count(), 0);
       const links = await section.locator('li a').evaluateAll(nodes => nodes.map(node => ({ href: node.href, label: node.closest('li').querySelector('h5').textContent })));
-      assert.equal(links.length, operation === 'venta' ? 7 : 5);
+      assert.equal(links.length, operation === 'venta' ? 8 : 6);
       for (const link of links) {
         const url = new URL(link.href);
         assert.equal(url.searchParams.get('codigo'), String(property.inmuebleId));

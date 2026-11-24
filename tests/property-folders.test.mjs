@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { DOCUMENT_TYPES } from '../lib/document-files.mjs';
 import { dossierDefaults, dossierStatus } from '../lib/transaction-dossier.mjs';
 import { filesByInformationFolder, informationFolders, informationFolderPhase, folderForLegacyTab } from '../lib/property-folders.mjs';
 
@@ -51,11 +52,24 @@ for(const operation of ['venta','alquiler']) {
     assert.deepEqual(folders.filter(item=>item.phase===1).map(item=>item.key),['visitas','precios','textos','publicaciones']);
     const phaseTwo=folders.filter(item=>item.phase===2);
     const numbered=phaseTwo.filter(item=>/^\d+\./.test(item.label));
-    assert.equal(numbered.length,operation==='venta'?7:5);
+    assert.equal(numbered.length,operation==='venta'?8:6);
     assert.deepEqual(phaseTwo.slice(numbered.length).map(item=>item.key),administrator?['estado','seguimiento','otros']:['estado','otros']);
     assert.ok(phaseTwo.slice(numbered.length).every(item=>!/^\d+\./.test(item.label)));
     assert.equal(new Set(folders.map(item=>item.key)).size,folders.length);
     assert.equal(informationFolderPhase('estado'),2);
     assert.equal(informationFolderPhase('seguimiento'),2);
   }
+}
+
+const catalogue = { tipoDocumento: 'CATALOGO_FISICO_LEGAL', almacenamiento: 'hosting' };
+const diagnosis = { tipoDocumento: 'DIAGNOSTICO_FISICO_LEGAL', almacenamiento: 'hosting' };
+const legacy = { tipoDocumento: 'CATALOGO_DIAGNOSTICO_FISICO_LEGAL', almacenamiento: 'hosting' };
+const technicalFiles = [catalogue, diagnosis, legacy];
+for (const operation of ['venta', 'alquiler']) {
+  const status = dossierStatus(dossierDefaults(), technicalFiles, operation);
+  const items = status.items.filter(item => item.section === 'catalogo');
+  assert.deepEqual(items.map(item => item.label), ['Catálogo Físico Legal', 'Diagnóstico Físico Legal']);
+  assert.ok(items.every(item => item.applies && !item.required && DOCUMENT_TYPES.has(item.key)));
+  assert.deepEqual(items.map(item => item.documents), [[catalogue, legacy], [diagnosis]]);
+  assert.deepEqual(filesByInformationFolder(technicalFiles, status, operation).catalogo, technicalFiles);
 }
